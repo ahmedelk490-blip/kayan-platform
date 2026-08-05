@@ -1,0 +1,100 @@
+/* ============================================================
+   @erp/brand — design tokens
+   Shared by apps/marketing and the ERP apps (ADR-015).
+   Components are NOT shared. Only what is in this file is.
+   ============================================================ */
+
+@theme {
+  /* ---------- Neutral scale: "steel" ------------------------
+     Industrial, slightly cool. Never pure black, never pure
+     white — both raise fatigue over an 8-hour ERP session
+     (07_UI_UX §5.1) and flatten depth in the 3D scenes.      */
+  --color-steel-950: #07090b;
+  --color-steel-900: #0c1013;
+  --color-steel-850: #11161a;
+  --color-steel-800: #161c21;
+  --color-steel-700: #212a31;
+  --color-steel-600: #33414b;
+  --color-steel-500: #4d5f6b;
+  --color-steel-400: #708391;
+  --color-steel-300: #99a8b3;
+  --color-steel-200: #c2ccd4;
+  --color-steel-100: #e2e8ec;
+  --color-steel-50: #f4f7f9;
+
+  /* ---------- Hi-vis: the safety accent ---------------------
+     The one colour that says "safety products" without a
+     word. Used sparingly — overused it reads as a
+     construction site (07_UI_UX §4.1).                       */
+  --color-hivis-500: #c6f24e;
+  --color-hivis-400: #d4f775;
+  --color-hivis-600: #a8d92b;
+
+  /* ---------- Signal: the data accent -----------------------
+     The digital half of the proposition. Pairs with hi-vis
+     in the Hero: physical product + system reading it.       */
+  --color-signal-500: #4dd9ff;
+  --color-signal-400: #7ce4ff;
+  --color-signal-600: #1fbfe8;
+
+  /* ---------- Semantic ------------------------------------- */
+  --color-bg: var(--color-steel-950);
+  --color-surface: var(--color-steel-900);
+  --color-surface-raised: var(--color-steel-850);
+  --color-border: var(--color-steel-700);
+  --color-text: var(--color-steel-100);
+  --color-text-muted: var(--color-steel-400);
+  --color-accent: var(--color-hivis-500);
+  --color-accent-alt: var(--color-signal-500);
+
+  /* ---------- Typography ------------------------------------
+     Display: Space Grotesk — technical, engineered.
+     Body:    Inter — neutral, exceptional at small sizes.
+     Arabic:  IBM Plex Sans Arabic — one of the few Arabic
+              families with a genuine matched weight range,
+              which is the real constraint on bilingual type
+              (07_UI_UX §10.2).                               */
+  --font-display: var(--font-space-grotesk), system-ui, sans-serif;
+  --font-body: var(--font-inter), system-ui, sans-serif;
+  --font-arabic: var(--font-plex-arabic), system-ui, sans-serif;
+
+  /* Fluid display scale — clamp() so headings never need a
+     breakpoint to stay proportional.                         */
+  --text-display-1: clamp(2.75rem, 9vw, 8.5rem);
+  --text-display-2: clamp(2.25rem, 6vw, 5rem);
+  --text-display-3: clamp(1.75rem, 4vw, 3rem);
+  --text-lead: clamp(1.05rem, 1.6vw, 1.375rem);
+
+  /* ---------- Radius --------------------------------------- */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 1rem;
+  --radius-full: 999px;
+
+  /* ---------- Motion curves --------------------------------
+     Mirrored in @erp/motion for JS animation. Curves and
+     durations are brand; animations are not.                 */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+
+  --duration-fast: 150ms;
+  --duration-base: 300ms;
+  --duration-slow: 600ms;
+  --duration-cinematic: 1200ms;
+}
+
+/* ---------- Reduced motion ---------------------------------
+   NFR-06 / WCAG 2.2 AA. The static rung of the degradation
+   ladder (07_UI_UX §8.1) is a designed path, not a failure
+   state — a meaningful share of visitors only ever see it.  */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

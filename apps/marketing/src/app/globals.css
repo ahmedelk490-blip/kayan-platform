@@ -1,0 +1,70 @@
+@import 'tailwindcss';
+@import '@erp/brand/tokens.css';
+
+/* Tailwind v4 scans the app by default; the shared cinematic package needs
+   declaring explicitly or its utility classes are stripped from the build. */
+@source '../../../../packages/ui-market/src';
+
+@layer base {
+  html {
+    /* Lenis drives scrolling; native smooth scroll would fight it. */
+    scroll-behavior: auto;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* The page must never scroll sideways; only pinned sections travel. */
+    overflow-x: hidden;
+  }
+
+  :lang(ar) body {
+    font-family: var(--font-arabic);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  /* Focus must clear AA contrast against every background, including 3D. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background-color: var(--color-accent);
+    color: var(--color-steel-950);
+  }
+}
+
+@layer utilities {
+  /* Fine engineering rule — used as a section divider. */
+  .rule-hairline {
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--color-steel-700) 20%,
+      var(--color-steel-700) 80%,
+      transparent
+    );
+  }
+
+  /* Technical grid backdrop. Logical properties so it mirrors under RTL. */
+  .grid-backdrop {
+    background-image:
+      linear-gradient(to right, color-mix(in srgb, var(--color-steel-700) 40%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in srgb, var(--color-steel-700) 40%, transparent) 1px, transparent 1px);
+    background-size: 72px 72px;
+  }
+}
