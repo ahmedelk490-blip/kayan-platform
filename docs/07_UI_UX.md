@@ -426,6 +426,53 @@ Proposed: brand identity → marketing site → ERP phases continue in parallel,
 
 ---
 
+## 10.5 Site Information Architecture
+
+Added for Milestone 2. The site must discharge six responsibilities; each maps to a definite place rather than being spread thinly across a single page.
+
+| Responsibility | Where it lives |
+|---|---|
+| Brand awareness | `/` — the five-act narrative |
+| Product showcase | `/platform`, `/industries` |
+| Demonstrating ERP capabilities | `/platform` — interactive dashboard preview |
+| Company presentation | `/company` |
+| Lead generation | `/contact` + CTAs throughout |
+| Customer conversion | `/contact` — the demo request form |
+
+### 10.5.1 Route map
+
+```
+/                     Homepage — cinematic narrative
+/platform             The system: modules, capabilities, dashboard preview
+/industries           The four archetypes as markets
+/company              Story, approach, principles
+/contact              Demo request — the conversion surface
+/legal/privacy        Required for lead capture
+/legal/terms
+```
+
+Deliberately **not** built: a `/resources` or `/blog` section, and a `/customers` page. Both need real content that does not exist; shipping them empty or fabricated would damage the credibility the rest of the site is built to earn. Tracked as OPEN-37.
+
+### 10.5.2 The homepage and the inner pages obey different rules
+
+This clarifies, and slightly narrows, the "never repeat animations" directive.
+
+**Novelty is a homepage property.** A visitor sees the homepage once, is being persuaded, and rewards surprise. That is why §4.3 assigns ten distinct interaction grammars.
+
+**Consistency is an inner-page property.** A visitor reaching `/platform` has already been persuaded and is now evaluating. They will visit several pages in one session, and a different interaction grammar on each would read as incoherence, not craft — while also multiplying load cost across exactly the pages where a buyer is comparing.
+
+Inner pages therefore share **one** learnable grammar: a common page hero, `SectionShell` rhythm, and restrained entrance motion. **No WebGL on inner pages except the dashboard preview**, which earns it by being the product itself.
+
+This is not a retreat from the cinematic standard. It is the standard applied correctly: the homepage sells, the inner pages inform, and confusing the two is how premium sites become exhausting.
+
+### 10.5.3 Dashboard preview — scope boundary
+
+WOW #9 should ultimately be built from real `@erp/ui-erp` components (§4.3). `ui-erp` does not exist yet: the ERP design system is a Phase 4 deliverable with its own documentation gate, and inventing three ad-hoc components now would prejudge it and violate D-14.
+
+**Milestone 2 therefore builds the preview inside `apps/marketing` using `@erp/brand` tokens only.** When `ui-erp` lands, the preview switches to consuming it — a contained change, and at that point it becomes the genuine proof it is meant to be.
+
+---
+
 ## 11.1 Implementation Status — Milestone 1
 
 Built and verified in the browser on 2026-08-05.

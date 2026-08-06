@@ -6,3 +6,6 @@ dist/
 .env
 .env.local
 .DS_Store
+
+# Interim lead store — contains PII, never commit (see api/leads/route.ts)
+.leads/

@@ -120,8 +120,10 @@ export function HeroWeaveScene() {
         uProgress: { value: 0 },
         uTime: { value: 0 },
         uSize: { value: 2.0 },
-        uColorFrom: { value: new THREE.Color(COLORS.steel400) },
-        uColorTo: { value: new THREE.Color(COLORS.hivis) },
+        // Raw, unordered material resolving into finished cloth: deep KAYAN
+        // maroon lifting to its lighter tint as the weave assembles.
+        uColorFrom: { value: new THREE.Color(COLORS.primaryLight) },
+        uColorTo: { value: new THREE.Color(COLORS.accent) },
       },
     };
   }, []);

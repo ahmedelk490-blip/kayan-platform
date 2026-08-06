@@ -26,7 +26,7 @@ export function SceneAnchor({
   offset = ['start start', 'end start'],
 }: SceneAnchorProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const setActiveScene = useSceneStore((s) => s.setActiveScene);
+  const setDesiredScene = useSceneStore((s) => s.setDesiredScene);
   const setProgress = useSceneStore((s) => s.setProgress);
 
   const { scrollYProgress } = useScroll({
@@ -48,12 +48,12 @@ export function SceneAnchor({
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          setActiveScene(scene);
+          setDesiredScene(scene);
         } else {
-          // Only clear if we still own the canvas — another anchor may have
-          // claimed it as this one left.
-          if (useSceneStore.getState().activeScene === scene) {
-            setActiveScene(null);
+          // Only clear if we are still the desired scene — another anchor may
+          // have claimed it as this one left.
+          if (useSceneStore.getState().desiredScene === scene) {
+            setDesiredScene(null);
           }
         }
       },
@@ -63,7 +63,7 @@ export function SceneAnchor({
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [scene, setActiveScene]);
+  }, [scene, setDesiredScene]);
 
   return (
     <div ref={ref} className={className}>

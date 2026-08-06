@@ -1,79 +1,129 @@
 /* ============================================================
-   @erp/brand — design tokens
-   Shared by apps/marketing and the ERP apps (ADR-015).
-   Components are NOT shared. Only what is in this file is.
+   @erp/brand — KAYAN design tokens
+   كيان · Safety Vests • T-Shirts • Corporate & Restaurant Uniforms
+
+   The logo defines the identity. The maroon below is the logo's
+   field colour; everything else is derived from it.
+
+   COLOUR SOURCE: sampled programmatically from the official
+   logo file (public/brand/kayan-logo.jpg). The field colour is
+   #5c2334 across 3,407 of 5,625 sampled pixels — measured, not
+   estimated. Everything below is derived from it.
    ============================================================ */
 
 @theme {
-  /* ---------- Neutral scale: "steel" ------------------------
-     Industrial, slightly cool. Never pure black, never pure
-     white — both raise fatigue over an 8-hour ERP session
-     (07_UI_UX §5.1) and flatten depth in the 3D scenes.      */
-  --color-steel-950: #07090b;
-  --color-steel-900: #0c1013;
-  --color-steel-850: #11161a;
-  --color-steel-800: #161c21;
-  --color-steel-700: #212a31;
-  --color-steel-600: #33414b;
-  --color-steel-500: #4d5f6b;
-  --color-steel-400: #708391;
-  --color-steel-300: #99a8b3;
-  --color-steel-200: #c2ccd4;
-  --color-steel-100: #e2e8ec;
-  --color-steel-50: #f4f7f9;
+  /* ---------- PRIMARY — KAYAN maroon -------------------------
+     600 IS the sampled logo field colour: HSL 342°, 45%, 25%.
+     The scale holds that hue and saturation and moves only
+     lightness, so tints stay in the family instead of drifting
+     pink at the top and brown at the bottom.                   */
+  --color-primary-50: #fbf4f6;
+  --color-primary-100: #f5e5ea;
+  --color-primary-200: #eac8d2;
+  --color-primary-300: #d99bae;
+  --color-primary-400: #c46481;
+  --color-primary-500: #943854;
+  --color-primary-600: #5c2334; /* ← sampled from the logo */
+  --color-primary-700: #4e1d2c;
+  --color-primary-800: #3f1824;
+  --color-primary-900: #30121b;
+  --color-primary-950: #1e0b11;
 
-  /* ---------- Hi-vis: the safety accent ---------------------
-     The one colour that says "safety products" without a
-     word. Used sparingly — overused it reads as a
-     construction site (07_UI_UX §4.1).                       */
-  --color-hivis-500: #c6f24e;
-  --color-hivis-400: #d4f775;
-  --color-hivis-600: #a8d92b;
+  /* ---------- SECONDARY — ink --------------------------------
+     Same 342° hue at very low saturation, so dark surfaces sit
+     with the maroon rather than fighting it. Never pure black:
+     it flattens depth and raises fatigue over a long session.  */
+  --color-ink-950: #120d0e;
+  --color-ink-900: #1b1315;
+  --color-ink-850: #20181a;
+  --color-ink-800: #291f22;
+  --color-ink-700: #3a2c30;
 
-  /* ---------- Signal: the data accent -----------------------
-     The digital half of the proposition. Pairs with hi-vis
-     in the Hero: physical product + system reading it.       */
-  --color-signal-500: #4dd9ff;
-  --color-signal-400: #7ce4ff;
-  --color-signal-600: #1fbfe8;
+  /* ---------- ACCENT — REMOVED -------------------------------
+     The brass/gold accent was withdrawn by directive on
+     2026-08-06. KAYAN maroon is the only accent. Nothing in the
+     system may reintroduce a third hue.
 
-  /* ---------- Semantic ------------------------------------- */
-  --color-bg: var(--color-steel-950);
-  --color-surface: var(--color-steel-900);
-  --color-surface-raised: var(--color-steel-850);
-  --color-border: var(--color-steel-700);
-  --color-text: var(--color-steel-100);
-  --color-text-muted: var(--color-steel-400);
-  --color-accent: var(--color-hivis-500);
-  --color-accent-alt: var(--color-signal-500);
+     ⚠ CONTRAST NOTE — the one place the directive cannot be
+     followed literally. #5c2334 on the ink background measures
+     ~1.9:1, far below the 4.5:1 WCAG AA floor, so it is unusable
+     for text, rules or icons on dark. It is therefore used as a
+     FILL (with white on it, exactly as the logo does), and
+     text-level accents use --color-primary-400, a lighter tint
+     of the same hue at ~5.6:1. Same colour, legible.
+     See 07_UI_UX §10.7.                                        */
 
-  /* ---------- Typography ------------------------------------
-     Display: Space Grotesk — technical, engineered.
-     Body:    Inter — neutral, exceptional at small sizes.
+  /* ---------- NEUTRAL — warm greys ---------------------------
+     Warm, not cool. A steel-grey neutral against maroon reads
+     cold and cheap; these carry a little red so the whole
+     surface feels of one family.                               */
+  --color-neutral-50: #faf8f8;
+  --color-neutral-100: #f2eeee;
+  --color-neutral-200: #e4dedf;
+  --color-neutral-300: #c9c0c2;
+  --color-neutral-400: #a2979a;
+  --color-neutral-500: #7d7175;
+  --color-neutral-600: #5f5459;
+  --color-neutral-700: #453c40;
+  --color-neutral-800: #2f272b;
+  --color-neutral-900: #1e181b;
+  --color-neutral-950: #120e10;
+
+  /* ---------- STATUS -----------------------------------------
+     Danger is deliberately pushed toward orange-red. A
+     conventional crimson sits too close to the primary maroon
+     to be reliably distinguishable — a real usability hazard on
+     a destructive-action button.                               */
+  --color-success-500: #2f8f63;
+  --color-success-600: #26744f;
+  --color-warning-500: #c98a1e;
+  --color-warning-600: #a56f14;
+  --color-danger-500: #e04b2f;
+  --color-danger-600: #bf3a21;
+
+  /* ---------- SEMANTIC — dark mode is the default ------------ */
+  --color-bg: var(--color-ink-950);
+  --color-surface: var(--color-ink-900);
+  --color-surface-raised: var(--color-ink-850);
+  --color-border: var(--color-ink-800);
+  --color-border-strong: var(--color-ink-700);
+
+  --color-text: var(--color-neutral-100);
+  --color-text-muted: var(--color-neutral-400);
+  --color-text-subtle: var(--color-neutral-500);
+  --color-text-on-primary: var(--color-neutral-50);
+  /* White on the maroon fill — 9.5:1, the logo's own pairing. */
+  --color-text-on-accent: var(--color-neutral-50);
+
+  /* Accent for TEXT, rules and icons on dark: lighter tint, same hue. */
+  --color-accent: var(--color-primary-400);
+  --color-accent-hover: var(--color-primary-300);
+  /* Accent for FILLS — buttons, chips, surfaces: the exact brand maroon. */
+  --color-primary: var(--color-primary-600);
+  --color-primary-hover: var(--color-primary-500);
+
+  /* ---------- Typography -------------------------------------
+     Display: Space Grotesk — engineered, precise.
+     Body:    Inter — neutral, excellent small.
      Arabic:  IBM Plex Sans Arabic — one of the few Arabic
               families with a genuine matched weight range,
-              which is the real constraint on bilingual type
-              (07_UI_UX §10.2).                               */
+              which is the real constraint on bilingual type.   */
   --font-display: var(--font-space-grotesk), system-ui, sans-serif;
   --font-body: var(--font-inter), system-ui, sans-serif;
   --font-arabic: var(--font-plex-arabic), system-ui, sans-serif;
 
-  /* Fluid display scale — clamp() so headings never need a
-     breakpoint to stay proportional.                         */
   --text-display-1: clamp(2.75rem, 9vw, 8.5rem);
   --text-display-2: clamp(2.25rem, 6vw, 5rem);
   --text-display-3: clamp(1.75rem, 4vw, 3rem);
   --text-lead: clamp(1.05rem, 1.6vw, 1.375rem);
 
-  /* ---------- Radius --------------------------------------- */
+  /* ---------- Radius ----------------------------------------- */
   --radius-sm: 0.25rem;
   --radius-md: 0.5rem;
   --radius-lg: 1rem;
   --radius-full: 999px;
 
-  /* ---------- Motion curves --------------------------------
-     Mirrored in @erp/motion for JS animation. Curves and
-     durations are brand; animations are not.                 */
+  /* ---------- Motion ----------------------------------------- */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
   --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
@@ -84,10 +134,50 @@
   --duration-cinematic: 1200ms;
 }
 
+/* ---------- LIGHT MODE --------------------------------------
+   Required for invoices, reports and PDF export, where a dark
+   surface is wrong. Semantic tokens flip; component code does
+   not change.                                                  */
+:root[data-theme='light'] {
+  --color-bg: var(--color-neutral-50);
+  --color-surface: #ffffff;
+  --color-surface-raised: var(--color-neutral-100);
+  --color-border: var(--color-neutral-200);
+  --color-border-strong: var(--color-neutral-300);
+
+  --color-text: var(--color-neutral-900);
+  --color-text-muted: var(--color-neutral-600);
+  --color-text-subtle: var(--color-neutral-500);
+
+  /* On light surfaces the exact brand maroon IS legible as text —
+     9.5:1 on white — so light mode uses it directly, no tint. */
+  --color-accent: var(--color-primary-600);
+  --color-accent-hover: var(--color-primary-700);
+  --color-primary: var(--color-primary-600);
+  --color-primary-hover: var(--color-primary-700);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --color-bg: var(--color-neutral-50);
+    --color-surface: #ffffff;
+    --color-surface-raised: var(--color-neutral-100);
+    --color-border: var(--color-neutral-200);
+    --color-border-strong: var(--color-neutral-300);
+
+    --color-text: var(--color-neutral-900);
+    --color-text-muted: var(--color-neutral-600);
+    --color-text-subtle: var(--color-neutral-500);
+
+    --color-accent: var(--color-primary-600);
+    --color-accent-hover: var(--color-primary-700);
+    --color-primary-hover: var(--color-primary-700);
+  }
+}
+
 /* ---------- Reduced motion ---------------------------------
    NFR-06 / WCAG 2.2 AA. The static rung of the degradation
-   ladder (07_UI_UX §8.1) is a designed path, not a failure
-   state — a meaningful share of visitors only ever see it.  */
+   ladder is a designed path, not a failure state.             */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

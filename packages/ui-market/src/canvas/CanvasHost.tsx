@@ -3,10 +3,14 @@
 import { Suspense, lazy, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { usePrefersReducedMotion } from '@erp/motion';
-import { useSceneStore } from './scene-store';
+import { resolveActiveScene, useSceneStore } from './scene-store';
 
 const HeroWeaveScene = lazy(() =>
   import('../scenes/HeroWeaveScene').then((m) => ({ default: m.HeroWeaveScene })),
+);
+
+const IntroScene = lazy(() =>
+  import('../intro/IntroScene').then((m) => ({ default: m.IntroScene })),
 );
 
 /** Probe device capability once, to pick a rung on the degradation ladder. */
@@ -44,7 +48,9 @@ function detectTier(): 'full' | 'reduced' | 'minimal' | 'static' {
  * must never pay for three.js (ADR-015).
  */
 export function CanvasHost() {
-  const activeScene = useSceneStore((s) => s.activeScene);
+  const desiredScene = useSceneStore((s) => s.desiredScene);
+  const introActive = useSceneStore((s) => s.introActive);
+  const activeScene = resolveActiveScene({ introActive, desiredScene });
   const tier = useSceneStore((s) => s.tier);
   const setTier = useSceneStore((s) => s.setTier);
   const reducedMotion = usePrefersReducedMotion();
@@ -58,17 +64,28 @@ export function CanvasHost() {
 
   const dpr: [number, number] = tier === 'full' ? [1, 2] : [1, 1.5];
 
+  // The intro plays over the page, so the shared canvas rises above the
+  // intro's backdrop for its duration, then drops back behind the content.
+  // One context either way — never a second <Canvas> (3d-websites playbook).
+  const isIntro = activeScene === 'intro';
+
   return (
-    <div className="pointer-events-none fixed inset-0 -z-10" aria-hidden="true">
+    <div
+      className={`pointer-events-none fixed inset-0 ${isIntro ? 'z-[100]' : '-z-10'}`}
+      aria-hidden="true"
+    >
       <Canvas
         dpr={dpr}
         gl={{ antialias: tier === 'full', alpha: true, powerPreference: 'high-performance' }}
-        camera={{ position: [0, 0, 12], fov: 45 }}
+        camera={{ position: [0, 0, isIntro ? 14 : 12], fov: 45 }}
         // Render on demand under reduced motion: the scene still assembles
         // with scroll, but nothing animates on its own.
         frameloop={reducedMotion ? 'demand' : 'always'}
       >
-        <Suspense fallback={null}>{activeScene === 'hero' && <HeroWeaveScene />}</Suspense>
+        <Suspense fallback={null}>
+          {activeScene === 'hero' && <HeroWeaveScene />}
+          {isIntro && <IntroScene />}
+        </Suspense>
       </Canvas>
     </div>
   );

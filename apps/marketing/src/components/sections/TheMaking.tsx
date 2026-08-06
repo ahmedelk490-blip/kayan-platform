@@ -57,12 +57,12 @@ export function TheMaking() {
     <section id="making" ref={ref} className="relative h-[420vh]">
       <div className="sticky top-0 flex h-screen flex-col justify-center overflow-hidden">
         <div className="mx-auto mb-12 w-full max-w-[1400px] px-6 md:px-10 lg:px-16">
-          <div className="mb-6 flex items-center gap-4 text-xs uppercase tracking-[0.2em] text-steel-400">
+          <div className="mb-6 flex items-center gap-4 text-xs uppercase tracking-[0.2em] text-neutral-400">
             <span className="text-accent">Act II</span>
-            <span className="h-px w-8 bg-steel-700" />
+            <span className="h-px w-8 bg-ink-700" />
             <span>The Making</span>
           </div>
-          <h2 className="max-w-[20ch] font-display text-display-3 leading-[1.05] text-steel-100">
+          <h2 className="max-w-[20ch] font-display text-display-3 leading-[1.05] text-neutral-100">
             <AnimatedText text="How raw material becomes a finished product" by="word" />
           </h2>
         </div>
@@ -71,22 +71,22 @@ export function TheMaking() {
           {STAGES.map((stage) => (
             <li
               key={stage.no}
-              className="w-[78vw] shrink-0 rounded-2xl border border-steel-800 bg-steel-900/50 p-7 backdrop-blur-sm sm:w-[52vw] lg:w-[30vw]"
+              className="w-[78vw] shrink-0 rounded-2xl border border-ink-800 bg-ink-900/50 p-7 backdrop-blur-sm sm:w-[52vw] lg:w-[30vw]"
             >
               <div className="flex items-baseline justify-between">
-                <span className="font-display text-4xl text-steel-700">{stage.no}</span>
+                <span className="font-display text-4xl text-ink-700">{stage.no}</span>
                 <span className="text-[0.65rem] uppercase tracking-[0.16em] text-accent">
                   {stage.meta}
                 </span>
               </div>
-              <h3 className="mt-6 font-display text-2xl text-steel-100">{stage.title}</h3>
-              <p className="mt-3 text-sm leading-relaxed text-steel-400">{stage.body}</p>
+              <h3 className="mt-6 font-display text-2xl text-neutral-100">{stage.title}</h3>
+              <p className="mt-3 text-sm leading-relaxed text-neutral-400">{stage.body}</p>
             </li>
           ))}
         </motion.ol>
 
         <div className="mx-auto mt-12 w-full max-w-[1400px] px-6 md:px-10 lg:px-16">
-          <div className="h-px w-full bg-steel-800">
+          <div className="h-px w-full bg-ink-800">
             <motion.div style={{ width: railWidth }} className="h-px bg-accent" />
           </div>
         </div>

@@ -46,10 +46,10 @@ export function SectionShell({
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-10% 0px' }}
           transition={{ duration: 0.6, ease: EASE.outExpo }}
-          className="mb-10 flex items-center gap-4 text-xs uppercase tracking-[0.2em] text-steel-400"
+          className="mb-10 flex items-center gap-4 text-xs uppercase tracking-[0.2em] text-neutral-400"
         >
           {act && <span className="text-accent">{act}</span>}
-          {act && label && <span className="h-px w-8 bg-steel-700" />}
+          {act && label && <span className="h-px w-8 bg-ink-700" />}
           {label && <span>{label}</span>}
         </motion.div>
       )}

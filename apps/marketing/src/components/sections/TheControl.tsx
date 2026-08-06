@@ -23,16 +23,16 @@ export function TheControl() {
     <SectionShell id="control" act="Act III" label="The Control" size="tall">
       <div className="mx-auto grid w-full max-w-[1400px] gap-14 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20">
         <div>
-          <h2 className="max-w-[18ch] font-display text-display-3 leading-[1.05] text-steel-100">
+          <h2 className="max-w-[18ch] font-display text-display-3 leading-[1.05] text-neutral-100">
             <AnimatedText text="Every department, posting to one ledger" by="word" />
           </h2>
-          <p className="mt-6 max-w-[46ch] text-lead leading-relaxed text-steel-400">
+          <p className="mt-6 max-w-[46ch] text-lead leading-relaxed text-neutral-400">
             Nothing is entered twice. A goods receipt moves stock, opens a cost layer and writes
             its journal entry in the same transaction — so the trial balance is never a
             reconciliation exercise.
           </p>
 
-          <dl className="mt-10 grid grid-cols-2 gap-6 border-t border-steel-800 pt-8">
+          <dl className="mt-10 grid grid-cols-2 gap-6 border-t border-ink-800 pt-8">
             {[
               { k: 'Postings', v: 'Append-only' },
               { k: 'Corrections', v: 'By reversal' },
@@ -40,10 +40,10 @@ export function TheControl() {
               { k: 'Traceability', v: 'Issue → receipt' },
             ].map((item) => (
               <div key={item.k}>
-                <dt className="text-[0.65rem] uppercase tracking-[0.18em] text-steel-500">
+                <dt className="text-[0.65rem] uppercase tracking-[0.18em] text-neutral-500">
                   {item.k}
                 </dt>
-                <dd className="mt-1.5 font-display text-sm text-steel-200">{item.v}</dd>
+                <dd className="mt-1.5 font-display text-sm text-neutral-200">{item.v}</dd>
               </div>
             ))}
           </dl>
@@ -54,16 +54,16 @@ export function TheControl() {
           whileInView="visible"
           viewport={{ once: true, margin: '-12% 0px' }}
           variants={staggerChildren(0.09)}
-          className="overflow-hidden rounded-2xl border border-steel-800 bg-steel-900/60"
+          className="overflow-hidden rounded-2xl border border-ink-800 bg-ink-900/60"
         >
-          <div className="flex items-center gap-2 border-b border-steel-800 px-5 py-3.5">
+          <div className="flex items-center gap-2 border-b border-ink-800 px-5 py-3.5">
             <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-            <span className="text-[0.65rem] uppercase tracking-[0.18em] text-steel-400">
+            <span className="text-[0.65rem] uppercase tracking-[0.18em] text-neutral-400">
               Activity · 05 Aug 2026
             </span>
           </div>
 
-          <ul className="divide-y divide-steel-800/70">
+          <ul className="divide-y divide-ink-800/70">
             {LEDGER.map((row) => (
               <motion.li
                 key={row.event}
@@ -73,7 +73,7 @@ export function TheControl() {
                 }}
                 className="flex gap-4 px-5 py-4"
               >
-                <span className="w-12 shrink-0 pt-0.5 font-mono text-xs text-steel-500">
+                <span className="w-12 shrink-0 pt-0.5 font-mono text-xs text-neutral-500">
                   {row.time}
                 </span>
                 <span className="min-w-0">
@@ -81,12 +81,12 @@ export function TheControl() {
                     className={
                       row.tone === 'accent'
                         ? 'block text-sm text-accent'
-                        : 'block text-sm text-steel-200'
+                        : 'block text-sm text-neutral-200'
                     }
                   >
                     {row.event}
                   </span>
-                  <span className="mt-0.5 block truncate text-xs text-steel-500">{row.detail}</span>
+                  <span className="mt-0.5 block truncate text-xs text-neutral-500">{row.detail}</span>
                 </span>
               </motion.li>
             ))}

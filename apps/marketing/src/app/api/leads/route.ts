@@ -1,0 +1,176 @@
+import { NextResponse } from 'next/server';
+import { appendFile, mkdir } from 'node:fs/promises';
+import path from 'node:path';
+
+export const runtime = 'nodejs';
+
+/**
+ * Public lead intake — the ONLY unauthenticated write path in the system
+ * (03_System_Architecture §21.2).
+ *
+ * Constraints that hold here and must keep holding:
+ *   - creates unqualified leads and nothing else, ever
+ *   - no access to any other entity, no general API, no direct DB access
+ *   - strict schema: reject rather than coerce
+ *   - rate limited per client, stricter than any authenticated endpoint
+ *
+ * ⚠ INTERIM STORAGE. The ERP CRM does not exist yet (Phase 4), so submissions
+ * are appended to a local JSONL file rather than queued into the CRM. This
+ * keeps leads from being silently dropped, but it is NOT the production path:
+ * the file is unencrypted, so this must be replaced by the queued intake
+ * before the site handles real enquiries. Tracked in 07_UI_UX §11.2.
+ */
+
+const MAX_LENGTHS = {
+  name: 120,
+  company: 160,
+  email: 254,
+  phone: 40,
+  message: 4000,
+} as const;
+
+const ALLOWED_INTERESTS = ['printing', 'embroidery', 'uniforms', 'safety'] as const;
+
+// Deliberately conservative: a syntactic check only. Address validity is
+// proven by a human replying, not by a regex.
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+type Rejection = { field: string; reason: string };
+
+interface Lead {
+  name: string;
+  company: string;
+  email: string;
+  phone: string;
+  interests: string[];
+  message: string;
+}
+
+function validate(body: unknown): { ok: true; lead: Lead } | { ok: false; errors: Rejection[] } {
+  const errors: Rejection[] = [];
+
+  if (typeof body !== 'object' || body === null) {
+    return { ok: false, errors: [{ field: '_', reason: 'Expected an object.' }] };
+  }
+  const raw = body as Record<string, unknown>;
+
+  const str = (key: keyof typeof MAX_LENGTHS, required: boolean) => {
+    const value = raw[key];
+    if (value === undefined || value === null || value === '') {
+      if (required) errors.push({ field: key, reason: 'Required.' });
+      return '';
+    }
+    if (typeof value !== 'string') {
+      errors.push({ field: key, reason: 'Must be text.' });
+      return '';
+    }
+    const trimmed = value.trim();
+    if (trimmed.length > MAX_LENGTHS[key]) {
+      errors.push({ field: key, reason: `Must be ${MAX_LENGTHS[key]} characters or fewer.` });
+      return '';
+    }
+    return trimmed;
+  };
+
+  const name = str('name', true);
+  const company = str('company', true);
+  const email = str('email', true);
+  const phone = str('phone', false);
+  const message = str('message', false);
+
+  if (email && !EMAIL.test(email)) {
+    errors.push({ field: 'email', reason: 'Does not look like an email address.' });
+  }
+
+  let interests: string[] = [];
+  if (raw.interests !== undefined) {
+    if (!Array.isArray(raw.interests)) {
+      errors.push({ field: 'interests', reason: 'Must be a list.' });
+    } else {
+      const invalid = raw.interests.filter(
+        (i) => typeof i !== 'string' || !ALLOWED_INTERESTS.includes(i as never),
+      );
+      if (invalid.length) {
+        errors.push({ field: 'interests', reason: 'Contains an unrecognised value.' });
+      } else {
+        interests = [...new Set(raw.interests as string[])];
+      }
+    }
+  }
+
+  if (errors.length) return { ok: false, errors };
+  return { ok: true, lead: { name, company, email, phone, interests, message } };
+}
+
+/**
+ * In-memory fixed-window rate limit.
+ *
+ * Per-process, so it does not hold across horizontally scaled instances —
+ * adequate for a single-instance marketing site, and replaced by the shared
+ * Redis limiter when the ERP API takes over intake.
+ */
+const WINDOW_MS = 60_000;
+const MAX_PER_WINDOW = 5;
+const hits = new Map<string, { count: number; resetAt: number }>();
+
+function rateLimit(key: string) {
+  const now = Date.now();
+  const entry = hits.get(key);
+
+  if (!entry || now > entry.resetAt) {
+    hits.set(key, { count: 1, resetAt: now + WINDOW_MS });
+    return { allowed: true, retryAfter: 0 };
+  }
+  if (entry.count >= MAX_PER_WINDOW) {
+    return { allowed: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
+  }
+  entry.count += 1;
+  return { allowed: true, retryAfter: 0 };
+}
+
+export async function POST(request: Request) {
+  const forwarded = request.headers.get('x-forwarded-for');
+  const client = forwarded?.split(',')[0]?.trim() || 'unknown';
+
+  const limit = rateLimit(client);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { ok: false, error: 'Too many submissions. Please try again shortly.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } },
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ ok: false, error: 'Malformed request.' }, { status: 400 });
+  }
+
+  const result = validate(body);
+  if (!result.ok) {
+    return NextResponse.json({ ok: false, errors: result.errors }, { status: 422 });
+  }
+
+  const record = {
+    ...result.lead,
+    receivedAt: new Date().toISOString(),
+    source: 'marketing-site',
+    status: 'UNQUALIFIED',
+    client,
+  };
+
+  try {
+    const dir = path.join(process.cwd(), '.leads');
+    await mkdir(dir, { recursive: true });
+    await appendFile(path.join(dir, 'leads.jsonl'), `${JSON.stringify(record)}\n`, 'utf8');
+  } catch (error) {
+    console.error('[leads] failed to persist submission', error);
+    return NextResponse.json(
+      { ok: false, error: 'We could not record that. Please email us directly.' },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ ok: true }, { status: 201 });
+}
