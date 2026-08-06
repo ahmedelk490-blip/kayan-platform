@@ -29,18 +29,20 @@ const plexArabic = IBM_Plex_Sans_Arabic({
 
 export const metadata: Metadata = {
   title: {
-    default: `${BRAND.name} — ${BRAND.tagline.en}`,
-    template: `%s · ${BRAND.name}`,
+    default: `${BRAND.nameAr} | ${BRAND.name} — ${BRAND.tagline.ar}`,
+    template: `%s · ${BRAND.nameAr}`,
   },
-  description: BRAND.message.en,
+  description:
+    'مصنع كيان للزي الموحد والطباعة والتطريز — يلكات، تيشيرتات، مرايل، قبعات، زي المطاعم والزي الإداري. خامات ممتازة، ستايلات عصرية، تطريز وطباعة داخل المصنع.',
   icons: {
     icon: '/brand/kayan-logo.jpg',
     apple: '/brand/kayan-logo.jpg',
   },
   openGraph: {
-    title: `${BRAND.name} — ${BRAND.tagline.en}`,
-    description: BRAND.message.en,
+    title: `${BRAND.nameAr} | ${BRAND.name}`,
+    description: BRAND.message.ar,
     images: ['/brand/kayan-logo.jpg'],
+    locale: 'ar_EG',
     type: 'website',
   },
 };
@@ -54,17 +56,17 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
-      lang="en"
-      dir="ltr"
+      lang="ar"
+      dir="rtl"
       className={`${spaceGrotesk.variable} ${inter.variable} ${plexArabic.variable}`}
     >
       <body>
-        {/* Keyboard users must be able to escape the cinematic sections. */}
+        {/* لمستخدمي لوحة المفاتيح: تخطّي الأقسام السينمائية. */}
         <a
           href="#main"
           className="sr-only focus:not-sr-only focus:fixed focus:start-4 focus:top-4 focus:z-[100] focus:rounded-full focus:bg-accent focus:px-5 focus:py-2 focus:text-sm focus:text-on-accent"
         >
-          Skip to content
+          تخطّي إلى المحتوى
         </a>
 
         <IntroMount />

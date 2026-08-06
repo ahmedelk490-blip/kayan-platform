@@ -22,6 +22,16 @@
     overflow-x: hidden;
   }
 
+  /* Arabic typography.
+     Redefining --font-display at the :lang(ar) level means every existing
+     `font-display` utility resolves to the Arabic face automatically —
+     Space Grotesk carries no Arabic glyphs, so without this every heading
+     would silently fall back to a system font. */
+  :lang(ar) {
+    --font-display: var(--font-plex-arabic), system-ui, sans-serif;
+    --font-body: var(--font-plex-arabic), system-ui, sans-serif;
+  }
+
   :lang(ar) body {
     font-family: var(--font-arabic);
   }
@@ -33,6 +43,20 @@
     font-weight: 500;
     letter-spacing: -0.02em;
     text-wrap: balance;
+  }
+
+  /* Arabic is a connected script: negative tracking breaks the joins, and
+     the taller glyph body needs more leading than a Latin display face. */
+  :lang(ar) h1,
+  :lang(ar) h2,
+  :lang(ar) h3 {
+    letter-spacing: 0;
+    line-height: 1.25;
+  }
+
+  :lang(ar) p,
+  :lang(ar) li {
+    line-height: 1.9;
   }
 
   /* Focus must clear AA contrast against every background, including 3D. */

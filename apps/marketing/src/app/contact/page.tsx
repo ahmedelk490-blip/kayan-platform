@@ -4,26 +4,26 @@ import { PageHero } from '@/components/PageHero';
 import { LeadForm } from '@/components/LeadForm';
 
 export const metadata: Metadata = {
-  title: 'Request a demo',
+  title: 'اطلب عرض سعر',
   description:
-    'Bring a real quotation and we will cost it in the system, showing every number it used.',
+    'أرسل تفاصيل طلبك من الزي الموحد أو الطباعة والتطريز، ونرجع لك بعرض سعر واضح وموعد تسليم محدد.',
 };
 
-const EXPECT = [
+const STEPS = [
   {
-    n: '01',
-    title: 'You bring a real job',
-    body: 'A print run, an embroidery order, a uniform contract. Ideally one you already priced, so you have something to compare against.',
+    n: '٠١',
+    title: 'ترسل لنا التفاصيل',
+    body: 'نوع الزي، عدد القطع، وشعارك إن وُجد. كلما زادت التفاصيل كان العرض أدق.',
   },
   {
-    n: '02',
-    title: 'We cost it live',
-    body: 'Set up as a hybrid item if it needs to be, with your fabric, your stitch count and your waste percentages.',
+    n: '٠٢',
+    title: 'نرجع لك بعرض سعر',
+    body: 'خلال يوم عمل واحد، بسعر واضح للقطعة وموعد تسليم محدد — لا تقديرات مفتوحة.',
   },
   {
-    n: '03',
-    title: 'You interrogate the number',
-    body: 'Expand any figure down to the formula version and the source of every input. If it disagrees with your spreadsheet, we find out why together.',
+    n: '٠٣',
+    title: 'نجهّز عينة قبل الإنتاج',
+    body: 'تعتمد العينة أولاً، ثم نشغّل الكمية. لا مفاجآت في التسليم النهائي.',
   },
 ];
 
@@ -31,9 +31,9 @@ export default function ContactPage() {
   return (
     <>
       <PageHero
-        eyebrow="Request a demo"
-        title="Bring a job we should not be able to cost."
-        lead="The fastest way to judge this system is to point it at work you already priced, and see whether it agrees with you — and whether it can show its reasoning when it does not."
+        eyebrow="اطلب عرض سعر"
+        title="احكِ لنا عن طلبك."
+        lead="عدد القطع، نوع الزي، وشعارك — ونرجع لك بعرض سعر واضح ومواعيد تسليم محددة."
       />
 
       <SectionShell size="tall">
@@ -44,18 +44,16 @@ export default function ContactPage() {
             </div>
 
             <div>
-              <h2 className="text-[0.65rem] uppercase tracking-[0.18em] text-neutral-500">
-                What to expect
-              </h2>
+              <h2 className="text-xs tracking-[0.14em] text-neutral-500">كيف نعمل</h2>
               <ol className="mt-8 space-y-9">
-                {EXPECT.map((step) => (
+                {STEPS.map((step) => (
                   <li key={step.n} className="flex gap-5">
-                    <span className="font-display text-2xl leading-none text-ink-700">
+                    <span className="font-display text-2xl leading-none text-primary-700">
                       {step.n}
                     </span>
                     <div>
                       <h3 className="font-display text-base text-neutral-100">{step.title}</h3>
-                      <p className="mt-2 max-w-[38ch] text-sm leading-relaxed text-neutral-400">
+                      <p className="mt-2 max-w-[38ch] text-sm leading-loose text-neutral-400">
                         {step.body}
                       </p>
                     </div>
@@ -65,10 +63,9 @@ export default function ContactPage() {
 
               <div className="rule-hairline my-10" />
 
-              <p className="max-w-[40ch] text-sm leading-relaxed text-neutral-500">
-                Deployment is your choice — multi-tenant cloud or dedicated on-premise, from one
-                codebase. Arabic and English are both first-class, including right-to-left
-                documents.
+              <p className="max-w-[40ch] text-sm leading-loose text-neutral-500">
+                نصنّع للمطاعم والشركات والمصانع والمنشآت الطبية، بكميات تبدأ من الطلبات الصغيرة
+                وحتى آلاف القطع.
               </p>
             </div>
           </div>

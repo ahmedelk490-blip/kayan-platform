@@ -1,22 +1,33 @@
 import { Hero } from '@/components/sections/Hero';
-import { TheMaking } from '@/components/sections/TheMaking';
-import { TheControl } from '@/components/sections/TheControl';
-import { Proof } from '@/components/sections/Proof';
+import { About } from '@/components/sections/About';
+import { Products } from '@/components/sections/Products';
+import { Services } from '@/components/sections/Services';
+import { WhyKayan } from '@/components/sections/WhyKayan';
+import { Vision } from '@/components/sections/Vision';
+import { ContactCta } from '@/components/sections/ContactCta';
 
 /**
- * Homepage — the five-act narrative spine (07_UI_UX §4.2).
+ * الصفحة الرئيسية لمصنع كيان.
  *
- * Milestone 1 ships Acts I, II, III and V. The remaining WOW moments
- * (Platform Overview, Printing Simulation, Embroidery Thread, Warehouse,
- * Supply Chain, Dashboard Preview, AI Analytics) follow in milestone 2.
+ * سبعة أقسام، ولكل قسم قواعد حركة مختلفة عن الذي قبله:
+ *   Hero      — تجميع نسيج ثلاثي الأبعاد مع حركة تلقائية
+ *   من نحن     — كشف هادئ متدرّج
+ *   المنتجات   — شبكة بطاقات متتابعة
+ *   الخدمات    — ألواح تدخل من الجانب
+ *   لماذا كيان — خطوط تُرسم أفقياً
+ *   الرؤية     — ألواح تكبر من ٠٫٩٦
+ *   التواصل    — أهدأ لحظة، عن قصد
  */
 export default function HomePage() {
   return (
     <>
       <Hero />
-      <TheMaking />
-      <TheControl />
-      <Proof />
+      <About />
+      <Products />
+      <Services />
+      <WhyKayan />
+      <Vision />
+      <ContactCta />
     </>
   );
 }

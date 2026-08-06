@@ -16,16 +16,16 @@ export function SiteFooter() {
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_repeat(4,1fr)] lg:gap-8">
           <div>
-            <Link href="/" aria-label={`${BRAND.name} — home`} className="inline-flex">
+            <Link href="/" aria-label={`${BRAND.nameAr} — الرئيسية`} className="inline-flex">
               <Logo height={56} className="rounded-lg" />
             </Link>
-            <p className="mt-5 max-w-[32ch] text-sm leading-relaxed text-neutral-400">
-              {BRAND.tagline.en}
-            </p>
-            <p dir="rtl" className="mt-2 max-w-[32ch] font-arabic text-sm leading-relaxed text-neutral-500">
+            <p className="mt-5 max-w-[34ch] text-sm leading-loose text-neutral-400">
               {BRAND.tagline.ar}
             </p>
-            <p className="mt-5 text-sm text-accent">{BRAND.slogan.en}</p>
+            <p className="mt-4 max-w-[34ch] text-sm leading-loose text-neutral-500">
+              {BRAND.message.ar}
+            </p>
+            <p className="mt-5 text-sm text-accent">{BRAND.slogan.ar}</p>
           </div>
 
           {FOOTER_GROUPS.map((group) => (
@@ -34,8 +34,10 @@ export function SiteFooter() {
                 {group.title}
               </h2>
               <ul className="mt-4 space-y-2.5">
+                {/* Keyed by label, not href — several links in a group point
+                    at the same section anchor. */}
                 {group.links.map((link) => (
-                  <li key={link.href}>
+                  <li key={link.label}>
                     <Link
                       href={link.href}
                       className="text-sm text-neutral-400 transition-colors duration-300 hover:text-neutral-100"
@@ -58,9 +60,9 @@ export function SiteFooter() {
 
         <div className="mt-8 flex flex-col gap-4 border-t border-ink-800 pt-8 text-xs text-neutral-500 sm:flex-row sm:items-center sm:justify-between">
           <span>
-            {BRAND.name} — {BRAND.tagline.en}
+            {BRAND.nameAr} | {BRAND.name} — مصنع الزي الموحد والطباعة والتطريز
           </span>
-          <span>© {new Date().getFullYear()} · All rights reserved</span>
+          <span>© {new Date().getFullYear()} · جميع الحقوق محفوظة</span>
         </div>
       </div>
     </footer>

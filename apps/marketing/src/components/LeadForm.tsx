@@ -2,16 +2,15 @@
 
 import { useState } from 'react';
 import { cn } from '@erp/utils';
-import { INDUSTRIES } from '@/site';
+import { PRODUCTS } from '@/site';
 
 type Status = 'idle' | 'submitting' | 'success' | 'error';
 
 /**
- * Demo request — the conversion surface.
+ * نموذج طلب عرض السعر.
  *
- * Styled toward the ERP philosophy rather than the cinematic one: a form is a
- * task, and decorating a task makes it slower. Validation messages are text,
- * not colour alone, and every error is tied to its field for screen readers.
+ * النموذج مهمة، لا مشهد — لا حركة زائدة تبطّئ الزائر. رسائل الخطأ نصّية
+ * وليست لوناً فقط، وكل خطأ مربوط بحقله لقارئ الشاشة.
  */
 export function LeadForm() {
   const [status, setStatus] = useState<Status>('idle');
@@ -50,16 +49,16 @@ export function LeadForm() {
       if (response.status === 422 && body?.errors) {
         const mapped: Record<string, string> = {};
         for (const item of body.errors as { field: string; reason: string }[]) {
-          mapped[item.field] = item.reason;
+          mapped[item.field] = FIELD_ERRORS[item.field] ?? 'من فضلك راجع هذا الحقل.';
         }
         setErrors(mapped);
-        setFormError('Please correct the highlighted fields.');
+        setFormError('من فضلك راجع الحقول المحددة.');
       } else {
-        setFormError(body?.error ?? 'Something went wrong. Please try again.');
+        setFormError(body?.error ?? 'حدث خطأ ما. من فضلك حاول مرة أخرى.');
       }
       setStatus('error');
     } catch {
-      setFormError('We could not reach the server. Please check your connection.');
+      setFormError('تعذّر الوصول إلى الخادم. تأكد من اتصالك بالإنترنت.');
       setStatus('error');
     }
   }
@@ -68,13 +67,12 @@ export function LeadForm() {
     return (
       <div
         role="status"
-        className="rounded-2xl border border-accent/30 bg-accent/[0.05] p-8 md:p-10"
+        className="rounded-2xl border border-primary-600/40 bg-primary-950/40 p-8 md:p-10"
       >
-        <h2 className="font-display text-2xl text-neutral-100">Thank you — that is with us.</h2>
-        <p className="mt-4 max-w-[48ch] text-sm leading-relaxed text-neutral-300">
-          We will come back to you within one working day. If you have a quotation or an
-          estimating spreadsheet you would like costed in the demo, bring it — that is the
-          fastest way to see whether this is worth your time.
+        <h2 className="font-display text-2xl text-neutral-100">وصلنا طلبك — شكراً لك.</h2>
+        <p className="mt-4 max-w-[48ch] text-sm leading-loose text-neutral-300">
+          سنرجع لك خلال يوم عمل واحد بعرض سعر واضح وموعد تسليم محدد. لو عندك شعار أو تصميم
+          جاهز، أرسله لنا وسيكون العرض أدق.
         </p>
       </div>
     );
@@ -85,19 +83,27 @@ export function LeadForm() {
       'w-full rounded-xl border bg-ink-900/60 px-4 py-3 text-sm text-neutral-100',
       'placeholder:text-neutral-600 transition-colors',
       'focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent',
-      errors[name] ? 'border-red-400/60' : 'border-ink-700',
+      errors[name] ? 'border-danger-500/70' : 'border-ink-700',
     );
 
-  const Label = ({ htmlFor, children, optional }: { htmlFor: string; children: React.ReactNode; optional?: boolean }) => (
-    <label htmlFor={htmlFor} className="mb-2 block text-xs uppercase tracking-[0.14em] text-neutral-400">
+  const Label = ({
+    htmlFor,
+    children,
+    optional,
+  }: {
+    htmlFor: string;
+    children: React.ReactNode;
+    optional?: boolean;
+  }) => (
+    <label htmlFor={htmlFor} className="mb-2 block text-xs tracking-[0.1em] text-neutral-400">
       {children}
-      {optional && <span className="ms-2 normal-case tracking-normal text-neutral-600">optional</span>}
+      {optional && <span className="ms-2 text-neutral-600">اختياري</span>}
     </label>
   );
 
-  const Error = ({ name }: { name: string }) =>
+  const FieldError = ({ name }: { name: string }) =>
     errors[name] ? (
-      <p id={`${name}-error`} className="mt-2 text-xs text-red-300">
+      <p id={`${name}-error`} className="mt-2 text-xs text-danger-500">
         {errors[name]}
       </p>
     ) : null;
@@ -106,7 +112,7 @@ export function LeadForm() {
     <form onSubmit={onSubmit} noValidate className="space-y-6">
       <div className="grid gap-6 sm:grid-cols-2">
         <div>
-          <Label htmlFor="name">Your name</Label>
+          <Label htmlFor="name">الاسم</Label>
           <input
             id="name"
             name="name"
@@ -115,12 +121,12 @@ export function LeadForm() {
             aria-invalid={Boolean(errors.name)}
             aria-describedby={errors.name ? 'name-error' : undefined}
             className={fieldClass('name')}
-            placeholder="Mahmoud Hassan"
+            placeholder="اسمك بالكامل"
           />
-          <Error name="name" />
+          <FieldError name="name" />
         </div>
         <div>
-          <Label htmlFor="company">Company</Label>
+          <Label htmlFor="company">اسم الشركة</Label>
           <input
             id="company"
             name="company"
@@ -129,54 +135,56 @@ export function LeadForm() {
             aria-invalid={Boolean(errors.company)}
             aria-describedby={errors.company ? 'company-error' : undefined}
             className={fieldClass('company')}
-            placeholder="Delta Printing & Safety"
+            placeholder="الشركة أو المطعم"
           />
-          <Error name="company" />
+          <FieldError name="company" />
         </div>
         <div>
-          <Label htmlFor="email">Work email</Label>
+          <Label htmlFor="email">البريد الإلكتروني</Label>
           <input
             id="email"
             name="email"
             type="email"
             autoComplete="email"
             required
+            dir="ltr"
             aria-invalid={Boolean(errors.email)}
             aria-describedby={errors.email ? 'email-error' : undefined}
-            className={fieldClass('email')}
+            className={cn(fieldClass('email'), 'text-start')}
             placeholder="you@company.com"
           />
-          <Error name="email" />
+          <FieldError name="email" />
         </div>
         <div>
           <Label htmlFor="phone" optional>
-            Phone
+            رقم الهاتف
           </Label>
           <input
             id="phone"
             name="phone"
             type="tel"
             autoComplete="tel"
-            className={fieldClass('phone')}
-            placeholder="+20 ..."
+            dir="ltr"
+            className={cn(fieldClass('phone'), 'text-start')}
+            placeholder="+20"
           />
-          <Error name="phone" />
+          <FieldError name="phone" />
         </div>
       </div>
 
       <fieldset>
-        <legend className="mb-3 text-xs uppercase tracking-[0.14em] text-neutral-400">
-          What do you produce?
-          <span className="ms-2 normal-case tracking-normal text-neutral-600">optional</span>
+        <legend className="mb-3 text-xs tracking-[0.1em] text-neutral-400">
+          ما الذي تحتاجه؟
+          <span className="ms-2 text-neutral-600">اختياري</span>
         </legend>
         <div className="flex flex-wrap gap-2.5">
-          {INDUSTRIES.map((industry) => (
+          {PRODUCTS.map((product) => (
             <label
-              key={industry.id}
-              className="cursor-pointer rounded-full border border-ink-700 px-4 py-2 text-sm text-neutral-300 transition-colors has-[:checked]:border-accent has-[:checked]:bg-accent/10 has-[:checked]:text-accent has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent"
+              key={product.id}
+              className="cursor-pointer rounded-full border border-ink-700 px-4 py-2 text-sm text-neutral-300 transition-colors has-[:checked]:border-accent has-[:checked]:bg-primary-950 has-[:checked]:text-accent has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent"
             >
-              <input type="checkbox" name="interests" value={industry.id} className="sr-only" />
-              {industry.name}
+              <input type="checkbox" name="interests" value={product.id} className="sr-only" />
+              {product.name}
             </label>
           ))}
         </div>
@@ -184,20 +192,20 @@ export function LeadForm() {
 
       <div>
         <Label htmlFor="message" optional>
-          What would you like costed?
+          تفاصيل الطلب
         </Label>
         <textarea
           id="message"
           name="message"
           rows={4}
           className={cn(fieldClass('message'), 'resize-y')}
-          placeholder="A 500-piece hi-vis order, printed and embroidered, in a size matrix…"
+          placeholder="مثال: ٥٠٠ تيشيرت بولو بشعار مطرّز على الصدر، مقاسات مختلفة، التسليم خلال ٣ أسابيع…"
         />
-        <Error name="message" />
+        <FieldError name="message" />
       </div>
 
       {formError && (
-        <p role="alert" className="text-sm text-red-300">
+        <p role="alert" className="text-sm text-danger-500">
           {formError}
         </p>
       )}
@@ -207,18 +215,27 @@ export function LeadForm() {
           type="submit"
           disabled={status === 'submitting'}
           className={cn(
-            'rounded-full bg-accent px-7 py-3.5 text-sm font-medium text-on-accent',
-            'transition-opacity focus-visible:outline-none focus-visible:ring-2',
-            'focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
+            'rounded-full bg-primary-600 px-7 py-3.5 text-sm font-medium text-neutral-50',
+            'transition-opacity hover:bg-primary-500 focus-visible:outline-none',
+            'focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
+            'focus-visible:ring-offset-bg',
             status === 'submitting' && 'cursor-not-allowed opacity-60',
           )}
         >
-          {status === 'submitting' ? 'Sending…' : 'Request a demo'}
+          {status === 'submitting' ? 'جارٍ الإرسال…' : 'أرسل الطلب'}
         </button>
-        <p className="text-xs text-neutral-500">
-          We reply within one working day. No newsletter, no sequence.
-        </p>
+        <p className="text-xs text-neutral-500">نرد خلال يوم عمل واحد.</p>
       </div>
     </form>
   );
 }
+
+/** ترجمة أخطاء الخادم — الـ API يرد بالإنجليزية. */
+const FIELD_ERRORS: Record<string, string> = {
+  name: 'الاسم مطلوب.',
+  company: 'اسم الشركة مطلوب.',
+  email: 'البريد الإلكتروني غير صحيح.',
+  phone: 'رقم الهاتف غير صحيح.',
+  message: 'النص طويل أكثر من اللازم.',
+  interests: 'اختيار غير معروف.',
+};

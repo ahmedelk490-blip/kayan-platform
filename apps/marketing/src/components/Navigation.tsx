@@ -76,9 +76,15 @@ export function Navigation() {
           ))}
         </div>
 
-        <div className="hidden md:block">
-          <MagneticButton href="/contact" className="px-5 py-2 text-xs" strength={0.25}>
-            Request a demo
+        <div className="hidden items-center gap-3 md:flex">
+          <Link
+            href="/login"
+            className="rounded-full border border-ink-700 px-4 py-2 text-xs text-neutral-300 transition-colors hover:border-accent hover:text-accent"
+          >
+            دخول النظام
+          </Link>
+          <MagneticButton href="#contact" className="px-5 py-2 text-xs" strength={0.25}>
+            اطلب عرض سعر
           </MagneticButton>
         </div>
 
@@ -87,7 +93,7 @@ export function Navigation() {
           onClick={() => setMenuOpen((open) => !open)}
           aria-expanded={menuOpen}
           aria-controls="mobile-menu"
-          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-label={menuOpen ? 'إغلاق القائمة' : 'فتح القائمة'}
           className="flex h-9 w-9 items-center justify-center rounded-full border border-ink-700 md:hidden"
         >
           <span className="relative block h-3 w-4">
@@ -131,12 +137,20 @@ export function Navigation() {
             </Link>
           ))}
           <Link
-            href="/contact"
+            href="/login"
             onClick={() => setMenuOpen(false)}
             tabIndex={menuOpen ? 0 : -1}
-            className="mt-2 rounded-xl bg-accent px-4 py-3 text-center text-sm font-medium text-on-accent"
+            className="mt-2 rounded-xl border border-ink-700 px-4 py-3 text-center text-sm text-neutral-200"
           >
-            Request a demo
+            دخول النظام
+          </Link>
+          <Link
+            href="#contact"
+            onClick={() => setMenuOpen(false)}
+            tabIndex={menuOpen ? 0 : -1}
+            className="rounded-xl bg-primary-600 px-4 py-3 text-center text-sm font-medium text-neutral-50"
+          >
+            اطلب عرض سعر
           </Link>
         </div>
       </motion.div>

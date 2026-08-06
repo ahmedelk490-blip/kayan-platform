@@ -1,91 +1,181 @@
 /**
- * Single source of truth for site navigation and footer structure.
+ * محتوى موقع كيان — مصدر واحد للصفحة والقائمة والفوتر.
  *
- * Kept as data rather than JSX so the header, the mobile menu, and the footer
- * sitemap cannot drift apart — a classic corporate-site defect.
+ * Content lives as data, not JSX, so the navigation, the page sections and
+ * the footer sitemap cannot drift apart.
  */
 
 export const NAV_LINKS = [
-  { href: '/platform', label: 'Platform' },
-  { href: '/industries', label: 'Industries' },
-  { href: '/company', label: 'Company' },
+  { href: '#about', label: 'من نحن' },
+  { href: '#products', label: 'منتجاتنا' },
+  { href: '#services', label: 'الطباعة والتطريز' },
+  { href: '#why', label: 'لماذا كيان' },
+  { href: '#contact', label: 'تواصل معنا' },
 ] as const;
+
+/** تسعة منتجات — الأساس الذي يقوم عليه المصنع. */
+export const PRODUCTS = [
+  {
+    id: 'vests',
+    name: 'اليلكات',
+    line: 'يلكات السلامة والعمل',
+    body: 'يلكات بخامات متينة وشرائط عاكسة، مناسبة لمواقع الإنشاء والمصانع وشركات التوصيل.',
+  },
+  {
+    id: 'tshirts',
+    name: 'التيشيرتات',
+    line: 'قطن وبولو',
+    body: 'تيشيرتات وبولو بقصّات مريحة وألوان ثابتة لا تبهت مع الغسيل المتكرر.',
+  },
+  {
+    id: 'aprons',
+    name: 'المرايل',
+    line: 'مطاعم وكافيهات ومصانع',
+    body: 'مرايل بخامات تتحمل الاستخدام اليومي، بتصاميم عملية وجيوب مدروسة.',
+  },
+  {
+    id: 'caps',
+    name: 'القبعات',
+    line: 'كاب وقبعات عمل',
+    body: 'قبعات قابلة للتطريز بشعار علامتك، بمقاسات قابلة للضبط.',
+  },
+  {
+    id: 'restaurant',
+    name: 'زي المطاعم',
+    line: 'طقم متكامل للصالة والمطبخ',
+    body: 'زي موحد للشيف والصالة، يجمع بين المظهر الأنيق وسهولة الحركة والتنظيف.',
+  },
+  {
+    id: 'corporate',
+    name: 'الزي الإداري',
+    line: 'قمصان وبدل مكتبية',
+    body: 'زي رسمي يعكس احترافية الشركة أمام عملائها، بخامات مريحة طوال اليوم.',
+  },
+  {
+    id: 'industrial',
+    name: 'الملابس الصناعية',
+    line: 'أفرولات وملابس ورش',
+    body: 'ملابس عمل مصممة للتحمّل، بخياطة مقوّاة في مواضع الاحتكاك.',
+  },
+  {
+    id: 'medical',
+    name: 'الملابس الطبية',
+    line: 'سكرابات وبالطو',
+    body: 'خامات مريحة سهلة التعقيم، بألوان ثابتة تتحمل الغسيل المتكرر.',
+  },
+  {
+    id: 'custom',
+    name: 'الملابس المخصصة',
+    line: 'حسب التصميم والمقاس',
+    body: 'نصنّع ما تحتاجه تحديداً — تصميمك، خاماتك، مقاساتك، وشعارك.',
+  },
+] as const;
+
+/** الخدمتان اللتان تميزان كيان: التنفيذ داخل المصنع. */
+export const SERVICES = [
+  {
+    id: 'embroidery',
+    name: 'التطريز',
+    tagline: 'شعارك بخيوط لا تبهت',
+    body: 'تطريز احترافي بخيوط عالية الجودة وكثافة غرز مدروسة، يحافظ على شكله بعد مئات الغسلات. نعمل على الشعارات الدقيقة والنصوص العربية والإنجليزية.',
+    points: ['تجهيز ملف التطريز لشعارك', 'مطابقة ألوان الخيوط لهوية علامتك', 'تطريز على الصدر والظهر والأكمام والقبعات'],
+  },
+  {
+    id: 'printing',
+    name: 'الطباعة',
+    tagline: 'الطريقة المناسبة لكل خامة',
+    body: 'نختار أسلوب الطباعة حسب الخامة والكمية والتصميم — لا أسلوب واحد يناسب كل شيء. النتيجة ألوان نظيفة وحواف حادة وثبات على القماش.',
+    points: ['سلك سكرين للكميات الكبيرة', 'طباعة DTF للتصاميم متعددة الألوان', 'طباعة حرارية للكميات الصغيرة والعينات'],
+  },
+] as const;
+
+/** لماذا كيان — أسباب ملموسة، لا شعارات. */
+export const WHY_KAYAN = [
+  {
+    n: '٠١',
+    title: 'خامات مختارة',
+    body: 'نختار القماش قبل أن نخيط. الخامة هي الفرق بين زي يدوم موسماً وزي يدوم سنوات.',
+  },
+  {
+    n: '٠٢',
+    title: 'التطريز والطباعة داخل المصنع',
+    body: 'لا نرسل عملك إلى ورش خارجية. التنفيذ كامل تحت سقف واحد — أسرع في التسليم وأدق في الجودة.',
+  },
+  {
+    n: '٠٣',
+    title: 'التزام بالمواعيد',
+    body: 'نحدد موعد التسليم بعد دراسة الطلب، ثم نلتزم به. تأخير الزي يعني تأخير افتتاحك.',
+  },
+  {
+    n: '٠٤',
+    title: 'مرونة في الكميات والمقاسات',
+    body: 'من عشرة أطقم إلى آلاف القطع، بجدول مقاسات يناسب فريقك فعلياً.',
+  },
+  {
+    n: '٠٥',
+    title: 'متابعة مباشرة',
+    body: 'شخص واحد مسؤول عن طلبك من العينة حتى التسليم — تعرف دائماً أين وصل عملك.',
+  },
+  {
+    n: '٠٦',
+    title: 'عينة قبل الإنتاج',
+    body: 'نجهّز عينة معتمدة قبل تشغيل الكمية، فلا مفاجآت في التسليم النهائي.',
+  },
+] as const;
+
+export const VISION = {
+  vision: {
+    title: 'رؤيتنا',
+    body: 'أن نكون الخيار الأول للزي الموحد في مصر والمنطقة، وأن يصبح اسم كيان مرادفاً للجودة التي يُعتمد عليها.',
+  },
+  mission: {
+    title: 'رسالتنا',
+    body: 'أن نصنع زياً يعكس احترافية عملائنا ويستحق أن يحمل شعارهم، بجودة ثابتة وخدمة صادقة وسعر عادل.',
+  },
+  values: {
+    title: 'قيمنا',
+    items: [
+      { name: 'الجودة', body: 'لا نساوم على الخامة ولا على التنفيذ.' },
+      { name: 'الالتزام', body: 'ما نتفق عليه ننفّذه في موعده.' },
+      { name: 'الإتقان', body: 'التفاصيل الصغيرة هي ما يُلاحَظ.' },
+      { name: 'الشفافية', body: 'نوضح ما نستطيع وما لا نستطيع قبل الاتفاق.' },
+    ],
+  },
+} as const;
 
 export const FOOTER_GROUPS = [
   {
-    title: 'Platform',
+    title: 'منتجاتنا',
     links: [
-      { href: '/platform#modules', label: 'Modules' },
-      { href: '/platform#costing', label: 'Cost engine' },
-      { href: '/platform#preview', label: 'Dashboard' },
+      { href: '#products', label: 'اليلكات والتيشيرتات' },
+      { href: '#products', label: 'زي المطاعم' },
+      { href: '#products', label: 'الزي الإداري' },
+      { href: '#products', label: 'الملابس الصناعية والطبية' },
     ],
   },
   {
-    title: 'Industries',
+    title: 'خدماتنا',
     links: [
-      { href: '/industries#printing', label: 'Printing' },
-      { href: '/industries#embroidery', label: 'Embroidery' },
-      { href: '/industries#uniforms', label: 'Uniforms' },
-      { href: '/industries#safety', label: 'Safety products' },
+      { href: '#services', label: 'التطريز' },
+      { href: '#services', label: 'الطباعة' },
+      { href: '#products', label: 'التصنيع المخصص' },
     ],
   },
   {
-    title: 'Company',
+    title: 'كيان',
     links: [
-      { href: '/company', label: 'Our approach' },
-      { href: '/company#principles', label: 'Principles' },
-      { href: '/contact', label: 'Contact' },
+      { href: '#about', label: 'من نحن' },
+      { href: '#why', label: 'لماذا كيان' },
+      { href: '#vision', label: 'الرؤية والرسالة' },
+      { href: '#contact', label: 'تواصل معنا' },
     ],
   },
   {
-    title: 'Legal',
+    title: 'روابط',
     links: [
-      { href: '/legal/privacy', label: 'Privacy' },
-      { href: '/legal/terms', label: 'Terms' },
+      { href: '/login', label: 'دخول النظام' },
+      { href: '/legal/privacy', label: 'الخصوصية' },
+      { href: '/legal/terms', label: 'الشروط' },
     ],
-  },
-] as const;
-
-/** The four archetypes — used by /industries and referenced from /platform. */
-export const INDUSTRIES = [
-  {
-    id: 'printing',
-    name: 'Printing',
-    model: 'Job shop, make-to-order',
-    driver: 'Setup amortisation + substrate area',
-    problem:
-      'Print is quoted on instinct because setup, waste and spoilage are never modelled. Margin is discovered at year end, sometimes negative.',
-    answer:
-      'Setup cost amortises across the run, substrate is consumed by area, and spoilage is a modelled percentage rather than a surprise.',
-  },
-  {
-    id: 'embroidery',
-    name: 'Embroidery',
-    model: 'Machine-hour capacity',
-    driver: 'Stitch count × head count',
-    problem:
-      'Costing per unit misprices every job, because the machine charges by time and stitches — not by how many shirts came off it.',
-    answer:
-      'Cost is stitch count times heads times machine rate. The digitised file is a reusable asset with its own amortisation, not an attachment on an order.',
-  },
-  {
-    id: 'uniforms',
-    name: 'Uniforms',
-    model: 'Batch cut-make-trim',
-    driver: 'Size-dependent fabric consumption',
-    problem:
-      'A 3XL consumes materially more fabric than a small. A single fixed quantity per garment under-costs large sizes silently, forever.',
-    answer:
-      'Consumption is a matrix across size and colour, so every variant carries its true fabric cost — and large sizes stop eating the margin.',
-  },
-  {
-    id: 'safety',
-    name: 'Safety products',
-    model: 'Regulated distribution',
-    driver: 'Landed cost + compliance',
-    problem:
-      'PPE carries certification, batch traceability, expiry and inspection duties. Handled on paper, a recall is impossible to execute.',
-    answer:
-      'Certification travels on the item and onto the invoice. Lots trace both ways, expired stock cannot be sold, and a recall is a query.',
   },
 ] as const;
