@@ -2,6 +2,7 @@
   "name": "erp-platform",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@10.9.8",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -11,9 +12,16 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "dev:marketing": "npm run dev --workspace=@erp/marketing"
+    "dev:marketing": "npm run dev --workspace=@erp/marketing",
+    "dev:erp": "npm run dev --workspace=@erp/web",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "node --experimental-strip-types prisma/seed.mjs",
+    "db:studio": "prisma studio"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.6",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.22",
     "turbo": "^2.3.3",
     "typescript": "^5.7.2"
   },

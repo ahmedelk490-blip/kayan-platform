@@ -9,3 +9,8 @@ dist/
 
 # Interim lead store — contains PII, never commit (see api/leads/route.ts)
 .leads/
+
+# SQLite dev database
+data/
+*.db
+*.db-journal

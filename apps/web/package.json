@@ -1,29 +1,33 @@
 {
-  "name": "@erp/marketing",
+  "name": "@erp/web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3200",
+    "dev": "next dev -p 3300",
     "build": "next build",
-    "start": "next start --port 3200",
+    "start": "next start -p 3300",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@erp/brand": "*",
-    "@erp/motion": "*",
-    "@erp/ui-market": "*",
+    "@erp/domain": "*",
     "@erp/utils": "*",
+    "@node-rs/argon2": "^2.0.2",
+    "@prisma/client": "^6.2.1",
     "motion": "^12.0.0",
     "next": "^15.1.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "sharp": "^0.35.3",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
-    "@types/node": "^22.10.2",
+    "@types/node": "^22.10.5",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
+    "prisma": "^6.2.1",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.2"
   }

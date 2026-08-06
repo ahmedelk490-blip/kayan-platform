@@ -1,0 +1,207 @@
+// KAYAN ERP — database schema
+//
+// ⚠ DEVIATION FROM ADR-002. The approved architecture is PostgreSQL with
+// Row-Level Security. Neither PostgreSQL nor Docker is available on this
+// machine, so development runs on SQLite.
+//
+// Consequences, stated rather than hidden:
+//   - RLS does not exist. Tenant isolation is enforced in the repository
+//     layer only, which ADR-002 explicitly called insufficient for
+//     production. This MUST be revisited before any real data lands.
+//   - No native enums, no JSONB, no partial indexes.
+//
+// The schema is otherwise written to port cleanly: changing the provider to
+// postgresql and adding the RLS policies is the migration.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Platform
+// ─────────────────────────────────────────────────────────────
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  companies Company[]
+  users     User[]
+  products  Product[]
+  categories Category[]
+}
+
+model Company {
+  id       String @id @default(cuid())
+  tenantId String
+  name     String
+  nameAr   String
+  currency String @default("EGP")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Identity & Access  (FR-IAM)
+// ─────────────────────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(cuid())
+  tenantId     String
+  email        String    @unique
+  passwordHash String
+  name         String
+  nameAr       String?
+  roleId       String
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  failedLogins Int       @default(0)
+  lockedUntil  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role     Role      @relation(fields: [roleId], references: [id])
+  sessions Session[]
+  audits   AuditLog[]
+
+  @@index([tenantId])
+  @@index([roleId])
+}
+
+/// Roles are data, not an enum — Company Administrators must be able to
+/// define their own (FR-IAM-007).
+model Role {
+  id        String @id @default(cuid())
+  key       String @unique // MANAGER | SALES | CUSTOMER | ADMIN
+  name      String
+  nameAr    String
+  /// Where this role lands after login.
+  landingPath String
+
+  users       User[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id     String @id @default(cuid())
+  key    String @unique // products.read, sales.write, …
+  nameAr String
+  group  String
+
+  roles RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+/// Server-side session registry, so revocation is real (FR-IAM-008).
+/// A stateless JWT cannot be revoked before it expires.
+model Session {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+  ip        String?
+  userAgent String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Append-only. Never updated, never deleted (DI-1).
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  detail     String?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Products  (FR-MDM)
+// ─────────────────────────────────────────────────────────────
+
+model Category {
+  id           String  @id @default(cuid())
+  tenantId     String
+  slug         String
+  nameAr       String
+  nameEn       String
+  /// Google Drive folder this category was imported from.
+  driveFolderId String?
+  sortOrder    Int     @default(0)
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  tenantId    String
+  categoryId  String
+  sku         String
+  nameAr      String
+  nameEn      String?
+  descriptionAr String?
+  /// Google Drive folder this product (model) was imported from.
+  driveFolderId String?
+  basePrice   Float?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category Category       @relation(fields: [categoryId], references: [id])
+  images   ProductImage[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId, categoryId])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  path      String
+  width     Int
+  height    Int
+  bytes     Int
+  isPrimary Boolean @default(false)
+  sortOrder Int     @default(0)
+  /// Source Drive file id, so a re-import can detect duplicates.
+  driveFileId String?
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}

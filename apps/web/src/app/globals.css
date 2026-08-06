@@ -1,0 +1,51 @@
+@import 'tailwindcss';
+@import '@erp/brand/tokens.css';
+
+/**
+ * ERP surface styling.
+ *
+ * Deliberately different from the marketing site: this is read for eight
+ * hours a day (07_UI_UX §5.1). No decorative motion, tighter density, and
+ * type sized for scanning rows rather than for impact.
+ */
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-arabic), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    font-size: 14px;
+  }
+
+  /* Arabic is connected: negative tracking breaks the joins. */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: 0;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  /* Financial figures must align on the decimal when stacked in a column. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  .erp-card {
+    border-radius: 0.75rem;
+    border: 1px solid var(--color-border);
+    background-color: color-mix(in srgb, var(--color-surface) 60%, transparent);
+  }
+}
