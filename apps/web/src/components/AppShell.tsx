@@ -108,6 +108,23 @@ export function AppShell({
           </div>
         </header>
 
+        {/* التنقل على الموبايل — الشريط الجانبي مخفي تحت lg، وبدون هذا
+            لا يستطيع مستخدم الهاتف الوصول لأي صفحة. */}
+        <nav
+          aria-label="التنقل الرئيسي"
+          className="flex gap-2 overflow-x-auto border-b border-ink-800 px-5 py-2.5 lg:hidden"
+        >
+          {items.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="shrink-0 rounded-full border border-ink-700 px-3.5 py-1.5 text-xs text-neutral-300 transition-colors hover:border-accent hover:text-accent"
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
         <main className="min-w-0 flex-1 p-5 lg:p-8">{children}</main>
       </div>
     </div>
