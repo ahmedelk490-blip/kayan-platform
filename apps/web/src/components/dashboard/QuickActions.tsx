@@ -31,18 +31,18 @@ export function QuickActions({ actions }: { actions: QuickAction[] }) {
           {action.available ? (
             <Link
               href={action.href}
-              className="group flex items-center justify-between gap-3 rounded-lg border border-ink-800 px-4 py-3 transition-all duration-300 hover:border-primary-600 hover:bg-primary-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="group flex items-center justify-between gap-3 rounded-lg border border-line px-4 py-3 transition-all duration-300 hover:border-brand hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
               <span>
-                <span className="block text-sm text-neutral-200">{action.label}</span>
-                <span className="block text-[0.7rem] text-neutral-500">{action.description}</span>
+                <span className="block text-sm text-txt">{action.label}</span>
+                <span className="block text-[0.7rem] text-txt-3">{action.description}</span>
               </span>
-              <IconArrow className="h-4 w-4 shrink-0 text-neutral-600 transition-all duration-300 group-hover:-translate-x-1 group-hover:text-accent" />
+              <IconArrow className="h-4 w-4 shrink-0 text-txt-4 transition-all duration-300 group-hover:-translate-x-1 group-hover:text-brand" />
             </Link>
           ) : (
-            <div className="rounded-lg border border-dashed border-ink-800 px-4 py-3 opacity-55">
-              <span className="block text-sm text-neutral-500">{action.label}</span>
-              <span className="block text-[0.7rem] text-neutral-600">{action.description}</span>
+            <div className="rounded-lg border border-dashed border-line px-4 py-3 opacity-55">
+              <span className="block text-sm text-txt-3">{action.label}</span>
+              <span className="block text-[0.7rem] text-txt-4">{action.description}</span>
             </div>
           )}
         </motion.li>

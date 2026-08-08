@@ -27,20 +27,18 @@ export function WelcomeHeader({ name, roleAr }: { name: string; roleAr: string }
       initial={{ opacity: 0, y: -12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-      className="relative overflow-hidden rounded-xl border border-ink-800 bg-gradient-to-bl from-primary-950/60 via-ink-900/50 to-ink-900/30 p-6 md:p-7"
+      // Flat brand-soft panel with a solid brand rule on the inline-start
+      // edge. No gradient, no blurred glow — the directive asks for clean
+      // surfaces and subtle depth, not decoration.
+      className="rounded-xl border border-brand-line border-s-4 border-s-brand bg-brand-soft p-6 md:p-7"
     >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -end-16 -top-16 h-48 w-48 rounded-full bg-primary-600/10 blur-3xl"
-      />
-
-      <div className="relative flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.15, duration: 0.5 }}
-            className="text-xs text-accent"
+            className="text-xs text-brand"
           >
             {greeting}
           </motion.p>
@@ -49,7 +47,7 @@ export function WelcomeHeader({ name, roleAr }: { name: string; roleAr: string }
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.22, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            className="mt-1.5 text-2xl text-neutral-100 md:text-3xl"
+            className="mt-1.5 text-2xl text-txt md:text-3xl"
           >
             {name}
           </motion.h2>
@@ -58,7 +56,7 @@ export function WelcomeHeader({ name, roleAr }: { name: string; roleAr: string }
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.32, duration: 0.5 }}
-            className="mt-1.5 text-xs text-neutral-500"
+            className="mt-1.5 text-xs text-txt-3"
           >
             {roleAr}
           </motion.p>
@@ -68,7 +66,7 @@ export function WelcomeHeader({ name, roleAr }: { name: string; roleAr: string }
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.38, duration: 0.5 }}
-          className="text-xs text-neutral-500"
+          className="text-xs text-txt-3"
         >
           {dateAr}
         </motion.p>

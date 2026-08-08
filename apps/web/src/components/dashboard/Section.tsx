@@ -20,13 +20,13 @@ export function SectionTitle({
       transition={{ delay, duration: 0.5 }}
       className="mb-3 flex items-center gap-3"
     >
-      <h3 className="shrink-0 text-xs text-neutral-400">{children}</h3>
-      {note && <span className="shrink-0 text-[0.7rem] text-neutral-600">{note}</span>}
+      <h3 className="shrink-0 text-xs text-txt-3">{children}</h3>
+      {note && <span className="shrink-0 text-[0.7rem] text-txt-4">{note}</span>}
       <motion.span
         initial={{ scaleX: 0 }}
         animate={{ scaleX: 1 }}
         transition={{ delay: delay + 0.1, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-        className="h-px flex-1 origin-right bg-ink-800"
+        className="h-px flex-1 origin-right bg-line"
       />
     </motion.div>
   );
@@ -49,10 +49,10 @@ export function Panel({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-      className="overflow-hidden rounded-xl border border-ink-800 bg-ink-900/40"
+      className="overflow-hidden rounded-xl border border-line bg-card"
     >
-      <header className="flex items-center justify-between gap-3 border-b border-ink-800 px-5 py-3.5">
-        <h3 className="text-sm text-neutral-200">{title}</h3>
+      <header className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
+        <h3 className="text-sm text-txt">{title}</h3>
         {action}
       </header>
       <div className="p-5">{children}</div>

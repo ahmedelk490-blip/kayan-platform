@@ -54,7 +54,7 @@ export default async function ProductsPage() {
             title={`${category.nameAr} — ${category.products.length} منتج`}
           >
             {category.products.length === 0 ? (
-              <p className="text-sm text-neutral-500">لا توجد منتجات في هذا التصنيف.</p>
+              <p className="text-sm text-txt-3">لا توجد منتجات في هذا التصنيف.</p>
             ) : (
               <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {category.products.map((product) => {
@@ -62,9 +62,9 @@ export default async function ProductsPage() {
                   return (
                     <li
                       key={product.id}
-                      className="overflow-hidden rounded-lg border border-ink-800 bg-ink-950"
+                      className="overflow-hidden rounded-lg border border-line bg-canvas"
                     >
-                      <div className="relative aspect-[3/4] bg-ink-900">
+                      <div className="relative aspect-[3/4] bg-card-2">
                         {cover ? (
                           <Image
                             src={cover.path}
@@ -74,24 +74,24 @@ export default async function ProductsPage() {
                             className="object-cover"
                           />
                         ) : (
-                          <div className="flex h-full items-center justify-center text-xs text-neutral-600">
+                          <div className="flex h-full items-center justify-center text-xs text-txt-4">
                             لا توجد صورة
                           </div>
                         )}
                       </div>
 
                       <div className="p-4">
-                        <p className="truncate text-sm text-neutral-100">{product.nameAr}</p>
-                        <p dir="ltr" className="tnum mt-1 text-start text-[0.7rem] text-neutral-500">
+                        <p className="truncate text-sm text-txt">{product.nameAr}</p>
+                        <p dir="ltr" className="tnum mt-1 text-start text-[0.7rem] text-txt-3">
                           {product.sku}
                         </p>
                         <div className="mt-3 flex items-center justify-between text-[0.7rem]">
-                          <span className="text-neutral-500">{product.images.length} صورة</span>
+                          <span className="text-txt-3">{product.images.length} صورة</span>
                           <span
                             className={
                               product.isActive
-                                ? 'rounded-full bg-success-600/15 px-2 py-0.5 text-success-500'
-                                : 'rounded-full bg-danger-600/15 px-2 py-0.5 text-danger-500'
+                                ? 'rounded-full bg-ok-soft px-2 py-0.5 text-ok'
+                                : 'rounded-full bg-bad-soft px-2 py-0.5 text-bad'
                             }
                           >
                             {product.isActive ? 'نشط' : 'موقوف'}

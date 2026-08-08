@@ -10,7 +10,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="w-full rounded-lg bg-primary-600 px-5 py-3 text-sm font-medium text-neutral-50 transition-colors hover:bg-primary-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-60"
+      className="w-full rounded-lg bg-brand px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-60"
     >
       {pending ? 'جارٍ الدخول…' : 'تسجيل الدخول'}
     </button>
@@ -23,7 +23,7 @@ export function LoginForm() {
   return (
     <form action={formAction} className="space-y-5" noValidate>
       <div>
-        <label htmlFor="email" className="mb-2 block text-xs text-neutral-400">
+        <label htmlFor="email" className="mb-2 block text-xs text-txt-3">
           البريد الإلكتروني
         </label>
         <input
@@ -35,18 +35,18 @@ export function LoginForm() {
           required
           aria-invalid={Boolean(state.fieldErrors?.email)}
           aria-describedby={state.fieldErrors?.email ? 'email-error' : undefined}
-          className="w-full rounded-lg border border-ink-700 bg-ink-900/60 px-4 py-3 text-start text-sm text-neutral-100 placeholder:text-neutral-600 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+          className="w-full rounded-lg border border-field bg-card px-4 py-3 text-start text-sm text-txt placeholder:text-txt-4 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
           placeholder="you@kayan.eg"
         />
         {state.fieldErrors?.email && (
-          <p id="email-error" className="mt-2 text-xs text-danger-500">
+          <p id="email-error" className="mt-2 text-xs text-bad">
             {state.fieldErrors.email}
           </p>
         )}
       </div>
 
       <div>
-        <label htmlFor="password" className="mb-2 block text-xs text-neutral-400">
+        <label htmlFor="password" className="mb-2 block text-xs text-txt-3">
           كلمة المرور
         </label>
         <input
@@ -58,10 +58,10 @@ export function LoginForm() {
           required
           aria-invalid={Boolean(state.fieldErrors?.password)}
           aria-describedby={state.fieldErrors?.password ? 'password-error' : undefined}
-          className="w-full rounded-lg border border-ink-700 bg-ink-900/60 px-4 py-3 text-start text-sm text-neutral-100 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+          className="w-full rounded-lg border border-field bg-card px-4 py-3 text-start text-sm text-txt focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
         />
         {state.fieldErrors?.password && (
-          <p id="password-error" className="mt-2 text-xs text-danger-500">
+          <p id="password-error" className="mt-2 text-xs text-bad">
             {state.fieldErrors.password}
           </p>
         )}
@@ -70,7 +70,7 @@ export function LoginForm() {
       {state.error && (
         <p
           role="alert"
-          className="rounded-lg border border-danger-500/40 bg-danger-500/10 px-4 py-3 text-xs text-danger-500"
+          className="rounded-lg border border-bad bg-bad-soft px-4 py-3 text-xs text-bad"
         >
           {state.error}
         </p>

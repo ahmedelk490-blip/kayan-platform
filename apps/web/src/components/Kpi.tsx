@@ -19,12 +19,12 @@ export function Kpi({
 }) {
   return (
     <div className="erp-card p-5">
-      <p className="text-xs text-neutral-500">{label}</p>
+      <p className="text-xs text-txt-3">{label}</p>
       <p className="mt-2 flex items-baseline gap-1.5">
-        <span className="tnum text-2xl text-neutral-100">{value}</span>
-        {unit && <span className="text-xs text-neutral-500">{unit}</span>}
+        <span className="tnum text-2xl text-txt">{value}</span>
+        {unit && <span className="text-xs text-txt-3">{unit}</span>}
       </p>
-      {hint && <p className="mt-1.5 text-[0.7rem] text-neutral-600">{hint}</p>}
+      {hint && <p className="mt-1.5 text-[0.7rem] text-txt-4">{hint}</p>}
     </div>
   );
 }
@@ -32,9 +32,9 @@ export function Kpi({
 export function EmptyMetric({ label, reason }: { label: string; reason: string }) {
   return (
     <div className="erp-card border-dashed p-5 opacity-70">
-      <p className="text-xs text-neutral-500">{label}</p>
-      <p className="mt-2 text-sm text-neutral-600">—</p>
-      <p className="mt-1.5 text-[0.7rem] text-neutral-600">{reason}</p>
+      <p className="text-xs text-txt-3">{label}</p>
+      <p className="mt-2 text-sm text-txt-4">—</p>
+      <p className="mt-1.5 text-[0.7rem] text-txt-4">{reason}</p>
     </div>
   );
 }
@@ -50,8 +50,8 @@ export function Panel({
 }) {
   return (
     <section className="erp-card overflow-hidden">
-      <header className="flex items-center justify-between gap-3 border-b border-ink-800 px-5 py-3.5">
-        <h2 className="text-sm text-neutral-200">{title}</h2>
+      <header className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
+        <h2 className="text-sm text-txt">{title}</h2>
         {action}
       </header>
       <div className="p-5">{children}</div>

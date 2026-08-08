@@ -15,11 +15,15 @@ import { CountUp } from './CountUp';
  * invented number is the failure mode this whole design is guarding against.
  */
 
+/**
+ * Icon tint only. No glows, no gradients — on a white operational surface
+ * they add nothing and cost legibility.
+ */
 const TONES = {
-  primary: { ring: 'ring-primary-600/30', glow: 'bg-primary-600/20', text: 'text-accent' },
-  neutral: { ring: 'ring-ink-700', glow: 'bg-ink-700/40', text: 'text-neutral-300' },
-  success: { ring: 'ring-success-600/30', glow: 'bg-success-600/20', text: 'text-success-500' },
-  warning: { ring: 'ring-warning-600/30', glow: 'bg-warning-600/20', text: 'text-warning-500' },
+  primary: { chip: 'bg-brand-soft text-brand' },
+  neutral: { chip: 'bg-card-2 text-txt-3' },
+  success: { chip: 'bg-ok-soft text-ok' },
+  warning: { chip: 'bg-warn-soft text-warn' },
 } as const;
 
 export type Tone = keyof typeof TONES;
@@ -50,28 +54,23 @@ export function StatCard({
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: index * 0.06, ease: [0.16, 1, 0.3, 1] }}
-      whileHover={{ y: -3 }}
-      className={`group relative overflow-hidden rounded-xl border border-ink-800 bg-ink-900/50 p-5 ring-1 ring-inset ${t.ring} transition-shadow duration-300 hover:shadow-lg hover:shadow-black/40`}
+      className="erp-card erp-card-hover p-5"
     >
-      {/* توهج خفيف يظهر عند المرور فقط */}
-      <div
-        aria-hidden="true"
-        className={`pointer-events-none absolute -end-8 -top-8 h-24 w-24 rounded-full blur-2xl transition-opacity duration-500 ${t.glow} opacity-0 group-hover:opacity-100`}
-      />
-
-      <div className="relative flex items-start justify-between gap-3">
-        <p className="text-xs text-neutral-500">{label}</p>
-        <span className={`shrink-0 ${t.text}`}>{icon}</span>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs text-txt-3">{label}</p>
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${t.chip}`}>
+          {icon}
+        </span>
       </div>
 
-      <p className="relative mt-3 flex items-baseline gap-1.5">
-        <span className="text-2xl text-neutral-100">
+      <p className="mt-3 flex items-baseline gap-1.5">
+        <span className="text-2xl font-semibold text-brand">
           <CountUp value={value} decimals={decimals} />
         </span>
-        {unit && <span className="text-xs text-neutral-500">{unit}</span>}
+        {unit && <span className="text-xs text-txt-3">{unit}</span>}
       </p>
 
-      {hint && <p className="relative mt-1.5 text-[0.7rem] text-neutral-600">{hint}</p>}
+      {hint && <p className="mt-1.5 text-[0.7rem] text-txt-4">{hint}</p>}
     </motion.div>
   );
 }
@@ -90,22 +89,25 @@ export function PendingCard({
   return (
     <motion.div
       initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 0.62, y: 0 }}
+      // Full opacity, unlike the dark theme's faded treatment: dimmed grey
+      // text on white fails contrast. The dashed border and the badge carry
+      // the "not built" meaning instead.
+      animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.25 + index * 0.05, ease: [0.16, 1, 0.3, 1] }}
-      className="relative rounded-xl border border-dashed border-ink-700 bg-ink-900/25 p-5"
+      className="relative rounded-xl border border-dashed border-line-2 bg-card-2 p-5"
     >
       <div className="flex items-start justify-between gap-3">
-        <p className="text-xs text-neutral-500">{label}</p>
-        <span className="shrink-0 text-neutral-700">{icon}</span>
+        <p className="text-xs text-txt-3">{label}</p>
+        <span className="shrink-0 text-txt-4">{icon}</span>
       </div>
 
-      <p className="mt-3 text-2xl text-neutral-700" aria-label="لا توجد بيانات">
+      <p className="mt-3 text-2xl text-txt-4" aria-label="لا توجد بيانات">
         —
       </p>
 
-      <p className="mt-1.5 text-[0.7rem] leading-relaxed text-neutral-600">{reason}</p>
+      <p className="mt-1.5 text-[0.7rem] leading-relaxed text-txt-4">{reason}</p>
 
-      <span className="mt-3 inline-block rounded-full border border-ink-700 px-2.5 py-0.5 text-[0.65rem] text-neutral-600">
+      <span className="mt-3 inline-block rounded-full border border-line-2 px-2.5 py-0.5 text-[0.65rem] text-txt-4">
         في انتظار تفعيل الموديول
       </span>
     </motion.div>

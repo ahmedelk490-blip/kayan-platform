@@ -2,12 +2,59 @@
 @import '@erp/brand/tokens.css';
 
 /**
- * ERP surface styling.
+ * KAYAN ERP — light operational theme.
  *
- * Deliberately different from the marketing site: this is read for eight
- * hours a day (07_UI_UX §5.1). No decorative motion, tighter density, and
- * type sized for scanning rows rather than for impact.
+ * The ERP and the marketing site share the brand (#5C2535) and nothing else.
+ * The marketing site is dark and cinematic; this is white, dense, and read for
+ * eight hours a day.
+ *
+ * These tokens are defined HERE, in the ERP app, rather than in @erp/brand —
+ * so the approved marketing homepage is untouched by anything in this file.
+ * Names are deliberately distinct from the brand scales (ink-*, neutral-*,
+ * primary-*) so nothing collides.
  */
+
+@theme {
+  /* ---- Surfaces: white and near-white only ---- */
+  --color-canvas: #faf9f9;
+  --color-card: #ffffff;
+  --color-card-2: #f6f3f4;
+
+  /* ---- Borders: very light, warm-tinted so they sit with the maroon ----
+     line / line-2 are decorative dividers and card edges.
+     `field` is deliberately darker: WCAG 1.4.11 requires 3:1 for the
+     boundary of a form control, and a field the user cannot locate is a
+     usability failure regardless of how clean it looks. Measured 3.11:1. */
+  --color-line: #ece7e9;
+  --color-line-2: #ddd4d7;
+  --color-field: #949196;
+
+  /* ---- Text ramp — every level measured against white ----
+     txt   17.9:1   txt-2  10.7:1   txt-3  7.1:1   txt-4  4.9:1
+     The first draft had txt-4 at 2.90:1, which fails AA for normal text.
+     The whole ramp was darkened to keep four distinct levels that all pass. */
+  --color-txt: #1f1418;
+  --color-txt-2: #4a3a40;
+  --color-txt-3: #64545a;
+  --color-txt-4: #7d6d72;
+
+  /* ---- Brand ---- */
+  --color-brand: #5c2535;
+  --color-brand-hover: #74303f;
+  --color-brand-soft: #f8eff2;
+  --color-brand-line: #e6d2d9;
+
+  /* ---- Status: muted so they never out-shout the brand ---- */
+  --color-ok: #2f7d5b;
+  --color-ok-soft: #eef7f2;
+  --color-warn: #9a6b12;
+  --color-warn-soft: #fbf4e7;
+  --color-bad: #b3392a;
+  --color-bad-soft: #fdefed;
+
+  /* ---- Typography: Kufi throughout ---- */
+  --font-kufi: var(--font-noto-kufi), system-ui, sans-serif;
+}
 
 @layer base {
   html {
@@ -15,37 +62,149 @@
   }
 
   body {
-    background-color: var(--color-bg);
-    color: var(--color-text);
-    font-family: var(--font-arabic), system-ui, sans-serif;
+    background-color: var(--color-canvas);
+    color: var(--color-txt);
+    font-family: var(--font-kufi);
     -webkit-font-smoothing: antialiased;
     font-size: 14px;
+    line-height: 1.7;
   }
 
-  /* Arabic is connected: negative tracking breaks the joins. */
+  /**
+   * Arabic is a connected script — negative tracking breaks the joins, and
+   * Kufi needs a little more leading than a Latin face at the same size.
+   */
   h1,
   h2,
-  h3 {
-    letter-spacing: 0;
+  h3,
+  h4 {
+    font-family: var(--font-kufi);
     font-weight: 600;
-    line-height: 1.35;
+    letter-spacing: 0;
+    line-height: 1.45;
+    color: var(--color-brand);
+  }
+
+  /* Latin runs LTR inside an RTL document: SKUs, emails, paths. */
+  [dir='ltr'] {
+    font-feature-settings: 'tnum';
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid var(--color-brand);
     outline-offset: 2px;
+    border-radius: 2px;
   }
 
-  /* Financial figures must align on the decimal when stacked in a column. */
+  ::selection {
+    background-color: var(--color-brand);
+    color: #ffffff;
+  }
+
+  /* Figures must align on the decimal when stacked down a column. */
   .tnum {
     font-variant-numeric: tabular-nums;
   }
 }
 
-@layer utilities {
+@layer components {
+  /**
+   * One card definition for the whole ERP. A subtle shadow, a hairline
+   * border — no gradients, no glass, nothing that costs legibility.
+   */
   .erp-card {
+    background-color: var(--color-card);
+    border: 1px solid var(--color-line);
     border-radius: 0.75rem;
-    border: 1px solid var(--color-border);
-    background-color: color-mix(in srgb, var(--color-surface) 60%, transparent);
+    box-shadow: 0 1px 2px rgb(31 20 24 / 0.04);
+  }
+
+  .erp-card-hover {
+    transition:
+      border-color 200ms ease,
+      box-shadow 200ms ease;
+  }
+
+  .erp-card-hover:hover {
+    border-color: var(--color-brand-line);
+    box-shadow: 0 4px 12px rgb(31 20 24 / 0.07);
+  }
+
+  /* Primary action. */
+  .erp-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.5rem;
+    background-color: var(--color-brand);
+    color: #ffffff;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: background-color 160ms ease;
+  }
+
+  .erp-btn:hover {
+    background-color: var(--color-brand-hover);
+  }
+
+  .erp-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  /* Secondary / outline action. */
+  .erp-btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-line-2);
+    background-color: var(--color-card);
+    color: var(--color-txt-2);
+    padding: 0.5rem 1rem;
+    font-size: 0.8125rem;
+    transition:
+      border-color 160ms ease,
+      color 160ms ease;
+  }
+
+  .erp-btn-ghost:hover {
+    border-color: var(--color-brand);
+    color: var(--color-brand);
+  }
+
+  .erp-input {
+    width: 100%;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-field);
+    background-color: var(--color-card);
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    color: var(--color-txt);
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  .erp-input::placeholder {
+    color: var(--color-txt-4);
+  }
+
+  .erp-input:focus {
+    outline: none;
+    border-color: var(--color-brand);
+    box-shadow: 0 0 0 3px var(--color-brand-soft);
+  }
+}
+
+/* Motion stays functional. Reduced-motion removes it entirely. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

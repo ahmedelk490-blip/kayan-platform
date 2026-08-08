@@ -18,20 +18,20 @@ const ACTION_AR: Record<string, string> = {
 };
 
 const ACTION_TONE: Record<string, string> = {
-  'auth.login.success': 'bg-success-600',
-  'auth.login.failed': 'bg-danger-500',
-  'products.import': 'bg-accent',
+  'auth.login.success': 'bg-ok',
+  'auth.login.failed': 'bg-bad',
+  'products.import': 'bg-brand',
 };
 
 export function ActivityFeed({ items }: { items: ActivityItem[] }) {
   if (items.length === 0) {
-    return <p className="text-sm text-neutral-500">لا يوجد نشاط مسجّل بعد.</p>;
+    return <p className="text-sm text-txt-3">لا يوجد نشاط مسجّل بعد.</p>;
   }
 
   return (
     <ul className="relative">
       {/* الخط الرأسي للجدول الزمني */}
-      <span aria-hidden="true" className="absolute bottom-3 end-[5px] top-3 w-px bg-ink-800" />
+      <span aria-hidden="true" className="absolute bottom-3 end-[5px] top-3 w-px bg-line" />
 
       {items.map((item, index) => (
         <motion.li
@@ -43,21 +43,21 @@ export function ActivityFeed({ items }: { items: ActivityItem[] }) {
         >
           <span
             aria-hidden="true"
-            className={`absolute end-0 top-4 h-2.5 w-2.5 rounded-full ring-4 ring-ink-900 ${
-              ACTION_TONE[item.action] ?? 'bg-neutral-600'
+            className={`absolute end-0 top-4 h-2.5 w-2.5 rounded-full ring-4 ring-card ${
+              ACTION_TONE[item.action] ?? 'bg-txt-4'
             }`}
           />
 
           <div className="min-w-0">
-            <p className="truncate text-sm text-neutral-300">
+            <p className="truncate text-sm text-txt-2">
               {ACTION_AR[item.action] ?? item.action}
             </p>
-            <p className="text-[0.7rem] text-neutral-600">{item.actor}</p>
+            <p className="text-[0.7rem] text-txt-4">{item.actor}</p>
           </div>
 
           <time
             dateTime={item.at}
-            className="tnum shrink-0 text-[0.7rem] text-neutral-600"
+            className="tnum shrink-0 text-[0.7rem] text-txt-4"
             suppressHydrationWarning
           >
             {new Date(item.at).toLocaleString('ar-EG', {

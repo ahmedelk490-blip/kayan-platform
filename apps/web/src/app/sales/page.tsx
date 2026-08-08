@@ -15,14 +15,14 @@ export default async function SalesDashboard() {
     <AppShell user={user} title="لوحة المبيعات">
       <div className="space-y-6">
         <section>
-          <h2 className="mb-3 text-xs text-neutral-500">بيانات فعلية</h2>
+          <h2 className="mb-3 text-xs text-txt-3">بيانات فعلية</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Kpi label="المنتجات المتاحة للبيع" value={String(productCount)} unit="منتج" />
           </div>
         </section>
 
         <section>
-          <h2 className="mb-3 text-xs text-neutral-500">في انتظار وحدات لم تُبنَ بعد</h2>
+          <h2 className="mb-3 text-xs text-txt-3">في انتظار وحدات لم تُبنَ بعد</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <EmptyMetric label="مبيعات اليوم" reason="وحدة المبيعات غير مبنية" />
             <EmptyMetric label="هدف الشهر" reason="وحدة المبيعات غير مبنية" />
@@ -35,14 +35,14 @@ export default async function SalesDashboard() {
 
         <div className="grid gap-6 lg:grid-cols-2">
           <Panel title="العملاء">
-            <p className="text-sm text-neutral-500">
+            <p className="text-sm text-txt-3">
               وحدة العملاء لم تُبنَ بعد. الطلبات القادمة من الموقع تُحفظ حالياً في ملف مؤقت
               خارج قاعدة البيانات.
             </p>
           </Panel>
 
           <Panel title="المهام والتقويم">
-            <p className="text-sm text-neutral-500">
+            <p className="text-sm text-txt-3">
               المهام والتقويم يظهران هنا بعد بناء وحدة إدارة العملاء.
             </p>
           </Panel>

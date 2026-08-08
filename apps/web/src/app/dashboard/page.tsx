@@ -154,9 +154,9 @@ export default async function ManagerDashboard() {
             </Panel>
 
             <Panel title="التنبيهات" delay={0.5}>
-              <div className="flex items-start gap-3 rounded-lg border border-dashed border-ink-800 p-4">
-                <IconBell className="mt-0.5 h-4 w-4 shrink-0 text-neutral-700" />
-                <p className="text-xs leading-relaxed text-neutral-500">
+              <div className="flex items-start gap-3 rounded-lg border border-dashed border-line p-4">
+                <IconBell className="mt-0.5 h-4 w-4 shrink-0 text-txt-4" />
+                <p className="text-xs leading-relaxed text-txt-3">
                   لا توجد تنبيهات. وحدة الإشعارات ستُفعّل تنبيهات نقص المخزون وتأخر الإنتاج
                   وانتهاء الصلاحية بعد بنائها.
                 </p>

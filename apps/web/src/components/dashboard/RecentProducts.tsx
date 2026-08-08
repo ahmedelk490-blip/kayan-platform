@@ -23,7 +23,7 @@ export interface RecentProduct {
  */
 export function RecentProducts({ products }: { products: RecentProduct[] }) {
   if (products.length === 0) {
-    return <p className="text-sm text-neutral-500">لا توجد منتجات بعد.</p>;
+    return <p className="text-sm text-txt-3">لا توجد منتجات بعد.</p>;
   }
 
   return (
@@ -37,11 +37,11 @@ export function RecentProducts({ products }: { products: RecentProduct[] }) {
         >
           <Link
             href="/products"
-            className="group block overflow-hidden rounded-lg border border-ink-800 bg-ink-950 transition-colors duration-300 hover:border-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="erp-card erp-card-hover group block overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             {/* 4:5 rather than 3:4 — garment shots are portrait, but a
                 dashboard cannot afford full-height product cards. */}
-            <div className="relative aspect-[4/5] overflow-hidden bg-ink-900">
+            <div className="relative aspect-[4/5] overflow-hidden bg-card-2">
               {product.imagePath ? (
                 <Image
                   src={product.imagePath}
@@ -51,25 +51,20 @@ export function RecentProducts({ products }: { products: RecentProduct[] }) {
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
                 />
               ) : (
-                <div className="flex h-full items-center justify-center text-xs text-neutral-700">
+                <div className="flex h-full items-center justify-center text-xs text-txt-4">
                   لا توجد صورة
                 </div>
               )}
-
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink-950/80 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-              />
             </div>
 
             <div className="p-3.5">
-              <p className="truncate text-sm text-neutral-100">{product.nameAr}</p>
-              <p className="mt-1 truncate text-[0.7rem] text-neutral-500">{product.categoryAr}</p>
+              <p className="truncate text-sm font-medium text-txt">{product.nameAr}</p>
+              <p className="mt-1 truncate text-[0.7rem] text-txt-3">{product.categoryAr}</p>
               <div className="mt-2.5 flex items-center justify-between">
-                <span dir="ltr" className="tnum text-[0.68rem] text-neutral-600">
+                <span dir="ltr" className="tnum text-[0.68rem] text-txt-4">
                   {product.sku}
                 </span>
-                <span className="text-[0.68rem] text-neutral-600">
+                <span className="text-[0.68rem] text-txt-4">
                   {product.imageCount} صورة
                 </span>
               </div>

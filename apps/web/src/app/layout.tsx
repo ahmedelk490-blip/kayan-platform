@@ -1,12 +1,17 @@
 import type { Metadata, Viewport } from 'next';
-import { IBM_Plex_Sans_Arabic } from 'next/font/google';
+import { Noto_Kufi_Arabic } from 'next/font/google';
 import { BRAND } from '@erp/brand';
 import './globals.css';
 
-const plexArabic = IBM_Plex_Sans_Arabic({
+/**
+ * Noto Kufi Arabic — geometric Kufi with a genuine weight range, drawn for
+ * screen legibility rather than display. Decorative Kufi faces are unusable
+ * at table density, which is most of this application.
+ */
+const notoKufi = Noto_Kufi_Arabic({
   subsets: ['arabic'],
   weight: ['300', '400', '500', '600', '700'],
-  variable: '--font-plex-arabic',
+  variable: '--font-noto-kufi',
   display: 'swap',
 });
 
@@ -28,7 +33,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ar" dir="rtl" className={plexArabic.variable}>
+    <html lang="ar" dir="rtl" className={notoKufi.variable}>
       <body>{children}</body>
     </html>
   );

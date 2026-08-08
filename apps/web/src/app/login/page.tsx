@@ -23,15 +23,15 @@ export default async function LoginPage() {
       <div className="w-full max-w-[400px]">
         <div className="mb-10 flex flex-col items-center text-center">
           <Logo height={64} className="rounded-xl" />
-          <h1 className="mt-6 text-xl text-neutral-100">نظام كيان</h1>
-          <p className="mt-2 text-xs text-neutral-500">{BRAND.tagline.ar}</p>
+          <h1 className="mt-6 text-xl text-brand">نظام كيان</h1>
+          <p className="mt-2 text-xs text-txt-3">{BRAND.tagline.ar}</p>
         </div>
 
         <div className="erp-card p-7">
           <LoginForm />
         </div>
 
-        <p className="mt-6 text-center text-xs text-neutral-600">
+        <p className="mt-6 text-center text-xs text-txt-4">
           للدعم الفني تواصل مع مدير النظام
         </p>
       </div>
