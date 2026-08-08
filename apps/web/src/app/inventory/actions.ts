@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { dec, formatQty } from '@erp/domain';
 import { audit, fieldErrors } from '@/lib/audit';
 import { TYPES, type MovementType } from './types';
 
@@ -98,10 +99,12 @@ export async function postMovement(_prev: FormState, formData: FormData): Promis
   // Refuse to drive a balance negative. An adjustment is the deliberate way
   // to correct a wrong balance, and it leaves a record saying so.
   if (delta < 0) {
-    const current = existing ? (meta.field === 'reserved' ? existing.reserved : existing.onHand) : 0;
-    if (current + delta < 0) {
+    const current = dec(
+      existing ? (meta.field === 'reserved' ? existing.reserved : existing.onHand) : 0,
+    );
+    if (current.plus(delta).isNegative()) {
       return {
-        error: `الرصيد الحالي ${current} لا يسمح بهذه الحركة. استخدم تسوية إذا كان الرصيد غير صحيح.`,
+        error: `الرصيد الحالي ${formatQty(current)} لا يسمح بهذه الحركة. استخدم تسوية إذا كان الرصيد غير صحيح.`,
       };
     }
   }

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { can, available } from '@erp/domain';
+import { can, available, dec, formatQty, type Numeric } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -64,16 +64,19 @@ export default async function InventoryPage() {
     }),
   ]);
 
+  // Decimal arithmetic — `+` on Decimal would stringify and concatenate.
   const totals = stock.reduce(
     (acc, s) => ({
-      onHand: acc.onHand + s.onHand,
-      reserved: acc.reserved + s.reserved,
-      damaged: acc.damaged + s.damaged,
+      onHand: acc.onHand.plus(dec(s.onHand)),
+      reserved: acc.reserved.plus(dec(s.reserved)),
+      damaged: acc.damaged.plus(dec(s.damaged)),
     }),
-    { onHand: 0, reserved: 0, damaged: 0 },
+    { onHand: dec(0), reserved: dec(0), damaged: dec(0) },
   );
 
-  const lowStock = stock.filter((s) => s.minStock > 0 && s.onHand <= s.minStock);
+  const lowStock = stock.filter(
+    (s) => dec(s.minStock).gt(0) && dec(s.onHand).lte(dec(s.minStock)),
+  );
 
   return (
     <AppShell user={user} title="المخزون">
@@ -103,18 +106,18 @@ export default async function InventoryPage() {
                   <td dir="ltr" className="px-4 py-3 text-start text-txt-3">
                     {s.location?.code ?? '—'}
                   </td>
-                  <td className="tnum px-4 py-3 text-txt-2">{s.onHand}</td>
-                  <td className="tnum px-4 py-3 text-txt-2">{s.reserved}</td>
+                  <td className="tnum px-4 py-3 text-txt-2">{formatQty(s.onHand)}</td>
+                  <td className="tnum px-4 py-3 text-txt-2">{formatQty(s.reserved)}</td>
                   {/* المتاح = الرصيد − المحجوز */}
-                  <td className={`tnum px-4 py-3 font-medium ${atp <= 0 ? 'text-bad' : 'text-txt'}`}>
-                    {atp}
+                  <td className={`tnum px-4 py-3 font-medium ${atp.lte(0) ? 'text-bad' : 'text-txt'}`}>
+                    {formatQty(atp)}
                   </td>
-                  <td className="tnum px-4 py-3 text-txt-2">{s.damaged}</td>
+                  <td className="tnum px-4 py-3 text-txt-2">{formatQty(s.damaged)}</td>
                   <td className="tnum px-4 py-3">
-                    {s.minStock > 0 && s.onHand <= s.minStock ? (
-                      <Badge tone="bad">{s.minStock}</Badge>
+                    {dec(s.minStock).gt(0) && dec(s.onHand).lte(dec(s.minStock)) ? (
+                      <Badge tone="bad">{formatQty(s.minStock)}</Badge>
                     ) : (
-                      <span className="text-txt-3">{s.minStock}</span>
+                      <span className="text-txt-3">{formatQty(s.minStock)}</span>
                     )}
                   </td>
                 </tr>
@@ -137,9 +140,9 @@ export default async function InventoryPage() {
                   <td className="px-4 py-3 text-txt-2">{variantLabel(m.variant)}</td>
                   <td className="px-4 py-3 text-txt-2">{TYPE_LABELS[m.type] ?? m.type}</td>
                   <td
-                    className={`tnum px-4 py-3 font-medium ${m.quantity < 0 ? 'text-bad' : 'text-ok'}`}
+                    className={`tnum px-4 py-3 font-medium ${dec(m.quantity).isNegative() ? 'text-bad' : 'text-ok'}`}
                   >
-                    {m.quantity > 0 ? `+${m.quantity}` : m.quantity}
+                    {dec(m.quantity).gt(0) ? `+${formatQty(m.quantity)}` : formatQty(m.quantity)}
                   </td>
                   <td className="px-4 py-3 text-txt-3">{m.warehouse.nameAr}</td>
                   <td className="px-4 py-3 text-txt-3">{m.reference ?? '—'}</td>
@@ -178,12 +181,20 @@ export default async function InventoryPage() {
   );
 }
 
-function Metric({ label, value, tone }: { label: string; value: number; tone?: 'bad' | 'muted' }) {
+function Metric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: Numeric;
+  tone?: 'bad' | 'muted';
+}) {
   return (
     <div className="erp-card p-5">
       <p className="text-xs text-txt-3">{label}</p>
       <p className={`tnum mt-2 text-2xl font-semibold ${tone === 'bad' ? 'text-bad' : 'text-brand'}`}>
-        {value}
+        {formatQty(value)}
       </p>
     </div>
   );

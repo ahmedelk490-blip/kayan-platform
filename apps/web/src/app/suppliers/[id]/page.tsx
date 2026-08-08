@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { can } from '@erp/domain';
+import { can, formatMoney } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -85,7 +85,9 @@ export default async function SupplierDetailPage({
                   <td dir="ltr" className="px-4 py-3 text-start text-txt-3">
                     {sp.supplierSku ?? '—'}
                   </td>
-                  <td className="tnum px-4 py-3 text-txt-2">{sp.lastPrice ?? '—'}</td>
+                  <td className="tnum px-4 py-3 text-txt-2">
+                    {sp.lastPrice === null ? '—' : formatMoney(sp.lastPrice)}
+                  </td>
                   <td className="tnum px-4 py-3 text-txt-2">
                     {sp.leadTimeDays ? `${sp.leadTimeDays} يوم` : '—'}
                   </td>

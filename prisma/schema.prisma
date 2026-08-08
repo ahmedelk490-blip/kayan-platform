@@ -9,10 +9,20 @@
 //   - Enums are modelled as String with the allowed values documented and
 //     enforced by Zod at the application boundary. Promoting them to native
 //     Postgres enums is a migration, not a redesign.
-//   - Money is Float here because SQLite has no DECIMAL. On Postgres these
-//     become NUMERIC(19,4) / NUMERIC(19,8). DI-3 prohibits floats in
-//     financial paths, so no money arithmetic happens in this phase —
-//     these columns are storage only until the Cost Engine is built.
+//   - MONEY AND QUANTITY USE `Decimal` (Phase 4.5). Prisma returns
+//     Prisma.Decimal objects, so all arithmetic is exact — 0.1 + 0.2 is
+//     0.3, not 0.30000000000000004.
+//
+//     ⚠ On SQLite the STORAGE is still float-backed: the column is created
+//     as DECIMAL but `typeof(value)` reports `real`. Measured behaviour —
+//     values round-trip exactly up to ~15 significant digits; a test value
+//     at 17 digits (1234567890123.4567) came back as ...4568. EGP amounts
+//     at 4dp are exact below ~10^11, which covers this business by a wide
+//     margin. On PostgreSQL these become genuine NUMERIC(19,4) with no
+//     such ceiling — add @db.Decimal(19, 4) at that point.
+//
+//     Quantities are Decimal too, deliberately: quantity × unitPrice would
+//     inherit float error from the quantity even if the price were exact.
 //
 // Conventions
 //   - Master data soft-deletes (isDeleted + deletedAt); transactional data
@@ -302,8 +312,8 @@ model Product {
   descriptionAr String?
   driveFolderId String?
   /// Storage only until the Cost Engine exists — see header note on money.
-  cost          Float?
-  sellingPrice  Float?
+  cost          Decimal?
+  sellingPrice  Decimal?
   /// ACTIVE | DRAFT | DISCONTINUED
   status        String    @default("ACTIVE")
   isDeleted     Boolean   @default(false)
@@ -341,8 +351,8 @@ model ProductVariant {
   sizeId       String?
   sku          String
   barcode      String?
-  cost         Float?
-  sellingPrice Float?
+  cost         Decimal?
+  sellingPrice Decimal?
   isActive     Boolean   @default(true)
   isDeleted    Boolean   @default(false)
   deletedAt    DateTime?
@@ -464,15 +474,15 @@ model WarehouseLocation {
 /// list does not have to sum the whole movement history on every page load.
 /// It is rebuildable from StockMovement at any time.
 model Stock {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   variantId   String
   warehouseId String
   locationId  String?
-  onHand      Float   @default(0)
-  reserved    Float   @default(0)
-  damaged     Float   @default(0)
-  minStock    Float   @default(0)
-  maxStock    Float?
+  onHand      Decimal  @default(0)
+  reserved    Decimal  @default(0)
+  damaged     Decimal  @default(0)
+  minStock    Decimal  @default(0)
+  maxStock    Decimal?
 
   variant   ProductVariant     @relation(fields: [variantId], references: [id], onDelete: Cascade)
   warehouse Warehouse          @relation(fields: [warehouseId], references: [id])
@@ -502,7 +512,7 @@ model StockMovement {
   /// RESERVE | UNRESERVE | DAMAGE | SCRAP | RETURN | REVERSAL
   type      String
   /// Signed: positive increases stock, negative decreases it.
-  quantity  Float
+  quantity  Decimal
   /// Free-text pointer to the source document until Purchasing exists.
   reference String?
   reason    String?
@@ -628,7 +638,7 @@ model SupplierProduct {
   supplierId   String
   productId    String
   supplierSku  String?
-  lastPrice    Float?
+  lastPrice    Decimal?
   leadTimeDays Int?
 
   supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
@@ -661,11 +671,11 @@ model Quotation {
   notes      String?
 
   /// Snapshot totals — see the money note in the schema header.
-  subtotal        Float @default(0)
-  discountAmount  Float @default(0)
-  discountPercent Float @default(0)
-  taxAmount       Float @default(0)
-  total           Float @default(0)
+  subtotal        Decimal @default(0)
+  discountAmount  Decimal @default(0)
+  discountPercent Decimal @default(0)
+  taxAmount       Decimal @default(0)
+  total           Decimal @default(0)
 
   isDeleted Boolean   @default(false)
   deletedAt DateTime?
@@ -697,23 +707,23 @@ model QuotationLine {
   variantId   String
   lineNo      Int    @default(1)
 
-  quantity        Float
-  unitPrice       Float
-  discountAmount  Float   @default(0)
-  discountPercent Float   @default(0)
-  taxRate         Float   @default(0)
-  taxAmount       Float   @default(0)
-  lineTotal       Float
+  quantity        Decimal
+  unitPrice       Decimal
+  discountAmount  Decimal @default(0)
+  discountPercent Decimal @default(0)
+  taxRate         Decimal @default(0)
+  taxAmount       Decimal @default(0)
+  lineTotal       Decimal
   notes           String?
 
   /// Reserved for the Cost Engine (Phase 6+). Null until it exists — a
   /// column that is present but honestly empty beats retrofitting the table
   /// once historical documents already depend on its shape.
-  costSnapshot   Float?
+  costSnapshot   Decimal?
   costSource     String?
   formulaVersion String?
-  grossProfit    Float?
-  marginPercent  Float?
+  grossProfit    Decimal?
+  marginPercent  Decimal?
 
   quotation Quotation      @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   product   Product        @relation(fields: [productId], references: [id])
@@ -738,11 +748,11 @@ model SalesOrder {
   requiredDeliveryDate DateTime?
   notes                String?
 
-  subtotal        Float @default(0)
-  discountAmount  Float @default(0)
-  discountPercent Float @default(0)
-  taxAmount       Float @default(0)
-  total           Float @default(0)
+  subtotal        Decimal @default(0)
+  discountAmount  Decimal @default(0)
+  discountPercent Decimal @default(0)
+  taxAmount       Decimal @default(0)
+  total           Decimal @default(0)
 
   /// Set the first time the order is confirmed and reservations are posted.
   /// Read as "reservations exist for this order".
@@ -775,20 +785,20 @@ model SalesOrderLine {
   variantId    String
   lineNo       Int    @default(1)
 
-  quantity        Float
-  unitPrice       Float
-  discountAmount  Float   @default(0)
-  discountPercent Float   @default(0)
-  taxRate         Float   @default(0)
-  taxAmount       Float   @default(0)
-  lineTotal       Float
+  quantity        Decimal
+  unitPrice       Decimal
+  discountAmount  Decimal @default(0)
+  discountPercent Decimal @default(0)
+  taxRate         Decimal @default(0)
+  taxAmount       Decimal @default(0)
+  lineTotal       Decimal
   notes           String?
 
-  costSnapshot   Float?
+  costSnapshot   Decimal?
   costSource     String?
   formulaVersion String?
-  grossProfit    Float?
-  marginPercent  Float?
+  grossProfit    Decimal?
+  marginPercent  Decimal?
 
   salesOrder SalesOrder      @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
   product    Product         @relation(fields: [productId], references: [id])

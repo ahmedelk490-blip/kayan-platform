@@ -7,6 +7,7 @@
  * them.
  */
 
-export * from './rbac';
-export * from './password';
-export * from './sales';
+export * from './rbac.ts';
+export * from './password.ts';
+export * from './money.ts';
+export * from './sales.ts';

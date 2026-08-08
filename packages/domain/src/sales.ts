@@ -1,3 +1,5 @@
+import { Decimal, dec, calc, display, type Numeric } from './money.ts';
+
 /**
  * Sales document arithmetic and status rules.
  *
@@ -5,31 +7,33 @@
  * runs for quotations and orders, so a converted order can never disagree
  * with the quotation it came from.
  *
- * ⚠ Floats. SQLite has no DECIMAL, so money is stored as Float for now
- * (documented in the schema header). Rounding is applied at the documented
- * points below to keep totals stable; when Postgres arrives these become
- * NUMERIC(19,4) and the rounding calls come out.
+ * Phase 4.5: every calculation is exact decimal. Values arrive as
+ * Prisma.Decimal, number or string and are coerced; results are Decimal.
+ * Rounding happens at two documented points only — line net and line tax —
+ * never mid-chain, so errors cannot compound across a document.
  */
 
-/** Two decimal places, the smallest unit of EGP that appears on a document. */
-export function money(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+export { Decimal, dec, calc, display };
+
+/** Round to the display scale. Kept for call sites that want a number. */
+export function money(value: Numeric | null | undefined): number {
+  return display(value).toNumber();
 }
 
 export interface LineInput {
-  quantity: number;
-  unitPrice: number;
-  discountAmount?: number;
-  discountPercent?: number;
-  taxRate?: number;
+  quantity: Numeric;
+  unitPrice: Numeric;
+  discountAmount?: Numeric;
+  discountPercent?: Numeric;
+  taxRate?: Numeric;
 }
 
 export interface LineTotals {
-  gross: number;
-  discount: number;
-  net: number;
-  taxAmount: number;
-  lineTotal: number;
+  gross: Decimal;
+  discount: Decimal;
+  net: Decimal;
+  taxAmount: Decimal;
+  lineTotal: Decimal;
 }
 
 /**
@@ -38,21 +42,27 @@ export interface LineTotals {
  * Percentage discount applies to the gross first, then any fixed amount is
  * subtracted. Tax is charged on the discounted net, never on the gross —
  * charging tax before discount overstates every invoice.
+ *
+ * Discount is clamped at the gross so a line can never go negative.
  */
 export function calcLine(input: LineInput): LineTotals {
-  const gross = money(input.quantity * input.unitPrice);
-  const percentPart = money(gross * ((input.discountPercent ?? 0) / 100));
-  const discount = money(Math.min(gross, percentPart + (input.discountAmount ?? 0)));
-  const net = money(gross - discount);
-  const taxAmount = money(net * ((input.taxRate ?? 0) / 100));
-  return { gross, discount, net, taxAmount, lineTotal: money(net + taxAmount) };
+  const gross = calc(dec(input.quantity).times(dec(input.unitPrice)));
+
+  const percentPart = gross.times(dec(input.discountPercent).dividedBy(100));
+  const rawDiscount = percentPart.plus(dec(input.discountAmount));
+  const discount = calc(Decimal.min(gross, rawDiscount));
+
+  const net = calc(gross.minus(discount));
+  const taxAmount = calc(net.times(dec(input.taxRate).dividedBy(100)));
+
+  return { gross, discount, net, taxAmount, lineTotal: calc(net.plus(taxAmount)) };
 }
 
 export interface DocumentTotals {
-  subtotal: number;
-  discountAmount: number;
-  taxAmount: number;
-  total: number;
+  subtotal: Decimal;
+  discountAmount: Decimal;
+  taxAmount: Decimal;
+  total: Decimal;
 }
 
 /**
@@ -64,17 +74,24 @@ export interface DocumentTotals {
  */
 export function calcDocument(
   lines: LineTotals[],
-  doc: { discountAmount?: number; discountPercent?: number } = {},
+  doc: { discountAmount?: Numeric; discountPercent?: Numeric } = {},
 ): DocumentTotals {
-  const subtotal = money(lines.reduce((sum, l) => sum + l.net, 0));
-  const lineTax = money(lines.reduce((sum, l) => sum + l.taxAmount, 0));
-  const percentPart = money(subtotal * ((doc.discountPercent ?? 0) / 100));
-  const discountAmount = money(Math.min(subtotal, percentPart + (doc.discountAmount ?? 0)));
+  const subtotal = calc(
+    lines.reduce((sum, l) => sum.plus(l.net), new Decimal(0)),
+  );
+  const lineTax = calc(
+    lines.reduce((sum, l) => sum.plus(l.taxAmount), new Decimal(0)),
+  );
+
+  const percentPart = subtotal.times(dec(doc.discountPercent).dividedBy(100));
+  const rawDiscount = percentPart.plus(dec(doc.discountAmount));
+  const discountAmount = calc(Decimal.min(subtotal, rawDiscount));
+
   return {
     subtotal,
     discountAmount,
     taxAmount: lineTax,
-    total: money(subtotal - discountAmount + lineTax),
+    total: calc(subtotal.minus(discountAmount).plus(lineTax)),
   };
 }
 
@@ -154,15 +171,11 @@ export function canTransition<S extends string>(
 }
 
 /** Statuses that hold stock reserved. */
-export const RESERVING_STATUSES: OrderStatus[] = [
-  'CONFIRMED',
-  'IN_PRODUCTION',
-  'READY',
-];
+export const RESERVING_STATUSES: OrderStatus[] = ['CONFIRMED', 'IN_PRODUCTION', 'READY'];
 
 /** Available to promise — what a salesperson may actually sell. */
-export function available(onHand: number, reserved: number): number {
-  return money(onHand - reserved);
+export function available(onHand: Numeric, reserved: Numeric): Decimal {
+  return calc(dec(onHand).minus(dec(reserved)));
 }
 
 export function isQuotationStatus(v: string): v is QuotationStatus {

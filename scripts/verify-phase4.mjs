@@ -8,6 +8,11 @@
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
+
+/** Prisma returns Decimal objects; compare by value, not by identity. */
+const n = (v) => (v === null || v === undefined ? null : Number(v.toString()));
+const eq = (a, b) => n(a) === n(b);
+
 const T = 'kayan';
 const results = [];
 
@@ -96,8 +101,8 @@ async function main() {
       data: { variantId: variant.id, warehouseId: warehouse.id, onHand: 100 },
     });
   }
-  const startReserved = stock.reserved;
-  const startOnHand = stock.onHand;
+  const startReserved = n(stock.reserved);
+  const startOnHand = n(stock.onHand);
 
   // ── Quotation with a pricing snapshot ───────────────────
   const quotation = await prisma.quotation.create({
@@ -128,7 +133,7 @@ async function main() {
   });
   check('quotation created with lines', quotation.lines.length === 1);
 
-  const snapshotPrice = quotation.lines[0].unitPrice;
+  const snapshotPrice = n(quotation.lines[0].unitPrice);
 
   // Change the product price AFTER quoting.
   await prisma.productVariant.update({
@@ -138,8 +143,8 @@ async function main() {
   const reread = await prisma.quotationLine.findUnique({ where: { id: quotation.lines[0].id } });
   check(
     'PRICING SNAPSHOT holds after product price change',
-    reread.unitPrice === snapshotPrice && reread.unitPrice === 100,
-    `line=${reread.unitPrice}, product now 999`,
+    n(reread.unitPrice) === snapshotPrice && n(reread.unitPrice) === 100,
+    `line=${n(reread.unitPrice)}, product now 999`,
   );
 
   // ── Status rules ────────────────────────────────────────
@@ -172,23 +177,23 @@ async function main() {
     include: { lines: true },
   });
   await prisma.quotation.update({ where: { id: quotation.id }, data: { status: 'CONVERTED' } });
-  check('order carries the quoted price', order.lines[0].unitPrice === 100);
+  check('order carries the quoted price', n(order.lines[0].unitPrice) === 100);
 
   // ── Confirm → reserve ───────────────────────────────────
   const first = await prisma.$transaction((tx) => reserve(tx, order, warehouse.id));
   check('confirm creates reservations', first === 1, `created=${first}`);
 
   let s = await prisma.stock.findFirst({ where: { id: stock.id } });
-  check('reserved increased', s.reserved === startReserved + 10, `reserved=${s.reserved}`);
-  check('onHand unchanged by reservation', s.onHand === startOnHand, `onHand=${s.onHand}`);
-  check('available = onHand - reserved', s.onHand - s.reserved === startOnHand - startReserved - 10);
+  check('reserved increased', n(s.reserved) === startReserved + 10, `reserved=${n(s.reserved)}`);
+  check('onHand unchanged by reservation', n(s.onHand) === startOnHand, `onHand=${n(s.onHand)}`);
+  check('available = onHand - reserved', n(s.onHand) - n(s.reserved) === startOnHand - startReserved - 10);
 
   // ── IDEMPOTENCY: confirm again ──────────────────────────
   const second = await prisma.$transaction((tx) => reserve(tx, order, warehouse.id));
   check('re-confirm creates NOTHING', second === 0, `created=${second}`);
 
   s = await prisma.stock.findFirst({ where: { id: stock.id } });
-  check('reserved unchanged after re-confirm', s.reserved === startReserved + 10, `reserved=${s.reserved}`);
+  check('reserved unchanged after re-confirm', n(s.reserved) === startReserved + 10, `reserved=${n(s.reserved)}`);
 
   const reserveCount = await prisma.stockMovement.count({
     where: { salesOrderId: order.id, type: 'RESERVE' },
@@ -220,7 +225,7 @@ async function main() {
   check('cancel releases the reservation', rel1 === 1, `released=${rel1}`);
 
   s = await prisma.stock.findFirst({ where: { id: stock.id } });
-  check('reserved back to start', s.reserved === startReserved, `reserved=${s.reserved}`);
+  check('reserved back to start', n(s.reserved) === startReserved, `reserved=${n(s.reserved)}`);
 
   // ── IDEMPOTENCY: cancel again ───────────────────────────
   const rel2 = await prisma.$transaction((tx) => release(tx, order));
@@ -232,7 +237,7 @@ async function main() {
   check('exactly one UNRESERVE movement', unreserveCount === 1, `count=${unreserveCount}`);
 
   s = await prisma.stock.findFirst({ where: { id: stock.id } });
-  check('reserved still at start after re-cancel', s.reserved === startReserved, `reserved=${s.reserved}`);
+  check('reserved still at start after re-cancel', n(s.reserved) === startReserved, `reserved=${n(s.reserved)}`);
 
   // ── Every movement references order and line ────────────
   const movements = await prisma.stockMovement.findMany({ where: { salesOrderId: order.id } });

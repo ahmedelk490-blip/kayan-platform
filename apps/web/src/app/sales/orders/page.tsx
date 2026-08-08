@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
-import { can, ORDER_STATUSES, ORDER_STATUS_AR } from '@erp/domain';
+import { can, ORDER_STATUSES, ORDER_STATUS_AR, formatMoney } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -120,7 +120,7 @@ export default async function OrdersPage({
             </td>
             <td className="tnum px-4 py-3 text-txt-3">{row._count.lines}</td>
             <td className="tnum px-4 py-3 text-txt-3">{row._count.movements}</td>
-            <td className="tnum px-4 py-3 font-medium text-brand">{row.total}</td>
+            <td className="tnum px-4 py-3 font-medium text-brand">{formatMoney(row.total)}</td>
             <td className="px-4 py-3">
               <StatusBadge status={row.status} kind="order" />
             </td>

@@ -3,6 +3,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
   can,
+  dec,
+  formatMoney,
+  formatQty,
+  type Numeric,
   ORDER_TRANSITIONS,
   ORDER_STATUS_AR,
   isOrderStatus,
@@ -131,18 +135,18 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                     {l.variant.sku}
                   </span>
                 </td>
-                <td className="tnum px-4 py-3 text-txt-2">{l.quantity}</td>
-                <td className="tnum px-4 py-3 text-txt-2">{l.unitPrice}</td>
-                <td className="tnum px-4 py-3 text-txt-3">{l.discountAmount}</td>
-                <td className="tnum px-4 py-3 text-txt-3">{l.taxAmount}</td>
-                <td className="tnum px-4 py-3 font-medium text-txt">{l.lineTotal}</td>
+                <td className="tnum px-4 py-3 text-txt-2">{formatQty(l.quantity)}</td>
+                <td className="tnum px-4 py-3 text-txt-2">{formatMoney(l.unitPrice)}</td>
+                <td className="tnum px-4 py-3 text-txt-3">{formatMoney(l.discountAmount)}</td>
+                <td className="tnum px-4 py-3 text-txt-3">{formatMoney(l.taxAmount)}</td>
+                <td className="tnum px-4 py-3 font-medium text-txt">{formatMoney(l.lineTotal)}</td>
               </tr>
             ))}
           </Table>
 
           <dl className="erp-card ms-auto max-w-xs space-y-2 p-5 text-sm">
             <Row label="المجموع" value={order.subtotal} />
-            <Row label="الخصم" value={-order.discountAmount} />
+            <Row label="الخصم" value={dec(order.discountAmount).negated()} />
             <Row label="الضريبة" value={order.taxAmount} />
             <div className="border-t border-line pt-2">
               <Row label="الإجمالي" value={order.total} strong />
@@ -166,8 +170,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                   <td className="px-4 py-3 text-txt-2">
                     {m.type === 'RESERVE' ? 'حجز' : m.type === 'UNRESERVE' ? 'إلغاء حجز' : m.type}
                   </td>
-                  <td className={`tnum px-4 py-3 ${m.quantity < 0 ? 'text-bad' : 'text-ok'}`}>
-                    {m.quantity > 0 ? `+${m.quantity}` : m.quantity}
+                  <td className={`tnum px-4 py-3 ${dec(m.quantity).isNegative() ? 'text-bad' : 'text-ok'}`}>
+                    {dec(m.quantity).gt(0) ? `+${formatQty(m.quantity)}` : formatQty(m.quantity)}
                   </td>
                   <td className="tnum px-4 py-3 text-txt-3">
                     {m.createdAt.toLocaleDateString('ar-EG')}
@@ -185,11 +189,11 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   );
 }
 
-function Row({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
+function Row({ label, value, strong }: { label: string; value: Numeric; strong?: boolean }) {
   return (
     <div className="flex justify-between gap-4">
       <dt className={strong ? 'font-medium text-txt' : 'text-txt-3'}>{label}</dt>
-      <dd className={`tnum ${strong ? 'font-semibold text-brand' : 'text-txt-2'}`}>{value}</dd>
+      <dd className={`tnum ${strong ? 'font-semibold text-brand' : 'text-txt-2'}`}>{formatMoney(value)}</dd>
     </div>
   );
 }

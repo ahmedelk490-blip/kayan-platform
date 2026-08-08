@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -41,13 +42,21 @@ export interface ReservationResult {
  * Reservation does NOT reduce onHand — the goods are still physically
  * present. It raises `reserved`, and available = onHand − reserved.
  */
+/** Quantities arrive as Prisma.Decimal; only their identity matters here. */
+interface OrderForReservation {
+  id: string;
+  tenantId: string;
+  lines: {
+    id: string;
+    productId: string;
+    variantId: string;
+    quantity: Prisma.Decimal;
+  }[];
+}
+
 export async function reserveForOrder(
   tx: Tx,
-  order: {
-    id: string;
-    tenantId: string;
-    lines: { id: string; productId: string; variantId: string; quantity: number }[];
-  },
+  order: OrderForReservation,
   userId: string | null,
   warehouseId: string,
 ): Promise<ReservationResult> {
@@ -113,11 +122,7 @@ export async function reserveForOrder(
  */
 export async function releaseForOrder(
   tx: Tx,
-  order: {
-    id: string;
-    tenantId: string;
-    lines: { id: string; productId: string; variantId: string; quantity: number }[];
-  },
+  order: OrderForReservation,
   userId: string | null,
 ): Promise<ReservationResult> {
   let created = 0;
@@ -148,7 +153,7 @@ export async function releaseForOrder(
         variantId: line.variantId,
         warehouseId: reserve.warehouseId,
         type: 'UNRESERVE',
-        quantity: -reserve.quantity,
+        quantity: reserve.quantity.negated(),
         reference: order.id,
         reason: 'إلغاء حجز — أمر بيع ملغي',
         userId,
@@ -163,7 +168,7 @@ export async function releaseForOrder(
     if (stock) {
       await tx.stock.update({
         where: { id: stock.id },
-        data: { reserved: { increment: -reserve.quantity } },
+        data: { reserved: { increment: reserve.quantity.negated() } },
       });
     }
 

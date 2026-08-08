@@ -9,6 +9,10 @@
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
+    // @erp/domain uses explicit .ts extensions on its internal imports so
+    // bare `node --experimental-strip-types` can run its pure logic directly
+    // for testing. Safe here because this project never emits.
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",

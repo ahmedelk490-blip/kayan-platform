@@ -3,6 +3,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
   can,
+  dec,
+  formatMoney,
+  formatQty,
+  type Numeric,
   QUOTATION_TRANSITIONS,
   QUOTATION_STATUS_AR,
   isQuotationStatus,
@@ -138,19 +142,22 @@ export default async function QuotationDetailPage({
             variants={options.variants}
             labels={{ dateA: 'تاريخ الإصدار', dateB: 'تاريخ الانتهاء' }}
             submitLabel="حفظ التعديلات"
+            // Decimal is not serialisable across the server/client boundary,
+            // so values are converted to numbers here. The form is an input
+            // surface; the server recalculates in Decimal on submit.
             values={{
               customerId: quotation.customerId,
               notes: quotation.notes,
-              discountAmount: quotation.discountAmount,
-              discountPercent: quotation.discountPercent,
+              discountAmount: dec(quotation.discountAmount).toNumber(),
+              discountPercent: dec(quotation.discountPercent).toNumber(),
               dateA: quotation.issueDate.toISOString().slice(0, 10),
               dateB: quotation.expiryDate?.toISOString().slice(0, 10),
               lines: quotation.lines.map((l) => ({
                 variantId: l.variantId,
-                quantity: l.quantity,
-                unitPrice: l.unitPrice,
-                discountAmount: l.discountAmount,
-                taxRate: l.taxRate,
+                quantity: dec(l.quantity).toNumber(),
+                unitPrice: dec(l.unitPrice).toNumber(),
+                discountAmount: dec(l.discountAmount).toNumber(),
+                taxRate: dec(l.taxRate).toNumber(),
                 notes: l.notes ?? '',
               })),
             }}
@@ -172,16 +179,16 @@ function ReadOnlyLines({
 }: {
   lines: {
     id: string;
-    quantity: number;
-    unitPrice: number;
-    lineTotal: number;
+    quantity: Numeric;
+    unitPrice: Numeric;
+    lineTotal: Numeric;
     product: { nameAr: string };
     variant: { sku: string; color: { nameAr: string } | null; size: { code: string } | null };
   }[];
-  subtotal: number;
-  discount: number;
-  tax: number;
-  total: number;
+  subtotal: Numeric;
+  discount: Numeric;
+  tax: Numeric;
+  total: Numeric;
 }) {
   return (
     <div className="space-y-4">
@@ -193,16 +200,16 @@ function ReadOnlyLines({
               {l.variant.color && ` · ${l.variant.color.nameAr}`}
               {l.variant.size && ` · ${l.variant.size.code}`}
             </td>
-            <td className="tnum px-4 py-3 text-txt-2">{l.quantity}</td>
-            <td className="tnum px-4 py-3 text-txt-2">{l.unitPrice}</td>
-            <td className="tnum px-4 py-3 font-medium text-txt">{l.lineTotal}</td>
+            <td className="tnum px-4 py-3 text-txt-2">{formatQty(l.quantity)}</td>
+            <td className="tnum px-4 py-3 text-txt-2">{formatMoney(l.unitPrice)}</td>
+            <td className="tnum px-4 py-3 font-medium text-txt">{formatMoney(l.lineTotal)}</td>
           </tr>
         ))}
       </Table>
 
       <dl className="erp-card ms-auto max-w-xs space-y-2 p-5 text-sm">
         <Row label="المجموع" value={subtotal} />
-        <Row label="الخصم" value={-discount} />
+        <Row label="الخصم" value={dec(discount).negated()} />
         <Row label="الضريبة" value={tax} />
         <div className="border-t border-line pt-2">
           <Row label="الإجمالي" value={total} strong />
@@ -212,11 +219,11 @@ function ReadOnlyLines({
   );
 }
 
-function Row({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
+function Row({ label, value, strong }: { label: string; value: Numeric; strong?: boolean }) {
   return (
     <div className="flex justify-between gap-4">
       <dt className={strong ? 'font-medium text-txt' : 'text-txt-3'}>{label}</dt>
-      <dd className={`tnum ${strong ? 'font-semibold text-brand' : 'text-txt-2'}`}>{value}</dd>
+      <dd className={`tnum ${strong ? 'font-semibold text-brand' : 'text-txt-2'}`}>{formatMoney(value)}</dd>
     </div>
   );
 }

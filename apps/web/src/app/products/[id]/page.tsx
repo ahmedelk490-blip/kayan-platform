@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { can } from '@erp/domain';
+import { can, dec, formatQty } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -92,7 +92,14 @@ export default async function ProductDetailPage({
           <h3 className="mb-5 text-sm font-semibold text-brand">البيانات</h3>
           <ProductForm
             action={update}
-            values={product}
+            // Decimal does not cross into a client component; the form is an
+            // input surface and the server recalculates on submit.
+            values={{
+              ...product,
+              cost: product.cost === null ? null : dec(product.cost).toNumber(),
+              sellingPrice:
+                product.sellingPrice === null ? null : dec(product.sellingPrice).toNumber(),
+            }}
             categories={options.categories}
             materials={options.materials}
             printingOptions={options.printingOptions}
@@ -116,7 +123,7 @@ export default async function ProductDetailPage({
               empty={product.variants.length === 0}
             >
               {product.variants.map((v) => {
-                const onHand = v.stock.reduce((sum, s) => sum + s.onHand, 0);
+                const onHand = v.stock.reduce((sum, s) => sum.plus(dec(s.onHand)), dec(0));
                 const del = deleteVariant.bind(null, product.id, v.id);
                 return (
                   <tr key={v.id} className="hover:bg-card-2">
@@ -138,7 +145,7 @@ export default async function ProductDetailPage({
                       )}
                     </td>
                     <td className="px-4 py-3 text-txt-2">{v.size?.code ?? '—'}</td>
-                    <td className="tnum px-4 py-3 text-txt">{onHand}</td>
+                    <td className="tnum px-4 py-3 text-txt">{formatQty(onHand)}</td>
                     <td className="px-4 py-3">
                       <Badge tone={v.isActive ? 'ok' : 'muted'}>
                         {v.isActive ? 'نشط' : 'موقوف'}

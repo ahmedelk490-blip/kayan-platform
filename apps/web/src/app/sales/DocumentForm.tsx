@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState, useState } from 'react';
-import { calcLine, calcDocument, money } from '@erp/domain';
+import { calcLine, calcDocument, formatMoney, type Numeric } from '@erp/domain';
 import { Field, TextArea, Select, SubmitButton, FormError } from '@/components/crud/Form';
 import type { FormState } from './shared';
 
@@ -164,7 +164,7 @@ export function DocumentForm({
 
                 <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
                   <span className="text-txt-3">
-                    الإجمالي: <span className="tnum text-txt">{t.lineTotal}</span>
+                    الإجمالي: <span className="tnum text-txt">{formatMoney(t.lineTotal)}</span>
                   </span>
                   {variant && (
                     <span className={short ? 'text-bad' : 'text-txt-3'}>
@@ -212,7 +212,7 @@ export function DocumentForm({
 
         <dl className="erp-card h-fit space-y-2.5 p-5 text-sm">
           <Row label="المجموع قبل الخصم" value={totals.subtotal} />
-          <Row label="الخصم" value={-totals.discountAmount} />
+          <Row label="الخصم" value={totals.discountAmount.negated()} />
           <Row label="الضريبة" value={totals.taxAmount} />
           <div className="border-t border-line pt-2.5">
             <Row label="الإجمالي" value={totals.total} strong />
@@ -255,12 +255,12 @@ function NumberCell({
   );
 }
 
-function Row({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
+function Row({ label, value, strong }: { label: string; value: Numeric; strong?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-4">
       <dt className={strong ? 'font-medium text-txt' : 'text-txt-3'}>{label}</dt>
       <dd className={`tnum ${strong ? 'text-base font-semibold text-brand' : 'text-txt-2'}`}>
-        {money(value)}
+        {formatMoney(value)}
       </dd>
     </div>
   );

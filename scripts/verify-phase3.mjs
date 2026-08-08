@@ -8,6 +8,10 @@
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
+
+/** Prisma returns Decimal objects; compare by value. */
+const n = (v) => (v === null || v === undefined ? null : Number(v.toString()));
+
 const T = 'kayan';
 const results = [];
 
@@ -103,7 +107,7 @@ async function main() {
   });
 
   const stock = await prisma.stock.findFirst({ where: { variantId: variant.id } });
-  check('stock projection written', stock?.onHand === 40, `onHand=${stock?.onHand}`);
+  check('stock projection written', n(stock?.onHand) === 40, `onHand=${n(stock?.onHand)}`);
 
   // Reversal keeps the original and links to it.
   const original = await prisma.stockMovement.findFirst({
