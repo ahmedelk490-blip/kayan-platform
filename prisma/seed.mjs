@@ -78,6 +78,18 @@ async function main() {
     });
   }
 
+  // Drop permissions the code no longer defines. Phase 5 renamed
+  // `manufacturing.read` to `.view`; without this the old key would linger in
+  // the database, granted to nobody, and the two would look like real but
+  // different permissions to anyone reading the table.
+  //
+  // Safe here because the loop above has just rebuilt every grant from the
+  // matrix in code, so no RolePermission row still points at a stale key.
+  const removed = await prisma.permission.deleteMany({
+    where: { key: { notIn: Object.keys(PERMISSIONS) } },
+  });
+  if (removed.count > 0) console.log(`pruned ${removed.count} stale permission(s)`);
+
   // Users
   const passwordHash = await hash(DEV_PASSWORD, ARGON2_OPTIONS);
 

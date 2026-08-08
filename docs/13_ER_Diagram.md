@@ -94,6 +94,33 @@ erDiagram
 
 ---
 
+## 3b. Manufacturing — Phase 5
+
+```
+Customer ──0..1─────┐
+SalesOrder ─0..1────┤
+SalesOrderLine ─0..1┤
+                    ▼
+Product ──1───► ProductionOrder ◄───1── ProductVariant
+                    │  │
+                    │  └──1..*──► WorkOrder            (sequence, status)
+                    │  └──0..*──► ProductionOrderAssignee ──► User
+                    │
+                    └──0..*──► StockMovement           (RECEIPT on completion)
+```
+
+A production order is always for exactly one variant and one quantity.
+Producing a sales order in batches means creating several production orders,
+which is what a factory actually does.
+
+`salesOrderId`, `salesOrderLineId` and `customerId` are all nullable — an
+order raised to replenish stock has no customer at all.
+
+`ProductionOrderAssignee` has a composite key `(productionOrderId, userId)`.
+The relation exists; there is no assignment UI yet.
+
+---
+
 ## 4. Constraints and indexes
 
 | Table | Unique | Indexes |
@@ -107,8 +134,11 @@ erDiagram
 | `Warehouse` | `(tenantId, code)` | `(tenantId, isDeleted)` |
 | `WarehouseLocation` | `(warehouseId, code)` | `warehouseId` |
 | `Stock` | `(variantId, warehouseId, locationId)` | `variantId`, `warehouseId` |
-| `StockMovement` | `reversesId` | `(tenantId, occurredAt)`, `(variantId, occurredAt)`, `warehouseId`, `type` |
+| `StockMovement` | `reversesId`, `(salesOrderLineId, type)`, `(productionOrderId, type)` | `(tenantId, occurredAt)`, `(variantId, occurredAt)`, `warehouseId`, `type` |
 | `Customer` / `Supplier` | `(tenantId, code)` | `(tenantId, isDeleted)`, `phone` |
+| `ProductionOrder` | `(tenantId, number)` | `(tenantId, isDeleted)`, `(tenantId, status)`, `salesOrderId`, `variantId` |
+| `ProductionOrderAssignee` | PK `(productionOrderId, userId)` | — |
+| `WorkOrder` | `(productionOrderId, sequence)` | `productionOrderId` |
 
 `ProductImage.driveFileId` being unique is what makes the Drive import
 idempotent — the same file can never be imported twice.
@@ -116,16 +146,26 @@ idempotent — the same file can never be imported twice.
 `StockMovement.reversesId` being unique means a movement can be reversed
 exactly once, which the verification suite tests directly.
 
+The two compound uniques on `StockMovement` are what make reservation
+(Phase 4) and the finished-goods receipt (Phase 5) idempotent. Both are
+enforced by the database, not by an application check, so a duplicate cannot
+slip through under concurrency. The Phase 5 suite proves this by attempting a
+second `RECEIPT` outside the application and confirming the write is rejected.
+
 ---
 
 ## 5. Soft delete
 
 `isDeleted` + `deletedAt` on: **Product, ProductVariant, Category, Color,
 Size, Material, PrintingOption, EmbroideryOption, Warehouse,
-WarehouseLocation, Customer, Supplier.**
+WarehouseLocation, Customer, Supplier, Quotation, SalesOrder,
+ProductionOrder.**
 
 Transactional data — `StockMovement`, `AuditLog`, `CustomerActivity` — is
 never deleted at all. Corrections are reversing entries.
+
+A production order can only be soft-deleted while it is `DRAFT` or already
+`CANCELLED`. One that has reached the floor must be cancelled, not hidden.
 
 ---
 
@@ -134,3 +174,4 @@ never deleted at all. Corrections are reversing entries.
 | Version | Date | Change |
 |---|---|---|
 | 1.0 | 2026-08-08 | Initial diagram at 29 tables after the Phase 3 migration. |
+| 1.1 | 2026-08-09 | Phase 5: `ProductionOrder`, `ProductionOrderAssignee`, `WorkOrder`; `StockMovement.productionOrderId` and its unique constraint. 36 tables. |

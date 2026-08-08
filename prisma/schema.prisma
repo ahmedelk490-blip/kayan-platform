@@ -63,6 +63,7 @@ model Tenant {
   stockMovements    StockMovement[]
   quotations        Quotation[]
   salesOrders       SalesOrder[]
+  productionOrders  ProductionOrder[]
 }
 
 model Company {
@@ -96,14 +97,15 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  role           Role               @relation(fields: [roleId], references: [id])
-  sessions       Session[]
-  audits         AuditLog[]
-  stockMovements StockMovement[]
-  activities     CustomerActivity[]
-  quotations     Quotation[]
-  salesOrders    SalesOrder[]
+  tenant                   Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role                     Role                      @relation(fields: [roleId], references: [id])
+  sessions                 Session[]
+  audits                   AuditLog[]
+  stockMovements           StockMovement[]
+  activities               CustomerActivity[]
+  quotations               Quotation[]
+  salesOrders              SalesOrder[]
+  productionOrderAssignees ProductionOrderAssignee[]
 
   @@index([tenantId])
   @@index([roleId])
@@ -332,6 +334,7 @@ model Product {
   stockMovements    StockMovement[]
   quotationLines    QuotationLine[]
   salesOrderLines   SalesOrderLine[]
+  productionOrders  ProductionOrder[]
 
   @@unique([tenantId, sku])
   @@index([tenantId, isDeleted])
@@ -359,14 +362,15 @@ model ProductVariant {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  product         Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
-  color           Color?           @relation(fields: [colorId], references: [id])
-  size            Size?            @relation(fields: [sizeId], references: [id])
-  images          ProductImage[]
-  stock           Stock[]
-  stockMovements  StockMovement[]
-  quotationLines  QuotationLine[]
-  salesOrderLines SalesOrderLine[]
+  product          Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  color            Color?            @relation(fields: [colorId], references: [id])
+  size             Size?             @relation(fields: [sizeId], references: [id])
+  images           ProductImage[]
+  stock            Stock[]
+  stockMovements   StockMovement[]
+  quotationLines   QuotationLine[]
+  salesOrderLines  SalesOrderLine[]
+  productionOrders ProductionOrder[]
 
   @@unique([sku])
   @@unique([productId, colorId, sizeId])
@@ -523,6 +527,9 @@ model StockMovement {
   salesOrderId     String?
   salesOrderLineId String?
 
+  /// Manufacturing linkage — finished-goods receipts on completion.
+  productionOrderId String?
+
   /// Set when this movement reverses another. The original is never touched.
   reversesId String?        @unique
   reverses   StockMovement? @relation("Reversal", fields: [reversesId], references: [id])
@@ -531,22 +538,27 @@ model StockMovement {
   occurredAt DateTime @default(now())
   createdAt  DateTime @default(now())
 
-  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  product        Product            @relation(fields: [productId], references: [id])
-  variant        ProductVariant     @relation(fields: [variantId], references: [id])
-  warehouse      Warehouse          @relation(fields: [warehouseId], references: [id])
-  location       WarehouseLocation? @relation(fields: [locationId], references: [id])
-  user           User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
-  salesOrder     SalesOrder?        @relation(fields: [salesOrderId], references: [id])
-  salesOrderLine SalesOrderLine?    @relation(fields: [salesOrderLineId], references: [id])
+  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product         Product            @relation(fields: [productId], references: [id])
+  variant         ProductVariant     @relation(fields: [variantId], references: [id])
+  warehouse       Warehouse          @relation(fields: [warehouseId], references: [id])
+  location        WarehouseLocation? @relation(fields: [locationId], references: [id])
+  user            User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  salesOrder      SalesOrder?        @relation(fields: [salesOrderId], references: [id])
+  salesOrderLine  SalesOrderLine?    @relation(fields: [salesOrderLineId], references: [id])
+  productionOrder ProductionOrder?   @relation(fields: [productionOrderId], references: [id])
 
-  /// IDEMPOTENCY GUARD.
+  /// IDEMPOTENCY GUARDS.
   ///
   /// One movement of a given type per order line, enforced by the database.
   /// Confirming the same order twice cannot create a second RESERVE, and
   /// cancelling twice cannot create a second UNRESERVE — the second attempt
   /// violates this constraint rather than relying on application checks.
+  ///
+  /// The same protection for manufacturing: completing a production order
+  /// twice cannot book its output twice.
   @@unique([salesOrderLineId, type])
+  @@unique([productionOrderId, type])
   @@index([tenantId, occurredAt])
   @@index([variantId, occurredAt])
   @@index([warehouseId])
@@ -576,11 +588,12 @@ model Customer {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  attachments Attachment[]
-  activities  CustomerActivity[]
-  quotations  Quotation[]
-  salesOrders SalesOrder[]
+  tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  attachments      Attachment[]
+  activities       CustomerActivity[]
+  quotations       Quotation[]
+  salesOrders      SalesOrder[]
+  productionOrders ProductionOrder[]
 
   @@unique([tenantId, code])
   @@index([tenantId, isDeleted])
@@ -764,13 +777,14 @@ model SalesOrder {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customer    Customer         @relation(fields: [customerId], references: [id])
-  quotation   Quotation?       @relation(fields: [quotationId], references: [id])
-  salesRep    User?            @relation(fields: [salesRepId], references: [id], onDelete: SetNull)
-  lines       SalesOrderLine[]
-  movements   StockMovement[]
-  attachments Attachment[]
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer         Customer          @relation(fields: [customerId], references: [id])
+  quotation        Quotation?        @relation(fields: [quotationId], references: [id])
+  salesRep         User?             @relation(fields: [salesRepId], references: [id], onDelete: SetNull)
+  lines            SalesOrderLine[]
+  movements        StockMovement[]
+  attachments      Attachment[]
+  productionOrders ProductionOrder[]
 
   @@unique([tenantId, number])
   @@index([tenantId, isDeleted])
@@ -800,13 +814,127 @@ model SalesOrderLine {
   grossProfit    Decimal?
   marginPercent  Decimal?
 
-  salesOrder SalesOrder      @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
-  product    Product         @relation(fields: [productId], references: [id])
-  variant    ProductVariant  @relation(fields: [variantId], references: [id])
-  movements  StockMovement[]
+  salesOrder       SalesOrder        @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  product          Product           @relation(fields: [productId], references: [id])
+  variant          ProductVariant    @relation(fields: [variantId], references: [id])
+  movements        StockMovement[]
+  productionOrders ProductionOrder[]
 
   @@index([salesOrderId])
   @@index([variantId])
+}
+
+// ═══════════════════════════════════════════════════════════
+// Manufacturing — Phase 5
+// ═══════════════════════════════════════════════════════════
+
+/// أمر الإنتاج.
+///
+/// One production order makes one variant. A sales order with three lines
+/// that all need making becomes three production orders — they are planned,
+/// scheduled and completed independently, and forcing them into one record
+/// makes partial completion impossible to express.
+model ProductionOrder {
+  id       String @id @default(cuid())
+  tenantId String
+  number   String
+
+  /// Optional but preferred — production can be for stock, not just to order.
+  salesOrderId     String?
+  salesOrderLineId String?
+  customerId       String?
+
+  productId String
+  variantId String
+  quantity  Decimal
+
+  /// LOW | NORMAL | HIGH | URGENT
+  priority String @default("NORMAL")
+  /// DRAFT | CONFIRMED | IN_PROGRESS | QC | COMPLETED | CANCELLED
+  status   String @default("DRAFT")
+
+  plannedStartDate DateTime?
+  plannedEndDate   DateTime?
+  actualStartDate  DateTime?
+  actualEndDate    DateTime?
+
+  notes String?
+
+  /// Reserved for the Cost Engine (Phase 6+). Null until it exists — a
+  /// column present and honestly empty beats altering the table once
+  /// historical orders depend on its shape.
+  estimatedCost Decimal?
+  actualCost    Decimal?
+
+  confirmedAt DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tenant         Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  salesOrder     SalesOrder?               @relation(fields: [salesOrderId], references: [id])
+  salesOrderLine SalesOrderLine?           @relation(fields: [salesOrderLineId], references: [id])
+  customer       Customer?                 @relation(fields: [customerId], references: [id])
+  product        Product                   @relation(fields: [productId], references: [id])
+  variant        ProductVariant            @relation(fields: [variantId], references: [id])
+  assignees      ProductionOrderAssignee[]
+  workOrders     WorkOrder[]
+  movements      StockMovement[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, isDeleted])
+  @@index([tenantId, status])
+  @@index([salesOrderId])
+  @@index([variantId])
+}
+
+/// الموظفون المكلَّفون — relation prepared, no HR workflow yet.
+model ProductionOrderAssignee {
+  productionOrderId String
+  userId            String
+  /// Free text for now: operator, supervisor, QC…
+  role              String?
+  createdAt         DateTime @default(now())
+
+  productionOrder ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([productionOrderId, userId])
+  @@index([userId])
+}
+
+/// أمر التشغيل — one step of a production order.
+///
+/// Deliberately minimal. Routings, work centres, machine time and stitch
+/// counts belong to the Formula Engine; this is the container they will
+/// attach to, so that phase does not have to reshape a table that live
+/// production orders already reference.
+model WorkOrder {
+  id                String @id @default(cuid())
+  productionOrderId String
+  sequence          Int
+  name              String
+  /// PENDING | IN_PROGRESS | DONE | SKIPPED
+  status            String @default("PENDING")
+
+  notes            String?
+  plannedStartDate DateTime?
+  plannedEndDate   DateTime?
+  actualStartDate  DateTime?
+  actualEndDate    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  productionOrder ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+
+  @@unique([productionOrderId, sequence])
+  @@index([productionOrderId])
 }
 
 /// المرفقات.

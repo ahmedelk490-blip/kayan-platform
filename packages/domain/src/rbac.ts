@@ -73,8 +73,11 @@ export const PERMISSIONS = {
   'inventory.read': { nameAr: 'عرض المخزون', group: 'المخزون' },
   'inventory.write': { nameAr: 'تعديل المخزون', group: 'المخزون' },
 
-  'manufacturing.read': { nameAr: 'عرض التصنيع', group: 'التصنيع' },
-  'manufacturing.write': { nameAr: 'تعديل التصنيع', group: 'التصنيع' },
+  // Phase 5. `manufacturing.read` was renamed to `.view` to match the
+  // naming the client specified; nothing else about RBAC changed.
+  'manufacturing.view': { nameAr: 'عرض أوامر الإنتاج', group: 'التصنيع' },
+  'manufacturing.write': { nameAr: 'إنشاء وتعديل أوامر الإنتاج', group: 'التصنيع' },
+  'manufacturing.confirm': { nameAr: 'تأكيد وتشغيل وإلغاء أوامر الإنتاج', group: 'التصنيع' },
   'formula.write': { nameAr: 'تعديل المعادلات', group: 'التصنيع' },
 
   'cost.read': { nameAr: 'عرض التكلفة', group: 'التكلفة' },
@@ -115,8 +118,9 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'suppliers.write',
     'inventory.read',
     'inventory.write',
-    'manufacturing.read',
+    'manufacturing.view',
     'manufacturing.write',
+    'manufacturing.confirm',
     'formula.write',
     'cost.read',
     'cost.margin',

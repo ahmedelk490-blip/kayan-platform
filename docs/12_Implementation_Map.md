@@ -5,6 +5,17 @@
 **Status:** AUDIT — measured from the codebase, not from plans
 **Commit audited:** `ecb14f9`
 
+> ⚠️ **This is a snapshot taken before Phase 2.** It was accurate on
+> 2026-08-06 and is now substantially out of date: Phases 2, 3, 4, 4.5 and 5
+> have since been built and frozen. Only §8 Manufacturing has been refreshed
+> in place, because Phase 5 touched it directly.
+>
+> For current state read the phase reports, which are the authority:
+> `14_Phase3_Report.md`, `15_Phase4_Report.md`,
+> `16_Phase45_Decimal_Report.md`, `17_Phase5_Manufacturing_Report.md`.
+>
+> A full re-audit of this document is outstanding work.
+
 ---
 
 ## 0. How to read this
@@ -201,9 +212,17 @@ The only persistence anywhere in the project is `apps/marketing/.leads/leads.jso
 
 ## 8. Manufacturing
 
+*Refreshed 2026-08-09 after Phase 5. Detail in `17_Phase5_Manufacturing_Report.md`.*
+
 | Capability | Status |
 |---|---|
-| Production Orders | ❌ Not started |
+| Production Orders | ✅ Complete — CRUD, workflow, `MO-YYYY-NNNN`, soft delete, audit |
+| Work Orders (named steps) | ✅ Complete — sequence + status, deliberately thin |
+| Sales Order ↔ Production Order link | ✅ Complete — both directions, status propagation |
+| Finished-goods receipt on completion | ✅ Complete — idempotent, DB-enforced |
+| Assigned Employees | ⚠️ Relation only — no UI, as specified |
+| Estimated / Actual Cost | ⚠️ Fields only — empty until the Cost Engine exists |
+| Material issue on start | ⚠️ Not built — needs a BOM; see the deviation note in the Phase 5 report |
 | Formula Engine | ❌ Not started |
 | Printing Formula | ❌ Not started |
 | Embroidery Formula | ❌ Not started |
@@ -215,7 +234,9 @@ The only persistence anywhere in the project is `apps/marketing/.leads/leads.jso
 | Ink Formula | ❌ Not started |
 | Automatic Cost Calculation | ❌ Not started |
 
-**0 of 11.** The cost figures shown on `/platform` are hardcoded constants in a React file for display purposes.
+**4 of 17 complete, 3 partial by design.** The cost figures shown on
+`/platform` are still hardcoded constants in a React file for display
+purposes — no cost is calculated anywhere in the system.
 
 ---
 

@@ -18,6 +18,7 @@ import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import { StatusBadge } from '../../StatusBadge';
+import { ProductionBadge } from '@/app/manufacturing/StatusBadge';
 import { confirmOrder, cancelOrder, changeOrderStatus, deleteOrder } from '../actions';
 
 export const metadata: Metadata = { title: 'أمر البيع' };
@@ -45,12 +46,21 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         orderBy: { createdAt: 'asc' },
         include: { variant: { select: { sku: true } } },
       },
+      productionOrders: {
+        where: { isDeleted: false },
+        orderBy: { number: 'asc' },
+        include: {
+          product: { select: { nameAr: true } },
+          variant: { select: { sku: true } },
+        },
+      },
     },
   });
   if (!order) notFound();
 
   const canConfirm = can(user.role, 'sales.confirm');
   const canWrite = can(user.role, 'sales.write');
+  const canProduce = can(user.role, 'manufacturing.write');
   const status = isOrderStatus(order.status) ? (order.status as OrderStatus) : 'DRAFT';
   const nextStates = ORDER_TRANSITIONS[status].filter((s) => s !== 'CANCELLED');
   const holdsReservations = RESERVING_STATUSES.includes(status);
@@ -183,6 +193,47 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           <p className="mt-2 text-[0.7rem] text-txt-4">
             الحجز لا يقلل الرصيد المتاح فعلياً — يرفع «محجوز»، والمتاح = المتاح − المحجوز.
           </p>
+
+          <div className="mt-8 flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-brand">أوامر الإنتاج</h3>
+            {canProduce && status !== 'DRAFT' && status !== 'CANCELLED' && (
+              <Link
+                href={`/manufacturing/new?salesOrderId=${order.id}`}
+                className="text-xs text-brand hover:underline"
+              >
+                + أمر إنتاج من هذا الأمر
+              </Link>
+            )}
+          </div>
+          {order.productionOrders.length === 0 ? (
+            <p className="erp-card mt-3 p-5 text-sm text-txt-3">
+              لا توجد أوامر إنتاج مرتبطة بهذا الأمر.
+            </p>
+          ) : (
+            <div className="mt-3">
+              <Table headers={['الرقم', 'المنتج', 'الكمية', 'الحالة']} empty={false}>
+                {order.productionOrders.map((p) => (
+                  <tr key={p.id}>
+                    <td dir="ltr" className="tnum px-4 py-3 text-start">
+                      <Link href={`/manufacturing/${p.id}`} className="text-brand hover:underline">
+                        {p.number}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-txt-2">
+                      {p.product.nameAr}
+                      <span dir="ltr" className="ms-2 text-[0.7rem] text-txt-4">
+                        {p.variant.sku}
+                      </span>
+                    </td>
+                    <td className="tnum px-4 py-3 text-txt-2">{formatQty(p.quantity)}</td>
+                    <td className="px-4 py-3">
+                      <ProductionBadge status={p.status} />
+                    </td>
+                  </tr>
+                ))}
+              </Table>
+            </div>
+          )}
         </section>
       </div>
     </AppShell>
