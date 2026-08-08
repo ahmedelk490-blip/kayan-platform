@@ -57,6 +57,13 @@ export const PERMISSIONS = {
   'customers.read': { nameAr: 'عرض العملاء', group: 'العملاء' },
   'customers.write': { nameAr: 'تعديل العملاء', group: 'العملاء' },
 
+  // Added in Phase 3. Extending the matrix, not rebuilding it — supplier
+  // management was requested and had no permission to guard it.
+  'suppliers.read': { nameAr: 'عرض الموردين', group: 'الموردون' },
+  'suppliers.write': { nameAr: 'تعديل الموردين', group: 'الموردون' },
+
+  'catalog.manage': { nameAr: 'إدارة التصنيفات والقوائم', group: 'المنتجات' },
+
   'inventory.read': { nameAr: 'عرض المخزون', group: 'المخزون' },
   'inventory.write': { nameAr: 'تعديل المخزون', group: 'المخزون' },
 
@@ -92,8 +99,11 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'sales.view',
     'products.read',
     'products.write',
+    'catalog.manage',
     'customers.read',
     'customers.write',
+    'suppliers.read',
+    'suppliers.write',
     'inventory.read',
     'inventory.write',
     'manufacturing.read',
@@ -109,6 +119,7 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'products.read',
     'customers.read',
     'customers.write',
+    'suppliers.read',
     'inventory.read',
     'cost.read',
     'reports.view',

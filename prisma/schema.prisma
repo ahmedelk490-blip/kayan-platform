@@ -4,14 +4,20 @@
 // Row-Level Security. Neither PostgreSQL nor Docker is available on this
 // machine, so development runs on SQLite.
 //
-// Consequences, stated rather than hidden:
 //   - RLS does not exist. Tenant isolation is enforced in the repository
-//     layer only, which ADR-002 explicitly called insufficient for
-//     production. This MUST be revisited before any real data lands.
-//   - No native enums, no JSONB, no partial indexes.
+//     layer only, which ADR-002 called insufficient for production.
+//   - Enums are modelled as String with the allowed values documented and
+//     enforced by Zod at the application boundary. Promoting them to native
+//     Postgres enums is a migration, not a redesign.
+//   - Money is Float here because SQLite has no DECIMAL. On Postgres these
+//     become NUMERIC(19,4) / NUMERIC(19,8). DI-3 prohibits floats in
+//     financial paths, so no money arithmetic happens in this phase —
+//     these columns are storage only until the Cost Engine is built.
 //
-// The schema is otherwise written to port cleanly: changing the provider to
-// postgresql and adding the RLS policies is the migration.
+// Conventions
+//   - Master data soft-deletes (isDeleted + deletedAt); transactional data
+//     never deletes.
+//   - Every tenant-scoped table carries tenantId and indexes it first.
 
 generator client {
   provider = "prisma-client-js"
@@ -23,19 +29,28 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
 // Platform
-// ─────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
 
 model Tenant {
   id        String   @id @default(cuid())
   name      String
   createdAt DateTime @default(now())
 
-  companies Company[]
-  users     User[]
-  products  Product[]
-  categories Category[]
+  companies      Company[]
+  users          User[]
+  products       Product[]
+  categories     Category[]
+  colors         Color[]
+  sizes          Size[]
+  materials      Material[]
+  printingOptions  PrintingOption[]
+  embroideryOptions EmbroideryOption[]
+  warehouses     Warehouse[]
+  customers      Customer[]
+  suppliers      Supplier[]
+  stockMovements StockMovement[]
 }
 
 model Company {
@@ -50,9 +65,9 @@ model Company {
   @@index([tenantId])
 }
 
-// ─────────────────────────────────────────────────────────────
-// Identity & Access  (FR-IAM)
-// ─────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+// Identity & Access — FROZEN (Phase 2). Do not modify.
+// ═══════════════════════════════════════════════════════════
 
 model User {
   id           String    @id @default(cuid())
@@ -69,23 +84,22 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  role     Role      @relation(fields: [roleId], references: [id])
-  sessions Session[]
-  audits   AuditLog[]
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role           Role            @relation(fields: [roleId], references: [id])
+  sessions       Session[]
+  audits         AuditLog[]
+  stockMovements StockMovement[]
+  activities     CustomerActivity[]
 
   @@index([tenantId])
   @@index([roleId])
 }
 
-/// Roles are data, not an enum — Company Administrators must be able to
-/// define their own (FR-IAM-007).
 model Role {
-  id        String @id @default(cuid())
-  key       String @unique // MANAGER | SALES | CUSTOMER | ADMIN
-  name      String
-  nameAr    String
-  /// Where this role lands after login.
+  id          String @id @default(cuid())
+  key         String @unique
+  name        String
+  nameAr      String
   landingPath String
 
   users       User[]
@@ -94,7 +108,7 @@ model Role {
 
 model Permission {
   id     String @id @default(cuid())
-  key    String @unique // products.read, sales.write, …
+  key    String @unique
   nameAr String
   group  String
 
@@ -111,8 +125,6 @@ model RolePermission {
   @@id([roleId, permissionId])
 }
 
-/// Server-side session registry, so revocation is real (FR-IAM-008).
-/// A stateless JWT cannot be revoked before it expires.
 model Session {
   id        String    @id @default(cuid())
   tokenHash String    @unique
@@ -143,65 +155,481 @@ model AuditLog {
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, createdAt])
+  @@index([entityType, entityId])
 }
 
-// ─────────────────────────────────────────────────────────────
-// Products  (FR-MDM)
-// ─────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+// Lookups — colours, sizes, materials, decoration options
+// ═══════════════════════════════════════════════════════════
+
+model Color {
+  id        String    @id @default(cuid())
+  tenantId  String
+  nameAr    String
+  nameEn    String?
+  /// #RRGGBB — used for the swatch in the UI.
+  hex       String?
+  sortOrder Int       @default(0)
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  variants ProductVariant[]
+
+  @@unique([tenantId, nameAr])
+  @@index([tenantId, isDeleted])
+}
+
+model Size {
+  id        String    @id @default(cuid())
+  tenantId  String
+  /// S, M, L, XL, 2XL … or a numeric size.
+  code      String
+  nameAr    String
+  /// Orders sizes correctly; alphabetical sorting puts XL before XS.
+  sortOrder Int       @default(0)
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  variants ProductVariant[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isDeleted])
+}
+
+model Material {
+  id        String    @id @default(cuid())
+  tenantId  String
+  nameAr    String
+  nameEn    String?
+  /// Free text for now — cotton 180gsm, polyester, etc.
+  spec      String?
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products ProductMaterial[]
+
+  @@unique([tenantId, nameAr])
+  @@index([tenantId, isDeleted])
+}
+
+/// طرق الطباعة — screen, DTF, sublimation, heat transfer…
+model PrintingOption {
+  id        String    @id @default(cuid())
+  tenantId  String
+  nameAr    String
+  nameEn    String?
+  notes     String?
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  tenant   Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products ProductPrintingOption[]
+
+  @@unique([tenantId, nameAr])
+  @@index([tenantId, isDeleted])
+}
+
+/// أنواع التطريز — flat, 3D puff, chenille…
+model EmbroideryOption {
+  id        String    @id @default(cuid())
+  tenantId  String
+  nameAr    String
+  nameEn    String?
+  notes     String?
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  tenant   Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products ProductEmbroideryOption[]
+
+  @@unique([tenantId, nameAr])
+  @@index([tenantId, isDeleted])
+}
+
+// ═══════════════════════════════════════════════════════════
+// Catalogue
+// ═══════════════════════════════════════════════════════════
 
 model Category {
-  id           String  @id @default(cuid())
-  tenantId     String
-  slug         String
-  nameAr       String
-  nameEn       String
-  /// Google Drive folder this category was imported from.
+  id            String    @id @default(cuid())
+  tenantId      String
+  /// Self-reference gives subcategories without a second model.
+  parentId      String?
+  slug          String
+  nameAr        String
+  nameEn        String
   driveFolderId String?
-  sortOrder    Int     @default(0)
+  sortOrder     Int       @default(0)
+  isDeleted     Boolean   @default(false)
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  /// @default is required as well as @updatedAt: the column is being added
+  /// to a table that already holds rows, and those rows need a value.
+  updatedAt     DateTime  @default(now()) @updatedAt
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant   Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
   products Product[]
 
   @@unique([tenantId, slug])
-  @@index([tenantId])
+  @@index([tenantId, isDeleted])
+  @@index([parentId])
 }
 
 model Product {
-  id          String   @id @default(cuid())
-  tenantId    String
-  categoryId  String
-  sku         String
-  nameAr      String
-  nameEn      String?
+  id            String    @id @default(cuid())
+  tenantId      String
+  categoryId    String
+  sku           String
+  barcode       String?
+  /// Payload encoded into the printed QR label.
+  qrPayload     String?
+  nameAr        String
+  nameEn        String?
   descriptionAr String?
-  /// Google Drive folder this product (model) was imported from.
   driveFolderId String?
-  basePrice   Float?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  /// Storage only until the Cost Engine exists — see header note on money.
+  cost          Float?
+  sellingPrice  Float?
+  /// ACTIVE | DRAFT | DISCONTINUED
+  status        String    @default("ACTIVE")
+  isDeleted     Boolean   @default(false)
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  category Category       @relation(fields: [categoryId], references: [id])
-  images   ProductImage[]
+  tenant            Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category          Category                  @relation(fields: [categoryId], references: [id])
+  variants          ProductVariant[]
+  images            ProductImage[]
+  materials         ProductMaterial[]
+  printingOptions   ProductPrintingOption[]
+  embroideryOptions ProductEmbroideryOption[]
+  suppliers         SupplierProduct[]
+  stockMovements    StockMovement[]
 
   @@unique([tenantId, sku])
+  @@index([tenantId, isDeleted])
   @@index([tenantId, categoryId])
+  @@index([barcode])
 }
 
-model ProductImage {
-  id        String  @id @default(cuid())
-  productId String
-  path      String
-  width     Int
-  height    Int
-  bytes     Int
-  isPrimary Boolean @default(false)
-  sortOrder Int     @default(0)
-  /// Source Drive file id, so a re-import can detect duplicates.
-  driveFileId String?
+/// المتغيّر — منتج + لون + مقاس. وحدة تتبّع المخزون.
+///
+/// Stock lives here, never on Product. A product with three colours in five
+/// sizes is fifteen independently stocked things, and treating it as one
+/// makes every stock figure meaningless.
+model ProductVariant {
+  id           String    @id @default(cuid())
+  productId    String
+  colorId      String?
+  sizeId       String?
+  sku          String
+  barcode      String?
+  cost         Float?
+  sellingPrice Float?
+  isActive     Boolean   @default(true)
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  color          Color?          @relation(fields: [colorId], references: [id])
+  size           Size?           @relation(fields: [sizeId], references: [id])
+  images         ProductImage[]
+  stock          Stock[]
+  stockMovements StockMovement[]
+
+  @@unique([sku])
+  @@unique([productId, colorId, sizeId])
+  @@index([productId])
+  @@index([barcode])
+}
+
+/// Images attach to a product, and optionally to one of its variants.
+/// variantId null = a general product image.
+model ProductImage {
+  id          String  @id @default(cuid())
+  productId   String
+  variantId   String?
+  path        String
+  width       Int
+  height      Int
+  bytes       Int
+  isPrimary   Boolean @default(false)
+  sortOrder   Int     @default(0)
+  /// Source Drive file id — the duplicate-detection key on re-import.
+  driveFileId String? @unique
+
+  product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
 
   @@index([productId])
+  @@index([variantId])
+}
+
+model ProductMaterial {
+  productId  String
+  materialId String
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@id([productId, materialId])
+}
+
+model ProductPrintingOption {
+  productId String
+  optionId  String
+
+  product Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  option  PrintingOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@id([productId, optionId])
+}
+
+model ProductEmbroideryOption {
+  productId String
+  optionId  String
+
+  product Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  option  EmbroideryOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@id([productId, optionId])
+}
+
+// ═══════════════════════════════════════════════════════════
+// Inventory
+// ═══════════════════════════════════════════════════════════
+
+model Warehouse {
+  id        String    @id @default(cuid())
+  tenantId  String
+  code      String
+  nameAr    String
+  address   String?
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  locations      WarehouseLocation[]
+  stock          Stock[]
+  stockMovements StockMovement[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isDeleted])
+}
+
+/// الرفوف والمواقع داخل المخزن.
+model WarehouseLocation {
+  id          String    @id @default(cuid())
+  warehouseId String
+  code        String
+  nameAr      String?
+  isDeleted   Boolean   @default(false)
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  warehouse      Warehouse       @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  stock          Stock[]
+  stockMovements StockMovement[]
+
+  @@unique([warehouseId, code])
+  @@index([warehouseId])
+}
+
+/// الرصيد الحالي — projection derived from StockMovement.
+///
+/// DI-2 makes movements the record of truth; this table exists so a stock
+/// list does not have to sum the whole movement history on every page load.
+/// It is rebuildable from StockMovement at any time.
+model Stock {
+  id          String  @id @default(cuid())
+  variantId   String
+  warehouseId String
+  locationId  String?
+  onHand      Float   @default(0)
+  reserved    Float   @default(0)
+  damaged     Float   @default(0)
+  minStock    Float   @default(0)
+  maxStock    Float?
+
+  variant   ProductVariant     @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  warehouse Warehouse          @relation(fields: [warehouseId], references: [id])
+  location  WarehouseLocation? @relation(fields: [locationId], references: [id])
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([variantId, warehouseId, locationId])
+  @@index([variantId])
+  @@index([warehouseId])
+}
+
+/// حركة المخزون — append-only.
+///
+/// Never updated, never deleted. A mistake is corrected by posting a
+/// reversing movement that references the original, so the history remains
+/// a complete and auditable record of what was believed and when.
+model StockMovement {
+  id          String @id @default(cuid())
+  tenantId    String
+  productId   String
+  variantId   String
+  warehouseId String
+  locationId  String?
+
+  /// RECEIPT | ISSUE | TRANSFER_IN | TRANSFER_OUT | ADJUSTMENT |
+  /// RESERVE | UNRESERVE | DAMAGE | SCRAP | RETURN | REVERSAL
+  type      String
+  /// Signed: positive increases stock, negative decreases it.
+  quantity  Float
+  /// Free-text pointer to the source document until Sales/Purchasing exist.
+  reference String?
+  reason    String?
+  userId    String?
+
+  /// Set when this movement reverses another. The original is never touched.
+  reversesId String?         @unique
+  reverses   StockMovement?  @relation("Reversal", fields: [reversesId], references: [id])
+  reversedBy StockMovement?  @relation("Reversal")
+
+  occurredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product   Product            @relation(fields: [productId], references: [id])
+  variant   ProductVariant     @relation(fields: [variantId], references: [id])
+  warehouse Warehouse          @relation(fields: [warehouseId], references: [id])
+  location  WarehouseLocation? @relation(fields: [locationId], references: [id])
+  user      User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, occurredAt])
+  @@index([variantId, occurredAt])
+  @@index([warehouseId])
+  @@index([type])
+}
+
+// ═══════════════════════════════════════════════════════════
+// Partners — customers and suppliers
+// ═══════════════════════════════════════════════════════════
+
+model Customer {
+  id          String    @id @default(cuid())
+  tenantId    String
+  code        String
+  companyName String?
+  /// Required — an order needs a human to call.
+  contactName String
+  phone       String
+  whatsapp    String?
+  email       String?
+  address     String?
+  taxNumber   String?
+  notes       String?
+  isDeleted   Boolean   @default(false)
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  attachments Attachment[]
+  activities  CustomerActivity[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isDeleted])
+  @@index([phone])
+}
+
+/// الجدول الزمني للعميل — calls, visits, notes.
+/// Future quotations, orders and invoices post here too.
+model CustomerActivity {
+  id         String   @id @default(cuid())
+  customerId String
+  /// NOTE | CALL | VISIT | MEETING | WHATSAPP | EMAIL | SYSTEM
+  type       String
+  title      String
+  body       String?
+  userId     String?
+  occurredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([customerId, occurredAt])
+}
+
+model Supplier {
+  id          String    @id @default(cuid())
+  tenantId    String
+  code        String
+  name        String
+  contactName String?
+  phone       String
+  whatsapp    String?
+  email       String?
+  address     String?
+  taxNumber   String?
+  notes       String?
+  /// 1–5, set by purchasing. Null until rated.
+  rating      Int?
+  isDeleted   Boolean   @default(false)
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products    SupplierProduct[]
+  attachments Attachment[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isDeleted])
+}
+
+/// ما يورّده كل مورّد. Purchase history attaches here when Purchasing exists.
+model SupplierProduct {
+  supplierId  String
+  productId   String
+  supplierSku String?
+  lastPrice   Float?
+  leadTimeDays Int?
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([supplierId, productId])
+}
+
+/// المرفقات.
+///
+/// Nullable foreign keys rather than an entityType/entityId pair, so the
+/// database still enforces referential integrity. Exactly one owner is set.
+model Attachment {
+  id         String   @id @default(cuid())
+  customerId String?
+  supplierId String?
+  filename   String
+  path       String
+  mimeType   String
+  bytes      Int
+  uploadedBy String?
+  createdAt  DateTime @default(now())
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([supplierId])
 }
