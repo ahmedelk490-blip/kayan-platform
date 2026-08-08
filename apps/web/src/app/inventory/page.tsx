@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { can } from '@erp/domain';
+import { can, available } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -91,18 +91,24 @@ export default async function InventoryPage() {
           <section>
             <h3 className="mb-3 text-sm font-semibold text-brand">الأرصدة</h3>
             <Table
-              headers={['المنتج / المتغيّر', 'المخزن', 'الموقع', 'متاح', 'محجوز', 'تالف', 'الحد الأدنى']}
+              headers={['المنتج / المتغيّر', 'المخزن', 'الموقع', 'الرصيد', 'محجوز', 'المتاح', 'تالف', 'الحد الأدنى']}
               empty={stock.length === 0}
             >
-              {stock.map((s) => (
+              {stock.map((s) => {
+                const atp = available(s.onHand, s.reserved);
+                return (
                 <tr key={s.id} className="hover:bg-card-2">
                   <td className="px-4 py-3 text-txt">{variantLabel(s.variant)}</td>
                   <td className="px-4 py-3 text-txt-2">{s.warehouse.nameAr}</td>
                   <td dir="ltr" className="px-4 py-3 text-start text-txt-3">
                     {s.location?.code ?? '—'}
                   </td>
-                  <td className="tnum px-4 py-3 font-medium text-txt">{s.onHand}</td>
+                  <td className="tnum px-4 py-3 text-txt-2">{s.onHand}</td>
                   <td className="tnum px-4 py-3 text-txt-2">{s.reserved}</td>
+                  {/* المتاح = الرصيد − المحجوز */}
+                  <td className={`tnum px-4 py-3 font-medium ${atp <= 0 ? 'text-bad' : 'text-txt'}`}>
+                    {atp}
+                  </td>
                   <td className="tnum px-4 py-3 text-txt-2">{s.damaged}</td>
                   <td className="tnum px-4 py-3">
                     {s.minStock > 0 && s.onHand <= s.minStock ? (
@@ -112,7 +118,8 @@ export default async function InventoryPage() {
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </Table>
           </section>
 

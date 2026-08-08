@@ -1,0 +1,94 @@
+import 'server-only';
+
+import { prisma } from '@/lib/prisma';
+
+export interface FormState {
+  error?: string;
+  ok?: string;
+  fieldErrors?: Record<string, string>;
+}
+
+/**
+ * Next document number, scoped to tenant and year: QUO-2026-0001.
+ *
+ * Derived from the highest existing number rather than a counter table, so
+ * it cannot drift out of step with reality. Not gapless — DI-6 requires that
+ * only for fiscal documents, which these are not; invoices will need the
+ * sequence-allocation approach instead.
+ */
+export async function nextDocumentNumber(
+  kind: 'QUO' | 'SO',
+  tenantId: string,
+): Promise<string> {
+  const year = new Date().getFullYear();
+  const prefix = `${kind}-${year}-`;
+
+  const rows =
+    kind === 'QUO'
+      ? await prisma.quotation.findMany({
+          where: { tenantId, number: { startsWith: prefix } },
+          select: { number: true },
+        })
+      : await prisma.salesOrder.findMany({
+          where: { tenantId, number: { startsWith: prefix } },
+          select: { number: true },
+        });
+
+  const max = rows.reduce((acc, r) => {
+    const n = Number.parseInt(r.number.slice(prefix.length), 10);
+    return Number.isFinite(n) && n > acc ? n : acc;
+  }, 0);
+
+  return `${prefix}${String(max + 1).padStart(4, '0')}`;
+}
+
+/** Append an entry to the customer timeline. */
+export async function timeline(input: {
+  customerId: string;
+  type: string;
+  title: string;
+  body?: string | null;
+  userId?: string | null;
+}) {
+  await prisma.customerActivity.create({
+    data: {
+      customerId: input.customerId,
+      type: input.type,
+      title: input.title,
+      body: input.body ?? null,
+      userId: input.userId ?? null,
+    },
+  });
+}
+
+/** Parse a decimal form value, defaulting to 0. */
+export function decimal(value: FormDataEntryValue | null): number {
+  const n = Number(String(value ?? '').trim());
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Read repeated line inputs out of a form.
+ *
+ * Lines are submitted as parallel arrays (`lines.variantId[]`, etc.) so a
+ * user can add and remove rows without any client-side state machine.
+ */
+export function readLines(formData: FormData) {
+  const variantIds = formData.getAll('lineVariantId').map(String);
+  const quantities = formData.getAll('lineQuantity').map(String);
+  const prices = formData.getAll('lineUnitPrice').map(String);
+  const discounts = formData.getAll('lineDiscount').map(String);
+  const taxRates = formData.getAll('lineTaxRate').map(String);
+  const notes = formData.getAll('lineNotes').map(String);
+
+  return variantIds
+    .map((variantId, i) => ({
+      variantId,
+      quantity: Number(quantities[i] ?? 0),
+      unitPrice: Number(prices[i] ?? 0),
+      discountAmount: Number(discounts[i] ?? 0),
+      taxRate: Number(taxRates[i] ?? 0),
+      notes: notes[i]?.trim() || null,
+    }))
+    .filter((l) => l.variantId && l.quantity > 0);
+}

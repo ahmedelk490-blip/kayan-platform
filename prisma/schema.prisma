@@ -38,19 +38,21 @@ model Tenant {
   name      String
   createdAt DateTime @default(now())
 
-  companies      Company[]
-  users          User[]
-  products       Product[]
-  categories     Category[]
-  colors         Color[]
-  sizes          Size[]
-  materials      Material[]
-  printingOptions  PrintingOption[]
+  companies         Company[]
+  users             User[]
+  products          Product[]
+  categories        Category[]
+  colors            Color[]
+  sizes             Size[]
+  materials         Material[]
+  printingOptions   PrintingOption[]
   embroideryOptions EmbroideryOption[]
-  warehouses     Warehouse[]
-  customers      Customer[]
-  suppliers      Supplier[]
-  stockMovements StockMovement[]
+  warehouses        Warehouse[]
+  customers         Customer[]
+  suppliers         Supplier[]
+  stockMovements    StockMovement[]
+  quotations        Quotation[]
+  salesOrders       SalesOrder[]
 }
 
 model Company {
@@ -84,12 +86,14 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  role           Role            @relation(fields: [roleId], references: [id])
+  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role           Role               @relation(fields: [roleId], references: [id])
   sessions       Session[]
   audits         AuditLog[]
   stockMovements StockMovement[]
   activities     CustomerActivity[]
+  quotations     Quotation[]
+  salesOrders    SalesOrder[]
 
   @@index([tenantId])
   @@index([roleId])
@@ -316,6 +320,8 @@ model Product {
   embroideryOptions ProductEmbroideryOption[]
   suppliers         SupplierProduct[]
   stockMovements    StockMovement[]
+  quotationLines    QuotationLine[]
+  salesOrderLines   SalesOrderLine[]
 
   @@unique([tenantId, sku])
   @@index([tenantId, isDeleted])
@@ -343,12 +349,14 @@ model ProductVariant {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  product        Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
-  color          Color?          @relation(fields: [colorId], references: [id])
-  size           Size?           @relation(fields: [sizeId], references: [id])
-  images         ProductImage[]
-  stock          Stock[]
-  stockMovements StockMovement[]
+  product         Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  color           Color?           @relation(fields: [colorId], references: [id])
+  size            Size?            @relation(fields: [sizeId], references: [id])
+  images          ProductImage[]
+  stock           Stock[]
+  stockMovements  StockMovement[]
+  quotationLines  QuotationLine[]
+  salesOrderLines SalesOrderLine[]
 
   @@unique([sku])
   @@unique([productId, colorId, sizeId])
@@ -423,7 +431,7 @@ model Warehouse {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   locations      WarehouseLocation[]
   stock          Stock[]
   stockMovements StockMovement[]
@@ -483,7 +491,7 @@ model Stock {
 /// reversing movement that references the original, so the history remains
 /// a complete and auditable record of what was believed and when.
 model StockMovement {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   tenantId    String
   productId   String
   variantId   String
@@ -495,30 +503,45 @@ model StockMovement {
   type      String
   /// Signed: positive increases stock, negative decreases it.
   quantity  Float
-  /// Free-text pointer to the source document until Sales/Purchasing exist.
+  /// Free-text pointer to the source document until Purchasing exists.
   reference String?
   reason    String?
   userId    String?
 
+  /// Sales linkage. Present on reservation and un-reservation movements so
+  /// every one can be traced back to the order and the exact line.
+  salesOrderId     String?
+  salesOrderLineId String?
+
   /// Set when this movement reverses another. The original is never touched.
-  reversesId String?         @unique
-  reverses   StockMovement?  @relation("Reversal", fields: [reversesId], references: [id])
-  reversedBy StockMovement?  @relation("Reversal")
+  reversesId String?        @unique
+  reverses   StockMovement? @relation("Reversal", fields: [reversesId], references: [id])
+  reversedBy StockMovement? @relation("Reversal")
 
   occurredAt DateTime @default(now())
   createdAt  DateTime @default(now())
 
-  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  product   Product            @relation(fields: [productId], references: [id])
-  variant   ProductVariant     @relation(fields: [variantId], references: [id])
-  warehouse Warehouse          @relation(fields: [warehouseId], references: [id])
-  location  WarehouseLocation? @relation(fields: [locationId], references: [id])
-  user      User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product        Product            @relation(fields: [productId], references: [id])
+  variant        ProductVariant     @relation(fields: [variantId], references: [id])
+  warehouse      Warehouse          @relation(fields: [warehouseId], references: [id])
+  location       WarehouseLocation? @relation(fields: [locationId], references: [id])
+  user           User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  salesOrder     SalesOrder?        @relation(fields: [salesOrderId], references: [id])
+  salesOrderLine SalesOrderLine?    @relation(fields: [salesOrderLineId], references: [id])
 
+  /// IDEMPOTENCY GUARD.
+  ///
+  /// One movement of a given type per order line, enforced by the database.
+  /// Confirming the same order twice cannot create a second RESERVE, and
+  /// cancelling twice cannot create a second UNRESERVE — the second attempt
+  /// violates this constraint rather than relying on application checks.
+  @@unique([salesOrderLineId, type])
   @@index([tenantId, occurredAt])
   @@index([variantId, occurredAt])
   @@index([warehouseId])
   @@index([type])
+  @@index([salesOrderId])
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -546,6 +569,8 @@ model Customer {
   tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   attachments Attachment[]
   activities  CustomerActivity[]
+  quotations  Quotation[]
+  salesOrders SalesOrder[]
 
   @@unique([tenantId, code])
   @@index([tenantId, isDeleted])
@@ -600,10 +625,10 @@ model Supplier {
 
 /// ما يورّده كل مورّد. Purchase history attaches here when Purchasing exists.
 model SupplierProduct {
-  supplierId  String
-  productId   String
-  supplierSku String?
-  lastPrice   Float?
+  supplierId   String
+  productId    String
+  supplierSku  String?
+  lastPrice    Float?
   leadTimeDays Int?
 
   supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
@@ -612,24 +637,192 @@ model SupplierProduct {
   @@id([supplierId, productId])
 }
 
+// ═══════════════════════════════════════════════════════════
+// Sales — Phase 4
+// ═══════════════════════════════════════════════════════════
+
+/// عرض السعر.
+///
+/// Totals are stored, not derived on read. A quotation is a statement made
+/// on a date; recomputing it later from current prices would silently
+/// rewrite history.
+model Quotation {
+  id         String  @id @default(cuid())
+  tenantId   String
+  number     String
+  customerId String
+  /// The representative who owns this quotation.
+  salesRepId String?
+
+  /// DRAFT | SENT | ACCEPTED | REJECTED | EXPIRED | CONVERTED
+  status     String    @default("DRAFT")
+  issueDate  DateTime  @default(now())
+  expiryDate DateTime?
+  notes      String?
+
+  /// Snapshot totals — see the money note in the schema header.
+  subtotal        Float @default(0)
+  discountAmount  Float @default(0)
+  discountPercent Float @default(0)
+  taxAmount       Float @default(0)
+  total           Float @default(0)
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer    Customer        @relation(fields: [customerId], references: [id])
+  salesRep    User?           @relation(fields: [salesRepId], references: [id], onDelete: SetNull)
+  lines       QuotationLine[]
+  salesOrders SalesOrder[]
+  attachments Attachment[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, isDeleted])
+  @@index([tenantId, status])
+  @@index([customerId])
+}
+
+/// بند عرض السعر.
+///
+/// PRICING SNAPSHOT. unitPrice, discount and tax are copied from the product
+/// at the moment the line is written and are never recalculated. If the
+/// product price changes tomorrow, this line still says what was quoted.
+model QuotationLine {
+  id          String @id @default(cuid())
+  quotationId String
+  productId   String
+  variantId   String
+  lineNo      Int    @default(1)
+
+  quantity        Float
+  unitPrice       Float
+  discountAmount  Float   @default(0)
+  discountPercent Float   @default(0)
+  taxRate         Float   @default(0)
+  taxAmount       Float   @default(0)
+  lineTotal       Float
+  notes           String?
+
+  /// Reserved for the Cost Engine (Phase 6+). Null until it exists — a
+  /// column that is present but honestly empty beats retrofitting the table
+  /// once historical documents already depend on its shape.
+  costSnapshot   Float?
+  costSource     String?
+  formulaVersion String?
+  grossProfit    Float?
+  marginPercent  Float?
+
+  quotation Quotation      @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  product   Product        @relation(fields: [productId], references: [id])
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+
+  @@index([quotationId])
+  @@index([variantId])
+}
+
+/// أمر البيع.
+model SalesOrder {
+  id          String  @id @default(cuid())
+  tenantId    String
+  number      String
+  customerId  String
+  quotationId String?
+  salesRepId  String?
+
+  /// DRAFT | CONFIRMED | IN_PRODUCTION | READY | DELIVERED | CANCELLED | COMPLETED
+  status               String    @default("DRAFT")
+  orderDate            DateTime  @default(now())
+  requiredDeliveryDate DateTime?
+  notes                String?
+
+  subtotal        Float @default(0)
+  discountAmount  Float @default(0)
+  discountPercent Float @default(0)
+  taxAmount       Float @default(0)
+  total           Float @default(0)
+
+  /// Set the first time the order is confirmed and reservations are posted.
+  /// Read as "reservations exist for this order".
+  confirmedAt DateTime?
+  cancelledAt DateTime?
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer    Customer         @relation(fields: [customerId], references: [id])
+  quotation   Quotation?       @relation(fields: [quotationId], references: [id])
+  salesRep    User?            @relation(fields: [salesRepId], references: [id], onDelete: SetNull)
+  lines       SalesOrderLine[]
+  movements   StockMovement[]
+  attachments Attachment[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, isDeleted])
+  @@index([tenantId, status])
+  @@index([customerId])
+}
+
+model SalesOrderLine {
+  id           String @id @default(cuid())
+  salesOrderId String
+  productId    String
+  variantId    String
+  lineNo       Int    @default(1)
+
+  quantity        Float
+  unitPrice       Float
+  discountAmount  Float   @default(0)
+  discountPercent Float   @default(0)
+  taxRate         Float   @default(0)
+  taxAmount       Float   @default(0)
+  lineTotal       Float
+  notes           String?
+
+  costSnapshot   Float?
+  costSource     String?
+  formulaVersion String?
+  grossProfit    Float?
+  marginPercent  Float?
+
+  salesOrder SalesOrder      @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  product    Product         @relation(fields: [productId], references: [id])
+  variant    ProductVariant  @relation(fields: [variantId], references: [id])
+  movements  StockMovement[]
+
+  @@index([salesOrderId])
+  @@index([variantId])
+}
+
 /// المرفقات.
 ///
 /// Nullable foreign keys rather than an entityType/entityId pair, so the
 /// database still enforces referential integrity. Exactly one owner is set.
 model Attachment {
-  id         String   @id @default(cuid())
-  customerId String?
-  supplierId String?
-  filename   String
-  path       String
-  mimeType   String
-  bytes      Int
-  uploadedBy String?
-  createdAt  DateTime @default(now())
+  id           String   @id @default(cuid())
+  customerId   String?
+  supplierId   String?
+  quotationId  String?
+  salesOrderId String?
+  filename     String
+  path         String
+  mimeType     String
+  bytes        Int
+  uploadedBy   String?
+  createdAt    DateTime @default(now())
 
-  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  customer   Customer?   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  supplier   Supplier?   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  quotation  Quotation?  @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  salesOrder SalesOrder? @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
 
   @@index([customerId])
   @@index([supplierId])
+  @@index([quotationId])
+  @@index([salesOrderId])
 }

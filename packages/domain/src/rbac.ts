@@ -48,6 +48,12 @@ export const ROLES: Record<RoleKey, RoleDefinition> = {
 export const PERMISSIONS = {
   'dashboard.view': { nameAr: 'عرض لوحة المدير', group: 'لوحات المعلومات' },
   'sales.view': { nameAr: 'عرض لوحة المبيعات', group: 'لوحات المعلومات' },
+
+  // Phase 4. sales.write covers creating and editing quotations and orders;
+  // sales.confirm is separate because confirming an order moves stock.
+  'sales.documents': { nameAr: 'عرض عروض الأسعار وأوامر البيع', group: 'المبيعات' },
+  'sales.write': { nameAr: 'إنشاء وتعديل مستندات البيع', group: 'المبيعات' },
+  'sales.confirm': { nameAr: 'تأكيد وإلغاء أوامر البيع', group: 'المبيعات' },
   'portal.view': { nameAr: 'عرض بوابة العميل', group: 'لوحات المعلومات' },
   'admin.view': { nameAr: 'عرض لوحة الإدارة', group: 'لوحات المعلومات' },
 
@@ -97,6 +103,9 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
   MANAGER: [
     'dashboard.view',
     'sales.view',
+    'sales.documents',
+    'sales.write',
+    'sales.confirm',
     'products.read',
     'products.write',
     'catalog.manage',
@@ -116,6 +125,9 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
 
   SALES: [
     'sales.view',
+    'sales.documents',
+    'sales.write',
+    'sales.confirm',
     'products.read',
     'customers.read',
     'customers.write',
