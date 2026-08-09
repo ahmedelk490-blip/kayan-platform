@@ -35,6 +35,11 @@ const ALLOWED_INTERESTS = ['printing', 'embroidery', 'uniforms', 'safety'] as co
 // proven by a human replying, not by a regex.
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
+// Equally conservative: digits, spaces and the punctuation international
+// numbers actually contain. Deliberately not a country-specific pattern —
+// rejecting a valid foreign number loses a customer to satisfy a regex.
+const PHONE = /^[+\d][\d\s()+.-]{6,}$/;
+
 type Rejection = { field: string; reason: string };
 
 interface Lead {
@@ -72,11 +77,19 @@ function validate(body: unknown): { ok: true; lead: Lead } | { ok: false; errors
     return trimmed;
   };
 
+  // Phase 8 reversed which contact field is mandatory. Business asks for a
+  // mobile number: this market replies on WhatsApp, and a required email
+  // loses enquiries from people who simply do not use one. Email stays
+  // accepted and still format-checked when supplied.
   const name = str('name', true);
-  const company = str('company', true);
-  const email = str('email', true);
-  const phone = str('phone', false);
+  const phone = str('phone', true);
+  const company = str('company', false);
+  const email = str('email', false);
   const message = str('message', false);
+
+  if (phone && !PHONE.test(phone)) {
+    errors.push({ field: 'phone', reason: 'Does not look like a phone number.' });
+  }
 
   if (email && !EMAIL.test(email)) {
     errors.push({ field: 'email', reason: 'Does not look like an email address.' });

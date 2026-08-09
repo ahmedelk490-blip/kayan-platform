@@ -1,8 +1,7 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, Space_Grotesk, IBM_Plex_Sans_Arabic } from 'next/font/google';
+import { Inter, Space_Grotesk, Noto_Kufi_Arabic } from 'next/font/google';
 import { BRAND } from '@erp/brand';
 import { SmoothScroller, ScrollProgress } from '@erp/ui-market';
-import { CanvasMount } from '@/components/CanvasMount';
 import { IntroMount } from '@/components/IntroMount';
 import { Navigation } from '@/components/Navigation';
 import { SiteFooter } from '@/components/SiteFooter';
@@ -20,7 +19,13 @@ const inter = Inter({
   display: 'swap',
 });
 
-const plexArabic = IBM_Plex_Sans_Arabic({
+/**
+ * Kufi for Arabic, matching the ERP and the brand.
+ *
+ * The CSS variable keeps its old name so no stylesheet needed touching; only
+ * the face behind it changed.
+ */
+const kufiArabic = Noto_Kufi_Arabic({
   subsets: ['arabic'],
   weight: ['300', '400', '500', '600', '700'],
   variable: '--font-plex-arabic',
@@ -58,7 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="ar"
       dir="rtl"
-      className={`${spaceGrotesk.variable} ${inter.variable} ${plexArabic.variable}`}
+      className={`${spaceGrotesk.variable} ${inter.variable} ${kufiArabic.variable}`}
     >
       <body>
         {/* لمستخدمي لوحة المفاتيح: تخطّي الأقسام السينمائية. */}
@@ -73,7 +78,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         <SmoothScroller>
           <ScrollProgress />
-          <CanvasMount />
+          {/* CanvasMount was removed in Phase 8. The homepage now sells with
+              photographs of the actual product, and no page anchors a 3D
+              scene any more — so the ~290 kB three.js runtime no longer
+              loads for anybody. */}
           <Navigation />
           <main id="main">{children}</main>
           <SiteFooter />

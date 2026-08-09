@@ -5,62 +5,60 @@ import { PageHero } from '@/components/PageHero';
 
 export const metadata: Metadata = {
   title: 'دخول النظام',
-  description: 'بوابات الدخول إلى نظام كيان.',
+  description: 'الدخول إلى نظام كيان الداخلي.',
 };
 
 /**
- * صفحة اختيار البوابة.
+ * صفحة تحويل إلى نظام كيان.
  *
- * ⚠ NOT the login system. This page exists solely so the homepage's
- * "دخول النظام" CTA does not 404. No authentication is implemented anywhere
- * in this project — see docs/12_Implementation_Map.md §5.
+ * كانت هذه الصفحة تقول إنه «لا يوجد نظام مصادقة في المشروع». هذا لم يعد
+ * صحيحاً منذ المرحلة الثانية: النظام يعمل بمصادقة Argon2id وجلسات مخزَّنة
+ * وعزل بيانات على مستوى قاعدة البيانات. الصفحة صارت تحوّل إلى الشاشة
+ * الحقيقية بدل أن تصف نظاماً غير موجود.
  *
- * Each portal states honestly that it is not ready rather than showing a
- * credential form that would accept input and do nothing.
+ * ⚠ لا تُعرض كلمة مرور هنا ولا في أي مكان. حساب التجربة يُذكر بالبريد فقط،
+ * وكلمته تُسلَّم لمن يحتاجها خارج الموقع.
  */
 
-const PORTALS = [
-  { id: 'customer', name: 'بوابة العملاء', body: 'متابعة الطلبات، اعتماد التصاميم، وسجل الفواتير.' },
-  { id: 'employee', name: 'بوابة الموظفين', body: 'متابعة خطوط الإنتاج وتسجيل الكميات المنتجة.' },
-  { id: 'erp', name: 'نظام ERP', body: 'المخزون والتصنيع والمبيعات والحسابات.' },
-  { id: 'admin', name: 'لوحة الإدارة', body: 'المستخدمون والصلاحيات وإعدادات النظام.' },
-];
+/** عنوان تطبيق الـ ERP. في الإنتاج يأتي من المتغيّرات البيئية. */
+const ERP_URL = process.env.NEXT_PUBLIC_ERP_URL ?? 'http://localhost:3300/login';
 
 export default function LoginPage() {
   return (
     <>
       <PageHero
         eyebrow="دخول النظام"
-        title="بوابات كيان."
-        lead="نظام كيان الداخلي قيد التطوير حالياً. هذه الصفحة توضح البوابات المخطط لها وحالتها الفعلية."
+        title="نظام كيان الداخلي."
+        lead="النظام مخصص لفريق المصنع. الدخول بحساب المستخدم الذي يزوّدك به مدير النظام."
       />
 
       <SectionShell size="tall">
-        <div className="mx-auto w-full max-w-[1400px]">
-          <ul className="grid gap-5 sm:grid-cols-2">
-            {PORTALS.map((portal) => (
-              <li
-                key={portal.id}
-                className="rounded-2xl border border-ink-800 bg-ink-900/40 p-8 opacity-70"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <h2 className="font-display text-xl text-neutral-100">{portal.name}</h2>
-                  <span className="shrink-0 rounded-full border border-ink-700 px-3 py-1 text-[0.7rem] text-neutral-500">
-                    قريباً
-                  </span>
-                </div>
-                <p className="mt-3 text-sm leading-loose text-neutral-400">{portal.body}</p>
-              </li>
-            ))}
-          </ul>
+        <div className="mx-auto w-full max-w-[720px]">
+          <div className="rounded-2xl border border-ink-700 bg-ink-900/60 p-8 md:p-10">
+            <h2 className="text-xl text-neutral-100">تسجيل الدخول</h2>
+            <p className="mt-3 text-sm leading-[1.9] text-neutral-400">
+              شاشة الدخول داخل التطبيق نفسه. الصلاحيات تتحدد من دور المستخدم،
+              وكل شخص يصل لبيانات منشأته فقط.
+            </p>
 
-          <p className="mt-10 max-w-[60ch] text-sm leading-loose text-neutral-500">
-            لا يوجد تسجيل دخول فعّال حتى الآن — لم يُبنَ بعد. لطلب عرض سعر أو للتواصل مع فريق
-            كيان،{' '}
-            <Link href="/contact" className="text-accent underline underline-offset-4">
-              أرسل لنا طلبك من هنا
+            <Link
+              href={ERP_URL}
+              className="mt-7 inline-flex items-center rounded-full bg-accent px-8 py-4 text-sm font-medium text-ink-950 transition-opacity hover:opacity-90"
+            >
+              انتقل إلى شاشة الدخول
             </Link>
-            .
+
+            <p className="mt-8 border-t border-ink-700 pt-6 text-xs leading-[1.9] text-neutral-500">
+              حساب تجريبي: <span className="text-neutral-300" dir="ltr">manager@kayan.eg</span>
+              {' '}— كلمة المرور تُطلب من مدير النظام ولا تُنشر هنا.
+            </p>
+          </div>
+
+          <p className="mt-8 text-center text-xs text-neutral-500">
+            لست من فريق المصنع؟{' '}
+            <Link href="/#quote" className="text-accent hover:underline">
+              اطلب عرض سعر بدلاً من ذلك
+            </Link>
           </p>
         </div>
       </SectionShell>

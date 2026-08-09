@@ -6,58 +6,54 @@ import { SectionShell } from '@erp/ui-market';
 import { WHY_KAYAN } from '@/site';
 
 /**
- * لماذا كيان؟
+ * ليش كيان.
  *
- * Motion grammar: a hairline draws across each row as it enters, so the
- * section reads as a list being written rather than cards appearing. Third
- * distinct grammar on the page.
+ * قائمة تُرسم خطوطها أفقياً سطراً بعد سطر — إيقاع مختلف عن البطاقات، وأقرب
+ * لقراءة قائمة أسباب.
  */
 export function WhyKayan() {
   return (
-    <SectionShell id="why" label="لماذا كيان" size="tall" className="scroll-mt-24">
-      <div className="mx-auto w-full max-w-[1400px]">
-        <motion.h2
-          initial={{ opacity: 0, y: 24 }}
+    <SectionShell size="tall">
+      <div id="why" className="mx-auto w-full max-w-[1400px]">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-100px' }}
-          transition={{ duration: 0.9, ease: EASE.outExpo }}
-          className="mb-14 max-w-[24ch] font-display text-display-3 leading-[1.3] text-neutral-100"
+          viewport={{ once: true, margin: '-80px' }}
+          transition={{ duration: 0.8, ease: EASE.outExpo }}
+          className="mb-14 max-w-[52ch]"
         >
-          لماذا <span className="text-accent">كيان</span>؟
-        </motion.h2>
+          <span className="mb-5 flex items-center gap-3 text-xs tracking-[0.16em] text-neutral-400">
+            <span className="h-px w-10 bg-accent" />
+            ليش كيان
+          </span>
+          <h2 className="font-display text-display-3 leading-[1.2] text-neutral-100">
+            خمسة أسباب تخليك ترتاح للطلب.
+          </h2>
+        </motion.div>
 
-        <div className="grid gap-x-16 md:grid-cols-2">
-          {WHY_KAYAN.map((reason, index) => (
-            <motion.div
-              key={reason.n}
-              initial={{ opacity: 0, y: 24 }}
+        <ul>
+          {WHY_KAYAN.map((item, index) => (
+            <motion.li
+              key={item.id}
+              initial={{ opacity: 0, y: 18 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-60px' }}
-              transition={{ duration: 0.7, ease: EASE.outExpo, delay: (index % 2) * 0.1 }}
-              className="relative py-8"
+              viewport={{ once: true, margin: '-50px' }}
+              transition={{ duration: 0.7, ease: EASE.outExpo, delay: index * 0.07 }}
+              className="relative grid gap-3 border-t border-ink-700 py-8 md:grid-cols-[0.8fr_1.2fr] md:gap-10"
             >
               <motion.span
+                aria-hidden
                 initial={{ scaleX: 0 }}
                 whileInView={{ scaleX: 1 }}
                 viewport={{ once: true }}
-                transition={{ duration: 0.9, ease: EASE.outExpo, delay: 0.2 }}
-                className="absolute inset-x-0 top-0 block h-px origin-right bg-ink-800"
+                transition={{ duration: 0.9, ease: EASE.outExpo, delay: index * 0.07 }}
+                className="absolute inset-x-0 top-0 h-px origin-right bg-accent/40"
               />
-
-              <div className="flex items-start gap-5">
-                <span className="font-display text-2xl leading-none text-primary-700">
-                  {reason.n}
-                </span>
-                <div>
-                  <h3 className="font-display text-xl text-neutral-100">{reason.title}</h3>
-                  <p className="mt-3 max-w-[42ch] text-sm leading-loose text-neutral-400">
-                    {reason.body}
-                  </p>
-                </div>
-              </div>
-            </motion.div>
+              <h3 className="text-lg text-neutral-100">{item.title}</h3>
+              <p className="max-w-[54ch] text-sm leading-[1.9] text-neutral-400">{item.body}</p>
+            </motion.li>
           ))}
-        </div>
+        </ul>
       </div>
     </SectionShell>
   );
