@@ -8,6 +8,7 @@ import { AppShell } from '@/components/AppShell';
 import { Toolbar } from '@/components/crud/Toolbar';
 import { ModuleHeader, Table, Pager } from '@/components/crud/Shell';
 import { parseListQuery, skipTake, type SearchParams } from '@/lib/query';
+import { NewCustomerModal, EditCustomerModal } from './CustomerModal';
 
 export const metadata: Metadata = { title: 'العملاء' };
 
@@ -63,13 +64,7 @@ export default async function CustomersPage({
       <ModuleHeader
         title="العملاء"
         count={count}
-        action={
-          canWrite ? (
-            <Link href="/customers/new" className="erp-btn">
-              عميل جديد
-            </Link>
-          ) : null
-        }
+        action={canWrite ? <NewCustomerModal /> : null}
       />
 
       <Toolbar placeholder="ابحث بالاسم أو الهاتف أو الكود…" sorts={SORTS} />
@@ -89,10 +84,28 @@ export default async function CustomersPage({
               {row.phone}
             </td>
             <td className="tnum px-4 py-3 text-txt-3">{row._count.activities}</td>
-            <td className="px-4 py-3 text-end">
-              <Link href={`/customers/${row.id}`} className="text-xs text-brand hover:underline">
-                عرض
-              </Link>
+            <td className="px-4 py-3">
+              <div className="flex items-center justify-end gap-3">
+                {canWrite && (
+                  <EditCustomerModal
+                    id={row.id}
+                    code={row.code}
+                    values={{
+                      contactName: row.contactName,
+                      companyName: row.companyName,
+                      phone: row.phone,
+                      whatsapp: row.whatsapp,
+                      email: row.email,
+                      address: row.address,
+                      taxNumber: row.taxNumber,
+                      notes: row.notes,
+                    }}
+                  />
+                )}
+                <Link href={`/customers/${row.id}`} className="text-xs text-brand hover:underline">
+                  عرض
+                </Link>
+              </div>
             </td>
           </tr>
         ))}

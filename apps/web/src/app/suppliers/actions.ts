@@ -9,6 +9,8 @@ import { audit, fieldErrors, nextCode } from '@/lib/audit';
 
 export interface FormState {
   error?: string;
+  /** Set on success. The modal closes on it; the full page shows it. */
+  ok?: string;
   fieldErrors?: Record<string, string>;
 }
 
@@ -53,10 +55,13 @@ function payload(data: z.infer<typeof SupplierSchema>) {
   };
 }
 
-export async function createSupplier(_prev: FormState, formData: FormData): Promise<FormState> {
+/** The one implementation. The two entry points differ only in the ending. */
+async function createSupplierCore(
+  formData: FormData,
+): Promise<{ state: FormState; id?: string; code?: string }> {
   const user = await requirePermission('suppliers.write');
   const parsed = SupplierSchema.safeParse(read(formData));
-  if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
+  if (!parsed.success) return { state: { fieldErrors: fieldErrors(parsed.error) } };
 
   const existing = await prisma.supplier.findMany({
     where: { tenantId: user.tenantId },
@@ -77,7 +82,23 @@ export async function createSupplier(_prev: FormState, formData: FormData): Prom
   });
 
   revalidatePath('/suppliers');
-  redirect(`/suppliers/${created.id}`);
+  return { state: {}, id: created.id, code: created.code };
+}
+
+export async function createSupplier(_prev: FormState, formData: FormData): Promise<FormState> {
+  const result = await createSupplierCore(formData);
+  if (!result.id) return result.state;
+  redirect(`/suppliers/${result.id}`);
+}
+
+/** Modal entry point — returns rather than navigating away from the list. */
+export async function createSupplierInline(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const result = await createSupplierCore(formData);
+  if (!result.id) return result.state;
+  return { ok: `تم إنشاء المورّد ${result.code}.` };
 }
 
 export async function updateSupplier(
@@ -107,7 +128,7 @@ export async function updateSupplier(
 
   revalidatePath('/suppliers');
   revalidatePath(`/suppliers/${id}`);
-  return {};
+  return { ok: 'تم حفظ التعديلات.' };
 }
 
 export async function deleteSupplier(id: string): Promise<void> {

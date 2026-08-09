@@ -9,6 +9,8 @@ import { audit, fieldErrors, nextCode } from '@/lib/audit';
 
 export interface FormState {
   error?: string;
+  /** Set on success. The modal closes on it; the full page shows it. */
+  ok?: string;
   fieldErrors?: Record<string, string>;
 }
 
@@ -43,10 +45,20 @@ function nullify<T extends Record<string, string | undefined>>(data: T) {
   return out;
 }
 
-export async function createCustomer(_prev: FormState, formData: FormData): Promise<FormState> {
+/**
+ * The one implementation of "create a customer".
+ *
+ * Both entry points below call this and differ only in how they end: the
+ * full page navigates to the new record, the modal reports success and lets
+ * the caller close and refresh. Validation, RBAC, numbering and the audit
+ * entry are identical because they are literally the same code.
+ */
+async function createCustomerCore(
+  formData: FormData,
+): Promise<{ state: FormState; id?: string; code?: string }> {
   const user = await requirePermission('customers.write');
   const parsed = CustomerSchema.safeParse(read(formData));
-  if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
+  if (!parsed.success) return { state: { fieldErrors: fieldErrors(parsed.error) } };
 
   const existing = await prisma.customer.findMany({
     where: { tenantId: user.tenantId },
@@ -79,7 +91,27 @@ export async function createCustomer(_prev: FormState, formData: FormData): Prom
   });
 
   revalidatePath('/customers');
-  redirect(`/customers/${created.id}`);
+  return { state: {}, id: created.id, code: created.code };
+}
+
+export async function createCustomer(_prev: FormState, formData: FormData): Promise<FormState> {
+  const result = await createCustomerCore(formData);
+  if (!result.id) return result.state;
+  redirect(`/customers/${result.id}`);
+}
+
+/**
+ * Modal entry point. Returns instead of redirecting, so the dialog can close
+ * itself and refresh the list the user was already looking at — navigating
+ * away from a list to a detail page is the wrong ending for a quick add.
+ */
+export async function createCustomerInline(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const result = await createCustomerCore(formData);
+  if (!result.id) return result.state;
+  return { ok: `تم إنشاء العميل ${result.code}.` };
 }
 
 export async function updateCustomer(
@@ -122,7 +154,7 @@ export async function updateCustomer(
 
   revalidatePath('/customers');
   revalidatePath(`/customers/${id}`);
-  return {};
+  return { ok: 'تم حفظ التعديلات.' };
 }
 
 /**

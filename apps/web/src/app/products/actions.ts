@@ -9,6 +9,8 @@ import { audit, fieldErrors } from '@/lib/audit';
 
 export interface FormState {
   error?: string;
+  /** Set on success. The modal closes on it; the full page shows it. */
+  ok?: string;
   fieldErrors?: Record<string, string>;
 }
 
@@ -66,15 +68,18 @@ async function syncLinks(productId: string, formData: FormData) {
   ]);
 }
 
-export async function createProduct(_prev: FormState, formData: FormData): Promise<FormState> {
+/** The one implementation. The two entry points differ only in the ending. */
+async function createProductCore(
+  formData: FormData,
+): Promise<{ state: FormState; id?: string; sku?: string }> {
   const user = await requirePermission('products.write');
   const parsed = ProductSchema.safeParse(read(formData));
-  if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
+  if (!parsed.success) return { state: { fieldErrors: fieldErrors(parsed.error) } };
 
   const clash = await prisma.product.findFirst({
     where: { tenantId: user.tenantId, sku: parsed.data.sku },
   });
-  if (clash) return { fieldErrors: { sku: 'هذا الكود مستخدم بالفعل.' } };
+  if (clash) return { state: { fieldErrors: { sku: 'هذا الكود مستخدم بالفعل.' } } };
 
   const created = await prisma.product.create({
     data: {
@@ -104,7 +109,28 @@ export async function createProduct(_prev: FormState, formData: FormData): Promi
   });
 
   revalidatePath('/products');
-  redirect(`/products/${created.id}`);
+  return { state: {}, id: created.id, sku: created.sku };
+}
+
+export async function createProduct(_prev: FormState, formData: FormData): Promise<FormState> {
+  const result = await createProductCore(formData);
+  if (!result.id) return result.state;
+  redirect(`/products/${result.id}`);
+}
+
+/**
+ * Modal entry point — returns rather than navigating away from the list.
+ *
+ * The default variant is still created here, exactly as on the full page:
+ * stock lives on the variant, so a product without one is unstockable.
+ */
+export async function createProductInline(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const result = await createProductCore(formData);
+  if (!result.id) return result.state;
+  return { ok: `تم إنشاء المنتج ${result.sku}.` };
 }
 
 export async function updateProduct(
@@ -153,7 +179,7 @@ export async function updateProduct(
 
   revalidatePath('/products');
   revalidatePath(`/products/${id}`);
-  return {};
+  return { ok: 'تم حفظ التعديلات.' };
 }
 
 export async function deleteProduct(id: string): Promise<void> {

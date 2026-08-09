@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react';
 import { Field, TextArea, Select, SubmitButton, FormError } from '@/components/crud/Form';
+import { useFormSuccess } from '@/components/crud/useFormSuccess';
 import type { FormState } from './actions';
 
 export interface SupplierValues {
@@ -28,12 +29,16 @@ export function SupplierForm({
   action,
   values,
   submitLabel,
+  onSuccess,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   values?: SupplierValues;
   submitLabel?: string;
+  /** Supplied by the modal only. The full page leaves it undefined. */
+  onSuccess?: () => void;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
+  useFormSuccess(state.ok, onSuccess);
 
   return (
     <form action={formAction} className="space-y-5" noValidate>
@@ -58,7 +63,10 @@ export function SupplierForm({
       <TextArea name="address" label="العنوان" errors={state.fieldErrors} defaultValue={values?.address} rows={2} />
       <TextArea name="notes" label="ملاحظات" errors={state.fieldErrors} defaultValue={values?.notes} />
 
-      <SubmitButton label={submitLabel} />
+      <div className="flex items-center gap-3">
+        <SubmitButton label={submitLabel} />
+        {state.ok && !onSuccess && <span className="text-xs text-ok">{state.ok}</span>}
+      </div>
     </form>
   );
 }

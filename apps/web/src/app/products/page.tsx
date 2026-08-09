@@ -9,6 +9,8 @@ import { AppShell } from '@/components/AppShell';
 import { Toolbar } from '@/components/crud/Toolbar';
 import { ModuleHeader, Table, Pager, Badge } from '@/components/crud/Shell';
 import { parseListQuery, skipTake, type SearchParams } from '@/lib/query';
+import { loadProductOptions } from './options';
+import { NewProductModal, EditProductModal } from './ProductModal';
 
 export const metadata: Metadata = { title: 'المنتجات' };
 
@@ -62,6 +64,9 @@ export default async function ProductsPage({
       include: {
         category: { select: { nameAr: true } },
         images: { where: { isPrimary: true }, take: 1 },
+        materials: { select: { materialId: true } },
+        printingOptions: { select: { optionId: true } },
+        embroideryOptions: { select: { optionId: true } },
         _count: { select: { variants: true, images: true } },
       },
     }),
@@ -73,19 +78,18 @@ export default async function ProductsPage({
   ]);
 
   const canWrite = can(user.role, 'products.write');
+  // The modal form needs the same option lists the full-page route builds.
+  // Loaded only when the user can actually open it.
+  const formOptions = canWrite
+    ? await loadProductOptions(user.tenantId)
+    : { categories: [], materials: [], printingOptions: [], embroideryOptions: [] };
 
   return (
     <AppShell user={user} title="المنتجات">
       <ModuleHeader
         title="المنتجات"
         count={count}
-        action={
-          canWrite ? (
-            <Link href="/products/new" className="erp-btn">
-              منتج جديد
-            </Link>
-          ) : null
-        }
+        action={canWrite ? <NewProductModal options={formOptions} /> : null}
       />
 
       <Toolbar placeholder="ابحث بالاسم أو الكود أو الباركود…" sorts={SORTS} />
@@ -147,10 +151,39 @@ export default async function ProductsPage({
               <td className="px-4 py-3">
                 <Badge tone={status.tone}>{status.label}</Badge>
               </td>
-              <td className="px-4 py-3 text-end">
-                <Link href={`/products/${row.id}`} className="text-xs text-brand hover:underline">
-                  عرض
-                </Link>
+              <td className="px-4 py-3">
+                <div className="flex items-center justify-end gap-3">
+                  {canWrite && (
+                    <EditProductModal
+                      id={row.id}
+                      sku={row.sku}
+                      options={formOptions}
+                      values={{
+                        nameAr: row.nameAr,
+                        nameEn: row.nameEn,
+                        sku: row.sku,
+                        barcode: row.barcode,
+                        categoryId: row.categoryId,
+                        descriptionAr: row.descriptionAr,
+                        // Decimal is not serialisable across the boundary, so
+                        // the form receives plain numbers. The server
+                        // recalculates in Decimal on submit.
+                        cost: row.cost === null ? null : Number(row.cost.toString()),
+                        sellingPrice:
+                          row.sellingPrice === null ? null : Number(row.sellingPrice.toString()),
+                        status: row.status,
+                      }}
+                      selected={{
+                        materials: row.materials.map((m) => m.materialId),
+                        printing: row.printingOptions.map((p) => p.optionId),
+                        embroidery: row.embroideryOptions.map((e) => e.optionId),
+                      }}
+                    />
+                  )}
+                  <Link href={`/products/${row.id}`} className="text-xs text-brand hover:underline">
+                    عرض
+                  </Link>
+                </div>
               </td>
             </tr>
           );

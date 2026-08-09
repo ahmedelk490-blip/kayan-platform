@@ -9,6 +9,7 @@ import {
   SubmitButton,
   FormError,
 } from '@/components/crud/Form';
+import { useFormSuccess } from '@/components/crud/useFormSuccess';
 import type { FormState } from './actions';
 
 export interface Option {
@@ -43,6 +44,7 @@ export function ProductForm({
   embroideryOptions,
   selected,
   submitLabel,
+  onSuccess,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   values?: ProductValues;
@@ -52,8 +54,11 @@ export function ProductForm({
   embroideryOptions: Option[];
   selected?: { materials: string[]; printing: string[]; embroidery: string[] };
   submitLabel?: string;
+  /** Supplied by the modal only. The full page leaves it undefined. */
+  onSuccess?: () => void;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
+  useFormSuccess(state.ok, onSuccess);
 
   return (
     <form action={formAction} className="space-y-5" noValidate>
@@ -117,7 +122,10 @@ export function ProductForm({
         />
       </div>
 
-      <SubmitButton label={submitLabel} />
+      <div className="flex items-center gap-3">
+        <SubmitButton label={submitLabel} />
+        {state.ok && !onSuccess && <span className="text-xs text-ok">{state.ok}</span>}
+      </div>
     </form>
   );
 }

@@ -4,7 +4,7 @@ import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
-import { MovementForm } from './MovementForm';
+import { MovementModal } from './MovementModal';
 import { reverseMovement } from './actions';
 import { TYPE_LABELS } from './types';
 
@@ -80,7 +80,19 @@ export default async function InventoryPage() {
 
   return (
     <AppShell user={user} title="المخزون">
-      <ModuleHeader title="المخزون" count={stock.length} />
+      <ModuleHeader
+        title="المخزون"
+        count={stock.length}
+        action={
+          canWrite ? (
+            <MovementModal
+              variants={variants.map((v) => ({ value: v.id, label: variantLabel(v) }))}
+              warehouses={warehouses.map((w) => ({ value: w.id, label: w.nameAr }))}
+              locations={locations.map((l) => ({ value: l.id, label: l.code }))}
+            />
+          ) : null
+        }
+      />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Metric label="إجمالي المتاح" value={totals.onHand} />
@@ -89,7 +101,10 @@ export default async function InventoryPage() {
         <Metric label="تحت الحد الأدنى" value={lowStock.length} tone={lowStock.length > 0 ? 'bad' : 'muted'} />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.3fr_1fr]">
+      {/* The movement form used to sit in a side column here. It is now the
+          modal above — the tables get the full width, which matters for a
+          ledger the operator actually reads. */}
+      <div className="grid gap-6">
         <div className="space-y-6">
           <section>
             <h3 className="mb-3 text-sm font-semibold text-brand">الأرصدة</h3>
@@ -166,16 +181,6 @@ export default async function InventoryPage() {
           </section>
         </div>
 
-        {canWrite && (
-          <section className="erp-card h-fit p-6">
-            <h3 className="mb-4 text-sm font-semibold text-brand">تسجيل حركة</h3>
-            <MovementForm
-              variants={variants.map((v) => ({ value: v.id, label: variantLabel(v) }))}
-              warehouses={warehouses.map((w) => ({ value: w.id, label: w.nameAr }))}
-              locations={locations.map((l) => ({ value: l.id, label: l.code }))}
-            />
-          </section>
-        )}
       </div>
     </AppShell>
   );

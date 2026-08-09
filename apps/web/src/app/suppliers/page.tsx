@@ -8,6 +8,7 @@ import { AppShell } from '@/components/AppShell';
 import { Toolbar } from '@/components/crud/Toolbar';
 import { ModuleHeader, Table, Pager } from '@/components/crud/Shell';
 import { parseListQuery, skipTake, type SearchParams } from '@/lib/query';
+import { NewSupplierModal, EditSupplierModal } from './SupplierModal';
 
 export const metadata: Metadata = { title: 'الموردون' };
 
@@ -61,13 +62,7 @@ export default async function SuppliersPage({
       <ModuleHeader
         title="الموردون"
         count={count}
-        action={
-          canWrite ? (
-            <Link href="/suppliers/new" className="erp-btn">
-              مورّد جديد
-            </Link>
-          ) : null
-        }
+        action={canWrite ? <NewSupplierModal /> : null}
       />
 
       <Toolbar placeholder="ابحث بالاسم أو الهاتف…" sorts={SORTS} />
@@ -85,10 +80,29 @@ export default async function SuppliersPage({
             </td>
             <td className="tnum px-4 py-3 text-txt-3">{row._count.products}</td>
             <td className="px-4 py-3 text-brand">{row.rating ? '★'.repeat(row.rating) : '—'}</td>
-            <td className="px-4 py-3 text-end">
-              <Link href={`/suppliers/${row.id}`} className="text-xs text-brand hover:underline">
-                عرض
-              </Link>
+            <td className="px-4 py-3">
+              <div className="flex items-center justify-end gap-3">
+                {canWrite && (
+                  <EditSupplierModal
+                    id={row.id}
+                    code={row.code}
+                    values={{
+                      name: row.name,
+                      contactName: row.contactName,
+                      phone: row.phone,
+                      whatsapp: row.whatsapp,
+                      email: row.email,
+                      address: row.address,
+                      taxNumber: row.taxNumber,
+                      notes: row.notes,
+                      rating: row.rating,
+                    }}
+                  />
+                )}
+                <Link href={`/suppliers/${row.id}`} className="text-xs text-brand hover:underline">
+                  عرض
+                </Link>
+              </div>
             </td>
           </tr>
         ))}
