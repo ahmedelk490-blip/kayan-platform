@@ -83,7 +83,10 @@ export function Navigation() {
           >
             دخول النظام
           </Link>
-          <MagneticButton href="#contact" className="px-5 py-2 text-xs" strength={0.25}>
+          {/* #quote, not #contact — the contact section was replaced by the
+              quote form in Phase 8, and this button pointed at an anchor that
+              no longer existed, so it silently did nothing. */}
+          <MagneticButton href="#quote" className="px-5 py-2 text-xs" strength={0.25}>
             اطلب عرض سعر
           </MagneticButton>
         </div>
@@ -145,7 +148,7 @@ export function Navigation() {
             دخول النظام
           </Link>
           <Link
-            href="#contact"
+            href="#quote"
             onClick={() => setMenuOpen(false)}
             tabIndex={menuOpen ? 0 : -1}
             className="rounded-xl bg-primary-600 px-4 py-3 text-center text-sm font-medium text-neutral-50"

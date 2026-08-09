@@ -140,13 +140,18 @@ export function LeadForm() {
           <FieldError name="company" />
         </div>
         <div>
-          <Label htmlFor="email">البريد الإلكتروني</Label>
+          {/* Phase 8 swapped which of these two is mandatory, to match the
+              API: a mobile number is required, email is not. This form was
+              still demanding the opposite, so every submission from /contact
+              was being rejected by the server. */}
+          <Label htmlFor="email" optional>
+            البريد الإلكتروني
+          </Label>
           <input
             id="email"
             name="email"
             type="email"
             autoComplete="email"
-            required
             dir="ltr"
             aria-invalid={Boolean(errors.email)}
             aria-describedby={errors.email ? 'email-error' : undefined}
@@ -156,14 +161,15 @@ export function LeadForm() {
           <FieldError name="email" />
         </div>
         <div>
-          <Label htmlFor="phone" optional>
-            رقم الهاتف
-          </Label>
+          <Label htmlFor="phone">رقم الجوال</Label>
           <input
             id="phone"
             name="phone"
             type="tel"
             autoComplete="tel"
+            required
+            aria-invalid={Boolean(errors.phone)}
+            aria-describedby={errors.phone ? 'phone-error' : undefined}
             dir="ltr"
             className={cn(fieldClass('phone'), 'text-start')}
             placeholder="+20"
