@@ -43,8 +43,13 @@ export function Products() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-60px' }}
               transition={{ duration: 0.75, ease: EASE.outExpo, delay: (index % 3) * 0.08 }}
-              whileHover={{ y: -8 }}
-              className="group overflow-hidden rounded-2xl border border-ink-700 bg-ink-900/60"
+              // Lift and a slight scale, both transforms. The shadow rides on
+              // a CSS transition rather than a motion value: box-shadow is the
+              // one property here that cannot be composited, and paying for it
+              // on a single hovered card is fine where paying for it on twelve
+              // entering cards would not be.
+              whileHover={{ y: -8, scale: 1.015 }}
+              className="group overflow-hidden rounded-2xl border border-ink-700 bg-ink-900/60 shadow-[0_0_0_rgba(0,0,0,0)] transition-shadow duration-300 ease-out hover:shadow-[0_24px_50px_-28px_rgba(0,0,0,0.85)]"
             >
               <div className="relative aspect-[4/3] overflow-hidden">
                 <Image

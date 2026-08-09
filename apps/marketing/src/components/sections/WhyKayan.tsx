@@ -32,25 +32,48 @@ export function WhyKayan() {
         </motion.div>
 
         <ul>
-          {WHY_KAYAN.map((item, index) => (
+          {/* No index needed any more: each point is triggered by its own
+              position in the viewport rather than by a shared stagger delay. */}
+          {WHY_KAYAN.map((item) => (
             <motion.li
               key={item.id}
-              initial={{ opacity: 0, y: 18 }}
+              // Each point waits for its own turn in the viewport rather than
+              // riding a shared stagger. Reading pace, not animation pace —
+              // this section is asking to be trusted, and hurrying it works
+              // against that.
+              initial={{ opacity: 0, y: 14 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-50px' }}
-              transition={{ duration: 0.7, ease: EASE.outExpo, delay: index * 0.07 }}
+              viewport={{ once: true, amount: 0.6 }}
+              transition={{ duration: 0.85, ease: EASE.outQuart }}
               className="relative grid gap-3 border-t border-ink-700 py-8 md:grid-cols-[0.8fr_1.2fr] md:gap-10"
             >
+              {/* The rule draws itself across before the words settle. */}
               <motion.span
                 aria-hidden
                 initial={{ scaleX: 0 }}
                 whileInView={{ scaleX: 1 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.9, ease: EASE.outExpo, delay: index * 0.07 }}
+                viewport={{ once: true, amount: 0.6 }}
+                transition={{ duration: 1, ease: EASE.outExpo }}
                 className="absolute inset-x-0 top-0 h-px origin-right bg-accent/40"
               />
-              <h3 className="text-lg text-neutral-100">{item.title}</h3>
-              <p className="max-w-[54ch] text-sm leading-[1.9] text-neutral-400">{item.body}</p>
+              <motion.h3
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                viewport={{ once: true, amount: 0.6 }}
+                transition={{ duration: 0.7, ease: EASE.outQuart, delay: 0.12 }}
+                className="text-lg text-neutral-100"
+              >
+                {item.title}
+              </motion.h3>
+              <motion.p
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                viewport={{ once: true, amount: 0.6 }}
+                transition={{ duration: 0.7, ease: EASE.outQuart, delay: 0.2 }}
+                className="max-w-[54ch] text-sm leading-[1.9] text-neutral-400"
+              >
+                {item.body}
+              </motion.p>
             </motion.li>
           ))}
         </ul>

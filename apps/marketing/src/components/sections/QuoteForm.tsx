@@ -82,10 +82,10 @@ export function QuoteForm() {
       <div id="quote" className="mx-auto w-full max-w-[1400px]">
         <div className="grid gap-14 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 12 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: '-80px' }}
-            transition={{ duration: 0.8, ease: EASE.outExpo }}
+            viewport={{ once: true, margin: '-60px' }}
+            transition={{ duration: 0.7, ease: EASE.outQuart }}
           >
             <span className="mb-5 flex items-center gap-3 text-xs tracking-[0.16em] text-neutral-400">
               <span className="h-px w-10 bg-accent" />
@@ -100,13 +100,17 @@ export function QuoteForm() {
             </p>
           </motion.div>
 
+          {/* The quietest motion on the page, on purpose. A form that slides
+              into place reads as decoration; this one has to read as somewhere
+              safe to type a phone number. Opacity only — nothing moves, so
+              nothing can shift under a finger already reaching for a field. */}
           <motion.form
             onSubmit={onSubmit}
             noValidate
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: '-60px' }}
-            transition={{ duration: 0.8, ease: EASE.outExpo, delay: 0.1 }}
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true, margin: '-40px' }}
+            transition={{ duration: 0.6, ease: EASE.outQuart }}
             className="rounded-2xl border border-ink-700 bg-ink-900/60 p-7 md:p-9"
           >
             <div className="grid gap-5 sm:grid-cols-2">
