@@ -6,6 +6,7 @@ import {
   COST_CATEGORIES,
   COST_CATEGORY_AR,
   COST_BASIS_AR,
+  unpricedLines,
   type CostCategory,
 } from '@erp/domain';
 import { Table } from '@/components/crud/Shell';
@@ -42,8 +43,23 @@ export function CostBreakdown({
 }) {
   const buckets = BUCKETS.filter((b) => dec(calculation[b.field] as never).gt(0));
 
+  // A line with real consumption and no price contributes nothing. Saying so
+  // here is the difference between "this run is cheap" and "nobody has told
+  // the system what a bottle of ink costs".
+  const unpriced = unpricedLines(calculation.lines);
+
   return (
     <div className="space-y-5">
+      {unpriced.length > 0 && (
+        <p
+          role="alert"
+          className="rounded-lg border border-warn bg-warn-soft px-4 py-3 text-xs text-warn"
+        >
+          هذا الحساب يشمل {unpriced.length} بنداً بلا سعر وحدة، فالإجمالي أقل من التكلفة
+          الحقيقية. أدخِل الأسعار في المعادلة ثم أعِد الحساب:{' '}
+          <span className="font-medium">{unpriced.map((l) => l.nameAr).join(' · ')}</span>
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-4 text-xs text-txt-3">
         <span className={calculation.kind === 'ACTUAL' ? 'text-ok' : 'text-txt-3'}>
           {calculation.kind === 'ACTUAL' ? 'تكلفة فعلية' : 'تكلفة تقديرية'}

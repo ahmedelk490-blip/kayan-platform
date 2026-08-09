@@ -9,6 +9,7 @@ import {
   FORMULA_VERSION_STATUS_AR,
   COST_CATEGORY_AR,
   COST_BASIS_AR,
+  unpricedLines,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
@@ -161,6 +162,22 @@ export default async function FormulaDetailPage({
           className="mb-5 rounded-lg border border-bad bg-bad-soft px-4 py-3 text-xs text-bad"
         >
           {ERRORS[errKey]}
+        </p>
+      )}
+
+      {shown && unpricedLines(shown.lines).length > 0 && (
+        <p
+          role="alert"
+          className="mb-5 rounded-lg border border-warn bg-warn-soft px-4 py-3 text-xs text-warn"
+        >
+          {unpricedLines(shown.lines).length} من البنود بلا سعر وحدة. الاستهلاك مضبوط،
+          لكن التكلفة الناتجة ستكون أقل من الحقيقة — أدخِل الأسعار قبل استخدام هذه
+          المعادلة في أي تسعير:{' '}
+          <span className="font-medium">
+            {unpricedLines(shown.lines)
+              .map((l) => l.nameAr)
+              .join(' · ')}
+          </span>
         </p>
       )}
 

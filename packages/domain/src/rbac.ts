@@ -92,6 +92,21 @@ export const PERMISSIONS = {
   /** Margin is deliberately separable from cost — FR-IAM-006. */
   'cost.margin': { nameAr: 'عرض هامش الربح', group: 'التكلفة' },
 
+  // Phase 6.5. Approval is separated from entry throughout: the person who
+  // files a claim must not be the person who lets it count against profit.
+  'expenses.view': { nameAr: 'عرض المصروفات الثانوية', group: 'المصروفات' },
+  'expenses.write': { nameAr: 'تسجيل المصروفات الثانوية', group: 'المصروفات' },
+  'expenses.approve': { nameAr: 'اعتماد المصروفات الثانوية', group: 'المصروفات' },
+
+  'damage.view': { nameAr: 'عرض محاضر الهالك', group: 'الهالك والجزاءات' },
+  'damage.write': { nameAr: 'تسجيل محاضر الهالك', group: 'الهالك والجزاءات' },
+  'damage.approve': { nameAr: 'اعتماد محاضر الهالك', group: 'الهالك والجزاءات' },
+  /** Deliberately its own key — a penalty takes money from a person. */
+  'penalties.approve': { nameAr: 'اعتماد وتحصيل الجزاءات', group: 'الهالك والجزاءات' },
+
+  'supplies.view': { nameAr: 'عرض مستلزمات الطباعة والتطريز', group: 'المستلزمات' },
+  'supplies.write': { nameAr: 'تسجيل حركات المستلزمات', group: 'المستلزمات' },
+
   'reports.view': { nameAr: 'عرض التقارير', group: 'التقارير' },
   'users.manage': { nameAr: 'إدارة المستخدمين', group: 'النظام' },
   'settings.manage': { nameAr: 'إدارة الإعدادات', group: 'النظام' },
@@ -133,6 +148,15 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'formula.write',
     'cost.view',
     'cost.margin',
+    'expenses.view',
+    'expenses.write',
+    'expenses.approve',
+    'damage.view',
+    'damage.write',
+    'damage.approve',
+    'penalties.approve',
+    'supplies.view',
+    'supplies.write',
     'reports.view',
   ],
 
@@ -148,10 +172,15 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'inventory.read',
     'cost.view',
     'reports.view',
+    // A representative files their own travel and fuel claims, and cannot
+    // approve them. Entry without approval is the whole point.
+    'expenses.view',
+    'expenses.write',
     // Deliberately NOT cost.margin — a representative sees cost to quote
     // sensibly, but company margin is not theirs to see.
     // Deliberately NOT formula.view either — the cost is what they need to
     // quote; the recipe that produces it is manufacturing know-how.
+    // Deliberately NOT damage or penalties — those concern staff conduct.
   ],
 
   CUSTOMER: ['portal.view', 'products.read'],

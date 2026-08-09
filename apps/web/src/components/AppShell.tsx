@@ -39,6 +39,9 @@ const NAV: NavItem[] = [
   { href: '/admin', label: 'الإدارة', permission: 'admin.view', built: true },
   { href: '/manufacturing', label: 'التصنيع', permission: 'manufacturing.view', built: true },
   { href: '/formulas', label: 'المعادلات والتكلفة', permission: 'formula.view', built: true },
+  { href: '/supplies', label: 'المستلزمات', permission: 'supplies.view', built: true },
+  { href: '/expenses', label: 'المصروفات الثانوية', permission: 'expenses.view', built: true },
+  { href: '/damage', label: 'الهالك والجزاءات', permission: 'damage.view', built: true },
   { href: '/reports', label: 'التقارير', permission: 'reports.view', built: false },
 ];
 

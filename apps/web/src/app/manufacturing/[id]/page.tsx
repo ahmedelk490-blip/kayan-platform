@@ -11,6 +11,7 @@ import {
   ORDER_STATUS_AR,
   WORK_ORDER_STATUSES,
   WORK_ORDER_STATUS_AR,
+  DAMAGE_STATUS_AR,
   isProductionStatus,
   type ProductionStatus,
 } from '@erp/domain';
@@ -55,6 +56,11 @@ export default async function ProductionOrderPage({
         orderBy: { computedAt: 'desc' },
         include: { lines: { orderBy: { sequence: 'asc' } }, formulas: true },
       },
+      damageRecords: {
+        where: { isDeleted: false },
+        orderBy: { damageDate: 'desc' },
+        include: { employee: { select: { nameAr: true, name: true } } },
+      },
     },
   });
   if (!order) notFound();
@@ -63,6 +69,7 @@ export default async function ProductionOrderPage({
   const canConfirm = can(user.role, 'manufacturing.confirm');
   const canCost = can(user.role, 'cost.view');
   const canMargin = can(user.role, 'cost.margin');
+  const canSeeDamage = can(user.role, 'damage.view');
 
   // The newest calculation is what the page shows. Older ones are kept and
   // never altered — they are the audit trail of what was believed and when.
@@ -251,6 +258,43 @@ export default async function ProductionOrderPage({
               <p className="mt-3 text-[0.7rem] text-txt-4">
                 هذه لقطة محفوظة وقت الحساب. تعديل المعادلة أو نشر إصدار جديد لا يغيّر هذا
                 الرقم — الحساب لا يُعاد أبداً في مكانه.
+              </p>
+            </section>
+          )}
+
+          {canSeeDamage && order.damageRecords.length > 0 && (
+            <section>
+              <h3 className="mb-3 text-sm font-semibold text-brand">الهالك في هذا الأمر</h3>
+              <Table
+                headers={['الرقم', 'التاريخ', 'الموظف', 'الكمية', 'التكلفة', 'الحالة']}
+                empty={false}
+              >
+                {order.damageRecords.map((d) => (
+                  <tr key={d.id}>
+                    <td dir="ltr" className="tnum px-4 py-3 text-start">
+                      <Link href={`/damage/${d.id}`} className="text-brand hover:underline">
+                        {d.number}
+                      </Link>
+                    </td>
+                    <td className="tnum px-4 py-3 text-txt-3">
+                      {d.damageDate.toLocaleDateString('ar-EG')}
+                    </td>
+                    <td className="px-4 py-3 text-txt-2">
+                      {d.employee ? (d.employee.nameAr ?? d.employee.name) : '—'}
+                    </td>
+                    <td className="tnum px-4 py-3 text-txt-2">{formatQty(d.quantity)}</td>
+                    <td className="tnum px-4 py-3 font-medium text-brand">
+                      {formatMoney(d.totalCost)}
+                    </td>
+                    <td className="px-4 py-3 text-[0.7rem] text-txt-3">
+                      {(DAMAGE_STATUS_AR as Record<string, string>)[d.status] ?? d.status}
+                    </td>
+                  </tr>
+                ))}
+              </Table>
+              <p className="mt-2 text-[0.7rem] text-txt-4">
+                تكلفة الهالك منفصلة عن تكلفة التصنيع عمداً — دمجها ترفع تكلفة القطعة
+                وتُخفي أن الفرق سببه حادث لا وصفة الإنتاج.
               </p>
             </section>
           )}

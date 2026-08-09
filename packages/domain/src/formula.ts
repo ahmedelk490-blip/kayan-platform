@@ -209,7 +209,17 @@ export function runMinutes(quantity: Numeric, params: Record<string, Numeric> = 
   return calc(perPiece.times(qty).plus(dec(params.setupMinutes)));
 }
 
-/** Consumption for one line, before it is priced. */
+/**
+ * Consumption for one line, before it is priced.
+ *
+ * Deliberately NOT rounded. Money rounds at 4dp; a physical quantity must
+ * not, because consumption per piece is legitimately tiny — half a bottle of
+ * ink spread over a 4000-cap roll is 0.000125 bottles, which 4dp rounding
+ * flattens to 0.0001 and overstates the cost by 20% on that line.
+ *
+ * Rounding happens once, on the resulting money. decimal.js carries 28
+ * significant digits, so the intermediate is exact for any real recipe.
+ */
 function consumption(
   line: EngineLine,
   quantity: Decimal,
@@ -220,27 +230,27 @@ function consumption(
 
   switch (line.basis) {
     case 'PER_PIECE':
-      return calc(per.times(quantity));
+      return per.times(quantity);
 
     case 'PER_ORDER':
-      return calc(per);
+      return per;
 
     case 'PER_YIELD': {
-      // A 50 m roll that yields 400 pieces costs 50/400 m per piece.
-      // Charged proportionally, not rounded up to whole rolls: this is an
-      // estimate of cost, and a part-used roll is not scrapped.
+      // A 100 m roll that yields 500 shirts is 0.2 m per shirt. Charged
+      // proportionally, not rounded up to whole rolls: this is an estimate
+      // of cost, and a part-used roll is not scrapped.
       const y = dec(line.yieldQty);
       if (y.lte(0)) return dec(0);
-      return calc(per.times(quantity).dividedBy(y));
+      return per.times(quantity).dividedBy(y);
     }
 
     case 'PER_1000_STITCHES': {
       const stitches = dec(params.stitchCount).times(quantity);
-      return calc(per.times(stitches).dividedBy(1000));
+      return per.times(stitches).dividedBy(1000);
     }
 
     case 'PER_MINUTE':
-      return calc(per.times(minutes));
+      return per.times(minutes);
 
     case 'PERCENT_OF_DIRECT':
       // Not a physical consumption — priced off the subtotal instead.
@@ -346,6 +356,22 @@ export function profit(revenue: Numeric, cost: Numeric): Profit {
     grossProfit,
     marginPercent: r.gt(0) ? calc(grossProfit.dividedBy(r).times(100)) : null,
   };
+}
+
+/**
+ * Lines that will contribute nothing because no price has been entered.
+ *
+ * A formula can be structurally complete and still cost zero — the KAYAN
+ * printing formula arrived with real consumption but no prices. Surfacing
+ * that is the difference between "this run costs nothing" and "nobody has
+ * told the system what a bottle of ink costs".
+ *
+ * Percentage lines are excluded: they carry no unit cost by design.
+ */
+export function unpricedLines<T extends { basis: string; unitCost: Numeric }>(
+  lines: T[],
+): T[] {
+  return lines.filter((l) => l.basis !== 'PERCENT_OF_DIRECT' && dec(l.unitCost).lte(0));
 }
 
 // ── Guards ──────────────────────────────────────────────────

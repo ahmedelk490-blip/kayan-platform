@@ -66,6 +66,12 @@ model Tenant {
   productionOrders  ProductionOrder[]
   formulas          Formula[]
   costCalculations  CostCalculation[]
+
+  secondaryExpenses  SecondaryExpense[]
+  damageRecords      DamageRecord[]
+  penalties          Penalty[]
+  supplies           Supply[]
+  supplyTransactions SupplyTransaction[]
 }
 
 model Company {
@@ -110,6 +116,21 @@ model User {
   productionOrderAssignees ProductionOrderAssignee[]
   formulaVersions          FormulaVersion[]
   costCalculations         CostCalculation[]
+
+  // Phase 6.5. Three roles per record — the person it concerns, the person
+  // who filed it, the person who approved it — so each needs its own named
+  // relation rather than one ambiguous link.
+  expensesAsEmployee  SecondaryExpense[]  @relation("ExpenseEmployee")
+  expensesApproved    SecondaryExpense[]  @relation("ExpenseApprover")
+  expensesCreated     SecondaryExpense[]  @relation("ExpenseCreator")
+  damagesAsEmployee   DamageRecord[]      @relation("DamageEmployee")
+  damagesApproved     DamageRecord[]      @relation("DamageApprover")
+  damagesCreated      DamageRecord[]      @relation("DamageCreator")
+  penaltiesAsEmployee Penalty[]           @relation("PenaltyEmployee")
+  penaltiesApproved   Penalty[]           @relation("PenaltyApprover")
+  penaltiesCreated    Penalty[]           @relation("PenaltyCreator")
+  penaltyEvents       PenaltyEvent[]
+  supplyTransactions  SupplyTransaction[]
 
   @@index([tenantId])
   @@index([roleId])
@@ -342,6 +363,7 @@ model Product {
   productionOrders  ProductionOrder[]
   productFormulas   ProductFormula[]
   costCalculations  CostCalculation[]
+  damageRecords     DamageRecord[]
 
   @@unique([tenantId, sku])
   @@index([tenantId, isDeleted])
@@ -380,6 +402,7 @@ model ProductVariant {
   productionOrders ProductionOrder[]
   productFormulas  ProductFormula[]
   costCalculations CostCalculation[]
+  damageRecords    DamageRecord[]
 
   @@unique([sku])
   @@unique([productId, colorId, sizeId])
@@ -897,6 +920,9 @@ model ProductionOrder {
   movements        StockMovement[]
   costCalculations CostCalculation[]
 
+  damageRecords      DamageRecord[]
+  supplyTransactions SupplyTransaction[]
+
   @@unique([tenantId, number])
   @@index([tenantId, isDeleted])
   @@index([tenantId, status])
@@ -1233,6 +1259,11 @@ model Attachment {
   supplierId   String?
   quotationId  String?
   salesOrderId String?
+  /// Phase 6.5 — receipts for expenses, photographs of damage. The columns
+  /// exist so the upload feature does not have to alter a table that live
+  /// records already reference; no upload UI is wired yet.
+  expenseId    String?
+  damageId     String?
   filename     String
   path         String
   mimeType     String
@@ -1240,13 +1271,258 @@ model Attachment {
   uploadedBy   String?
   createdAt    DateTime @default(now())
 
-  customer   Customer?   @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  supplier   Supplier?   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-  quotation  Quotation?  @relation(fields: [quotationId], references: [id], onDelete: Cascade)
-  salesOrder SalesOrder? @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  customer   Customer?         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  supplier   Supplier?         @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  quotation  Quotation?        @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  salesOrder SalesOrder?       @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  expense    SecondaryExpense? @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  damage     DamageRecord?     @relation(fields: [damageId], references: [id], onDelete: Cascade)
 
   @@index([customerId])
   @@index([supplierId])
   @@index([quotationId])
   @@index([salesOrderId])
+  @@index([expenseId])
+  @@index([damageId])
+}
+
+// ═══════════════════════════════════════════════════════════
+// Operations — expenses, damage, penalties, supplies (Phase 6.5)
+// ═══════════════════════════════════════════════════════════
+
+/// المصروفات الثانوية.
+///
+/// Everything that erodes net profit without belonging to a product: food,
+/// fuel, rent, electricity. Kept out of the Cost Engine on purpose — spread
+/// across units they would corrupt the per-piece manufacturing cost, which
+/// must stay comparable between a run of 50 and a run of 5000.
+model SecondaryExpense {
+  id       String @id @default(cuid())
+  tenantId String
+  number   String
+
+  expenseDate DateTime
+  /// FOOD | TRANSPORT | FUEL | ELECTRICITY | WATER | INTERNET | CLEANING |
+  /// OFFICE | MAINTENANCE | RENT | OTHER
+  category    String
+  amount      Decimal
+  /// Optional — links to User until an HR Employee entity exists.
+  employeeId  String?
+  notes       String?
+
+  /// PENDING | APPROVED | REJECTED. Only APPROVED counts against profit.
+  status       String    @default("PENDING")
+  approvedById String?
+  approvedAt   DateTime?
+  rejectReason String?
+
+  createdById String?
+  isDeleted   Boolean   @default(false)
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee    User?        @relation("ExpenseEmployee", fields: [employeeId], references: [id], onDelete: SetNull)
+  approvedBy  User?        @relation("ExpenseApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  createdBy   User?        @relation("ExpenseCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  attachments Attachment[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, isDeleted])
+  @@index([tenantId, expenseDate])
+  @@index([tenantId, status])
+}
+
+/// محضر هالك / تالف.
+///
+/// Records what was spoiled, why, and what it cost. The reason is required:
+/// a damage record without one is an unexplained loss, which is exactly the
+/// thing this table exists to stop.
+model DamageRecord {
+  id       String @id @default(cuid())
+  tenantId String
+  number   String
+
+  damageDate DateTime
+  employeeId String?
+  /// Free text until departments and machines are master data.
+  department String?
+  machine    String?
+
+  productId         String?
+  variantId         String?
+  productionOrderId String?
+
+  quantity Decimal
+  /// Required by validation, not merely by convention.
+  reason   String
+
+  materialCost Decimal @default(0)
+  laborCost    Decimal @default(0)
+  totalCost    Decimal @default(0)
+
+  /// DRAFT | PENDING | APPROVED | REJECTED
+  status       String    @default("DRAFT")
+  approvedById String?
+  approvedAt   DateTime?
+  rejectReason String?
+
+  createdById String?
+  isDeleted   Boolean   @default(false)
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee        User?            @relation("DamageEmployee", fields: [employeeId], references: [id], onDelete: SetNull)
+  approvedBy      User?            @relation("DamageApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  createdBy       User?            @relation("DamageCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  product         Product?         @relation(fields: [productId], references: [id])
+  variant         ProductVariant?  @relation(fields: [variantId], references: [id])
+  productionOrder ProductionOrder? @relation(fields: [productionOrderId], references: [id])
+  penalties       Penalty[]
+  attachments     Attachment[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, isDeleted])
+  @@index([tenantId, damageDate])
+  @@index([tenantId, status])
+  @@index([productionOrderId])
+}
+
+/// الجزاء.
+///
+/// Money taken from a person. Every one of them carries a reason, an
+/// approver, and an append-only history — because a deduction someone cannot
+/// account for later is not a control, it is a grievance.
+model Penalty {
+  id       String @id @default(cuid())
+  tenantId String
+  number   String
+
+  damageId   String?
+  employeeId String
+
+  amount Decimal
+  reason String
+
+  /// PENDING | APPROVED | PAID | CANCELLED
+  status       String    @default("PENDING")
+  approvedById String?
+  approvedAt   DateTime?
+  paidAt       DateTime?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  damage     DamageRecord?  @relation(fields: [damageId], references: [id], onDelete: SetNull)
+  employee   User           @relation("PenaltyEmployee", fields: [employeeId], references: [id])
+  approvedBy User?          @relation("PenaltyApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  createdBy  User?          @relation("PenaltyCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  events     PenaltyEvent[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([employeeId])
+  @@index([damageId])
+}
+
+/// سجل الجزاء — append-only.
+///
+/// Never updated, never deleted. The penalty row says what is true now; this
+/// says how it got there and who decided.
+model PenaltyEvent {
+  id        String @id @default(cuid())
+  penaltyId String
+
+  fromStatus String?
+  toStatus   String
+  note       String?
+  userId     String?
+
+  createdAt DateTime @default(now())
+
+  penalty Penalty @relation(fields: [penaltyId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([penaltyId, createdAt])
+}
+
+/// مستلزمات الطباعة والتطريز.
+///
+/// Deliberately separate from Material and from stocked Products. These are
+/// consumables bought and burned by a department, not variants sold to a
+/// customer, and mixing them into product stock would make both figures
+/// meaningless.
+model Supply {
+  id       String @id @default(cuid())
+  tenantId String
+  code     String
+  nameAr   String
+
+  /// PRINTING | EMBROIDERY
+  kind     String
+  /// ROLL | INK | CLEANING | TRANSFER_PAPER | THREAD | NEEDLE | FRAME |
+  /// BACKING | OTHER — valid values depend on `kind`.
+  category String
+  unit     String?
+
+  /// Latest known purchase price. A reference for data entry, never the
+  /// source of truth for a past transaction — those carry their own.
+  lastUnitCost Decimal?
+  /// Running balance, derived from transactions.
+  onHand       Decimal  @default(0)
+  minStock     Decimal  @default(0)
+
+  notes     String?
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactions SupplyTransaction[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isDeleted])
+  @@index([tenantId, kind])
+}
+
+/// حركة مستلزمات — append-only.
+///
+/// Purchases and consumption in one ledger, so monthly spend and monthly
+/// burn are two queries over the same truth rather than two tables that can
+/// disagree.
+model SupplyTransaction {
+  id       String @id @default(cuid())
+  tenantId String
+  supplyId String
+
+  /// PURCHASE | CONSUMPTION
+  type   String
+  txDate DateTime
+
+  quantity  Decimal
+  unitCost  Decimal @default(0)
+  totalCost Decimal @default(0)
+
+  /// Linked when consumption belongs to a specific run.
+  productionOrderId String?
+  notes             String?
+  userId            String?
+
+  createdAt DateTime @default(now())
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supply          Supply           @relation(fields: [supplyId], references: [id], onDelete: Cascade)
+  productionOrder ProductionOrder? @relation(fields: [productionOrderId], references: [id], onDelete: SetNull)
+  user            User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, txDate])
+  @@index([supplyId, txDate])
+  @@index([tenantId, type])
+  @@index([productionOrderId])
 }
