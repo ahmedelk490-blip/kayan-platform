@@ -14,7 +14,7 @@ import {
   type OrderStatus,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
-import { prisma } from '@/lib/prisma';
+import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 import { nextDocumentNumber, timeline, readLines, decimal, type FormState } from '../shared';
 import { reserveForOrder, releaseForOrder, defaultWarehouseId } from '../reservations';
@@ -143,7 +143,7 @@ export async function confirmOrder(id: string): Promise<void> {
   const warehouseId = await defaultWarehouseId(user.tenantId);
   if (!warehouseId) redirect(`/sales/orders/${id}?error=no-warehouse`);
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await tenantTransaction(async (tx) => {
     const r = await reserveForOrder(tx, order, user.id, warehouseId);
     await tx.salesOrder.update({
       where: { id },
@@ -195,7 +195,7 @@ export async function cancelOrder(id: string): Promise<void> {
     redirect(`/sales/orders/${id}`);
   }
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await tenantTransaction(async (tx) => {
     const r = await releaseForOrder(tx, order, user.id);
     await tx.salesOrder.update({
       where: { id },

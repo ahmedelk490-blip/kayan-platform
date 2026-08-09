@@ -5,7 +5,7 @@ import { cookies, headers } from 'next/headers';
 import { hash, verify } from '@node-rs/argon2';
 import type { RoleKey } from '@erp/domain';
 import { isRoleKey } from '@erp/domain';
-import { prisma } from './prisma';
+import { authDb } from './prisma';
 
 /**
  * Authentication — infrastructure.
@@ -13,6 +13,14 @@ import { prisma } from './prisma';
  * The *rules* (password policy, lockout thresholds, the permission matrix)
  * live in @erp/domain. This file only does I/O: hashing, cookies, the session
  * table. Article 1.
+ *
+ * ── Why this file alone uses authDb (Phase 7) ───────────────
+ *
+ * Every query here runs before anyone knows which tenant the caller belongs
+ * to — that is what logging in is for. RLS would deny them all. `authDb`
+ * connects as the single BYPASSRLS role, and nothing outside this file may
+ * import it, so the exception is one greppable line rather than a privilege
+ * anybody can reach for.
  */
 
 const SESSION_COOKIE = 'kayan_session';
@@ -65,7 +73,7 @@ export async function createSession(userId: string): Promise<string> {
   const token = randomBytes(32).toString('base64url');
   const headerList = await headers();
 
-  await prisma.session.create({
+  await authDb.session.create({
     data: {
       tokenHash: hashToken(token),
       userId,
@@ -93,7 +101,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 
-  const session = await prisma.session.findUnique({
+  const session = await authDb.session.findUnique({
     where: { tokenHash: hashToken(token) },
     include: { user: { include: { role: true } } },
   });
@@ -121,7 +129,7 @@ export async function destroySession(): Promise<void> {
 
   if (token) {
     // Revoke rather than delete — the session row is audit evidence.
-    await prisma.session.updateMany({
+    await authDb.session.updateMany({
       where: { tokenHash: hashToken(token), revokedAt: null },
       data: { revokedAt: new Date() },
     });
@@ -132,7 +140,7 @@ export async function destroySession(): Promise<void> {
 
 /** Revoke every session for a user (FR-IAM-008). */
 export async function revokeAllSessions(userId: string): Promise<number> {
-  const result = await prisma.session.updateMany({
+  const result = await authDb.session.updateMany({
     where: { userId, revokedAt: null },
     data: { revokedAt: new Date() },
   });

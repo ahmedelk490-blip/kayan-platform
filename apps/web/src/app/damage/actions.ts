@@ -12,7 +12,7 @@ import {
   isPenaltyStatus,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
-import { prisma } from '@/lib/prisma';
+import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 import { nextOpsNumber, parseDateOr, type FormState } from '@/lib/ops';
 
@@ -265,7 +265,7 @@ export async function setPenaltyStatus(
     redirect(`/damage/${damageId}?err=self-penalty`);
   }
 
-  await prisma.$transaction(async (tx) => {
+  await tenantTransaction(async (tx) => {
     await tx.penalty.update({
       where: { id: penaltyId },
       data: {

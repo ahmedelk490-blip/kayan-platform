@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { Prisma } from '@prisma/client';
-import { prisma } from '@/lib/prisma';
+import { prisma, type tenantTransaction } from '@/lib/prisma';
 
 /**
  * Reserved-stock integration.
@@ -19,7 +19,10 @@ import { prisma } from '@/lib/prisma';
  * what makes the guarantee true.
  */
 
-type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+// Derived from tenantTransaction rather than from prisma.$transaction: since
+// Phase 7 the callers open transactions through that helper, which hands back
+// a plain client with the tenant already declared on the connection.
+type Tx = Parameters<Parameters<typeof tenantTransaction>[0]>[0];
 
 /** Where to reserve from. One warehouse for now; Phase 5 may allocate. */
 async function defaultWarehouseId(tenantId: string): Promise<string | null> {

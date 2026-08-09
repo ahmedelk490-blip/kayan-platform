@@ -1,6 +1,10 @@
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  // Tooling spans tenants, so it uses the maintenance connection. The
+  // application role deliberately cannot see anything without a tenant.
+  datasources: { db: { url: process.env.MAINTENANCE_DATABASE_URL } },
+});
 
 const categories = await prisma.category.findMany({
   include: { products: { include: { images: true } } },

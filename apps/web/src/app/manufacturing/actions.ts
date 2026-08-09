@@ -12,7 +12,7 @@ import {
   type ProductionStatus,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
-import { prisma } from '@/lib/prisma';
+import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 import { nextProductionNumber, type FormState } from './shared';
 
@@ -219,7 +219,7 @@ export async function changeProductionStatus(id: string, next: string): Promise<
   }
   if (next === 'CANCELLED') stamps.cancelledAt = now;
 
-  await prisma.$transaction(async (tx) => {
+  await tenantTransaction(async (tx) => {
     await tx.productionOrder.update({ where: { id }, data: { status: next, ...stamps } });
 
     // Finished-goods receipt — once, on completion. The unique constraint on

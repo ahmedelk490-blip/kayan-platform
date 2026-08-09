@@ -1,25 +1,19 @@
 // KAYAN ERP — database schema
 //
-// ⚠ DEVIATION FROM ADR-002. The approved architecture is PostgreSQL with
-// Row-Level Security. Neither PostgreSQL nor Docker is available on this
-// machine, so development runs on SQLite.
+// PostgreSQL (Phase 7). ADR-002 is now satisfied: the approved architecture
+// was always PostgreSQL with Row-Level Security, and development ran on
+// SQLite only because neither PostgreSQL nor Docker was installable here.
+// Both deviations recorded in earlier phases are closed:
 //
-//   - RLS does not exist. Tenant isolation is enforced in the repository
-//     layer only, which ADR-002 called insufficient for production.
-//   - Enums are modelled as String with the allowed values documented and
-//     enforced by Zod at the application boundary. Promoting them to native
-//     Postgres enums is a migration, not a redesign.
-//   - MONEY AND QUANTITY USE `Decimal` (Phase 4.5). Prisma returns
-//     Prisma.Decimal objects, so all arithmetic is exact — 0.1 + 0.2 is
-//     0.3, not 0.30000000000000004.
+//   - RLS EXISTS. Every tenant-owned table has RLS enabled and FORCED, with
+//     policies keyed on the app.tenant_id session setting. Forcing matters:
+//     without it the table owner would silently bypass its own policies.
+//     Tenant isolation is no longer repository-layer-only.
 //
-//     ⚠ On SQLite the STORAGE is still float-backed: the column is created
-//     as DECIMAL but `typeof(value)` reports `real`. Measured behaviour —
-//     values round-trip exactly up to ~15 significant digits; a test value
-//     at 17 digits (1234567890123.4567) came back as ...4568. EGP amounts
-//     at 4dp are exact below ~10^11, which covers this business by a wide
-//     margin. On PostgreSQL these become genuine NUMERIC(19,4) with no
-//     such ceiling — add @db.Decimal(19, 4) at that point.
+//   - MONEY AND QUANTITY ARE GENUINELY EXACT. Columns are NUMERIC(19,4).
+//     On SQLite the DECIMAL column was float-backed and exact only below
+//     ~15 significant digits; that ceiling is gone. Prisma still returns
+//     Prisma.Decimal, so no application arithmetic changed.
 //
 //     Quantities are Decimal too, deliberately: quantity × unitPrice would
 //     inherit float error from the quantity even if the price were exact.
@@ -28,6 +22,10 @@
 //   - Master data soft-deletes (isDeleted + deletedAt); transactional data
 //     never deletes.
 //   - Every tenant-scoped table carries tenantId and indexes it first.
+//   - Enums remain String with allowed values documented and enforced by Zod
+//     at the application boundary. Promoting them to native Postgres enums is
+//     a migration, not a redesign, and is deliberately not bundled with this
+//     one — a data move and a type change should not fail together.
 
 generator client {
   provider = "prisma-client-js"
@@ -35,8 +33,12 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Migrations and introspection run as the schema owner. The application's
+  // own connection (url) is a role with neither ownership nor BYPASSRLS, so
+  // it cannot escape the policies.
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -340,8 +342,8 @@ model Product {
   descriptionAr String?
   driveFolderId String?
   /// Storage only until the Cost Engine exists — see header note on money.
-  cost          Decimal?
-  sellingPrice  Decimal?
+  cost          Decimal? @db.Decimal(19, 4)
+  sellingPrice  Decimal? @db.Decimal(19, 4)
   /// ACTIVE | DRAFT | DISCONTINUED
   status        String    @default("ACTIVE")
   isDeleted     Boolean   @default(false)
@@ -383,8 +385,8 @@ model ProductVariant {
   sizeId       String?
   sku          String
   barcode      String?
-  cost         Decimal?
-  sellingPrice Decimal?
+  cost         Decimal? @db.Decimal(19, 4)
+  sellingPrice Decimal? @db.Decimal(19, 4)
   isActive     Boolean   @default(true)
   isDeleted    Boolean   @default(false)
   deletedAt    DateTime?
@@ -514,11 +516,11 @@ model Stock {
   variantId   String
   warehouseId String
   locationId  String?
-  onHand      Decimal  @default(0)
-  reserved    Decimal  @default(0)
-  damaged     Decimal  @default(0)
-  minStock    Decimal  @default(0)
-  maxStock    Decimal?
+  onHand      Decimal  @default(0) @db.Decimal(19, 4)
+  reserved    Decimal  @default(0) @db.Decimal(19, 4)
+  damaged     Decimal  @default(0) @db.Decimal(19, 4)
+  minStock    Decimal  @default(0) @db.Decimal(19, 4)
+  maxStock    Decimal? @db.Decimal(19, 4)
 
   variant   ProductVariant     @relation(fields: [variantId], references: [id], onDelete: Cascade)
   warehouse Warehouse          @relation(fields: [warehouseId], references: [id])
@@ -548,7 +550,7 @@ model StockMovement {
   /// RESERVE | UNRESERVE | DAMAGE | SCRAP | RETURN | REVERSAL
   type      String
   /// Signed: positive increases stock, negative decreases it.
-  quantity  Decimal
+  quantity  Decimal @db.Decimal(19, 4)
   /// Free-text pointer to the source document until Purchasing exists.
   reference String?
   reason    String?
@@ -683,7 +685,7 @@ model SupplierProduct {
   supplierId   String
   productId    String
   supplierSku  String?
-  lastPrice    Decimal?
+  lastPrice    Decimal? @db.Decimal(19, 4)
   leadTimeDays Int?
 
   supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
@@ -716,11 +718,11 @@ model Quotation {
   notes      String?
 
   /// Snapshot totals — see the money note in the schema header.
-  subtotal        Decimal @default(0)
-  discountAmount  Decimal @default(0)
-  discountPercent Decimal @default(0)
-  taxAmount       Decimal @default(0)
-  total           Decimal @default(0)
+  subtotal        Decimal @default(0) @db.Decimal(19, 4)
+  discountAmount  Decimal @default(0) @db.Decimal(19, 4)
+  discountPercent Decimal @default(0) @db.Decimal(19, 4)
+  taxAmount       Decimal @default(0) @db.Decimal(19, 4)
+  total           Decimal @default(0) @db.Decimal(19, 4)
 
   isDeleted Boolean   @default(false)
   deletedAt DateTime?
@@ -752,23 +754,23 @@ model QuotationLine {
   variantId   String
   lineNo      Int    @default(1)
 
-  quantity        Decimal
-  unitPrice       Decimal
-  discountAmount  Decimal @default(0)
-  discountPercent Decimal @default(0)
-  taxRate         Decimal @default(0)
-  taxAmount       Decimal @default(0)
-  lineTotal       Decimal
+  quantity        Decimal @db.Decimal(19, 4)
+  unitPrice       Decimal @db.Decimal(19, 4)
+  discountAmount  Decimal @default(0) @db.Decimal(19, 4)
+  discountPercent Decimal @default(0) @db.Decimal(19, 4)
+  taxRate         Decimal @default(0) @db.Decimal(19, 4)
+  taxAmount       Decimal @default(0) @db.Decimal(19, 4)
+  lineTotal       Decimal @db.Decimal(19, 4)
   notes           String?
 
   /// Reserved for the Cost Engine (Phase 6+). Null until it exists — a
   /// column that is present but honestly empty beats retrofitting the table
   /// once historical documents already depend on its shape.
-  costSnapshot   Decimal?
+  costSnapshot   Decimal? @db.Decimal(19, 4)
   costSource     String?
   formulaVersion String?
-  grossProfit    Decimal?
-  marginPercent  Decimal?
+  grossProfit    Decimal? @db.Decimal(19, 4)
+  marginPercent  Decimal? @db.Decimal(19, 4)
 
   quotation Quotation      @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   product   Product        @relation(fields: [productId], references: [id])
@@ -793,11 +795,11 @@ model SalesOrder {
   requiredDeliveryDate DateTime?
   notes                String?
 
-  subtotal        Decimal @default(0)
-  discountAmount  Decimal @default(0)
-  discountPercent Decimal @default(0)
-  taxAmount       Decimal @default(0)
-  total           Decimal @default(0)
+  subtotal        Decimal @default(0) @db.Decimal(19, 4)
+  discountAmount  Decimal @default(0) @db.Decimal(19, 4)
+  discountPercent Decimal @default(0) @db.Decimal(19, 4)
+  taxAmount       Decimal @default(0) @db.Decimal(19, 4)
+  total           Decimal @default(0) @db.Decimal(19, 4)
 
   /// Set the first time the order is confirmed and reservations are posted.
   /// Read as "reservations exist for this order".
@@ -831,20 +833,20 @@ model SalesOrderLine {
   variantId    String
   lineNo       Int    @default(1)
 
-  quantity        Decimal
-  unitPrice       Decimal
-  discountAmount  Decimal @default(0)
-  discountPercent Decimal @default(0)
-  taxRate         Decimal @default(0)
-  taxAmount       Decimal @default(0)
-  lineTotal       Decimal
+  quantity        Decimal @db.Decimal(19, 4)
+  unitPrice       Decimal @db.Decimal(19, 4)
+  discountAmount  Decimal @default(0) @db.Decimal(19, 4)
+  discountPercent Decimal @default(0) @db.Decimal(19, 4)
+  taxRate         Decimal @default(0) @db.Decimal(19, 4)
+  taxAmount       Decimal @default(0) @db.Decimal(19, 4)
+  lineTotal       Decimal @db.Decimal(19, 4)
   notes           String?
 
-  costSnapshot   Decimal?
+  costSnapshot   Decimal? @db.Decimal(19, 4)
   costSource     String?
   formulaVersion String?
-  grossProfit    Decimal?
-  marginPercent  Decimal?
+  grossProfit    Decimal? @db.Decimal(19, 4)
+  marginPercent  Decimal? @db.Decimal(19, 4)
 
   salesOrder       SalesOrder        @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
   product          Product           @relation(fields: [productId], references: [id])
@@ -879,7 +881,7 @@ model ProductionOrder {
 
   productId String
   variantId String
-  quantity  Decimal
+  quantity  Decimal @db.Decimal(19, 4)
 
   /// LOW | NORMAL | HIGH | URGENT
   priority String @default("NORMAL")
@@ -896,8 +898,8 @@ model ProductionOrder {
   /// Reserved for the Cost Engine (Phase 6+). Null until it exists — a
   /// column present and honestly empty beats altering the table once
   /// historical orders depend on its shape.
-  estimatedCost Decimal?
-  actualCost    Decimal?
+  estimatedCost Decimal? @db.Decimal(19, 4)
+  actualCost    Decimal? @db.Decimal(19, 4)
 
   confirmedAt DateTime?
   startedAt   DateTime?
@@ -1068,13 +1070,13 @@ model FormulaLine {
   basis String
 
   /// Consumption per basis unit — or the percentage, for PERCENT_OF_DIRECT.
-  quantity Decimal
+  quantity Decimal @db.Decimal(19, 4)
   /// Pieces produced by one `quantity`. PER_YIELD only: a 50 m roll that
   /// yields 400 shirts is quantity=50, yieldQty=400.
-  yieldQty Decimal?
+  yieldQty Decimal? @db.Decimal(19, 4)
   unit     String?
   /// Cost of one unit, frozen into this version.
-  unitCost Decimal  @default(0)
+  unitCost Decimal  @default(0) @db.Decimal(19, 4)
 
   notes String?
 
@@ -1098,7 +1100,7 @@ model FormulaParam {
   formulaVersionId String
   key              String
   nameAr           String
-  value            Decimal @default(0)
+  value            Decimal @default(0) @db.Decimal(19, 4)
   unit             String?
 
   formulaVersion FormulaVersion @relation(fields: [formulaVersionId], references: [id], onDelete: Cascade)
@@ -1144,32 +1146,32 @@ model CostCalculation {
 
   productId String
   variantId String
-  quantity  Decimal
+  quantity  Decimal @db.Decimal(19, 4)
 
   /// ESTIMATE | ACTUAL
   kind String @default("ESTIMATE")
 
   /// The eight reported buckets, each summed from the snapshot lines.
-  materialCost  Decimal @default(0)
-  inkCost       Decimal @default(0)
-  threadCost    Decimal @default(0)
-  laborCost     Decimal @default(0)
-  packagingCost Decimal @default(0)
-  machineCost   Decimal @default(0)
-  overheadCost  Decimal @default(0)
-  wasteCost     Decimal @default(0)
+  materialCost  Decimal @default(0) @db.Decimal(19, 4)
+  inkCost       Decimal @default(0) @db.Decimal(19, 4)
+  threadCost    Decimal @default(0) @db.Decimal(19, 4)
+  laborCost     Decimal @default(0) @db.Decimal(19, 4)
+  packagingCost Decimal @default(0) @db.Decimal(19, 4)
+  machineCost   Decimal @default(0) @db.Decimal(19, 4)
+  overheadCost  Decimal @default(0) @db.Decimal(19, 4)
+  wasteCost     Decimal @default(0) @db.Decimal(19, 4)
 
-  directCost   Decimal @default(0)
-  indirectCost Decimal @default(0)
-  totalCost    Decimal @default(0)
-  costPerPiece Decimal @default(0)
+  directCost   Decimal @default(0) @db.Decimal(19, 4)
+  indirectCost Decimal @default(0) @db.Decimal(19, 4)
+  totalCost    Decimal @default(0) @db.Decimal(19, 4)
+  costPerPiece Decimal @default(0) @db.Decimal(19, 4)
   /// Run minutes the time-based lines were charged on.
-  totalMinutes Decimal @default(0)
+  totalMinutes Decimal @default(0) @db.Decimal(19, 4)
 
   /// Optional pricing guidance. Null when no target was given — the engine
   /// does not invent a margin.
-  targetMarginPercent Decimal?
-  suggestedPrice      Decimal?
+  targetMarginPercent Decimal? @db.Decimal(19, 4)
+  suggestedPrice      Decimal? @db.Decimal(19, 4)
 
   notes String?
 
@@ -1234,13 +1236,13 @@ model CostCalculationLine {
   unit     String?
 
   /// Copied from the formula line.
-  quantityPerBasis Decimal
-  yieldQty         Decimal?
-  unitCost         Decimal
+  quantityPerBasis Decimal @db.Decimal(19, 4)
+  yieldQty         Decimal? @db.Decimal(19, 4)
+  unitCost         Decimal @db.Decimal(19, 4)
 
   /// Computed by the engine.
-  consumedQty Decimal
-  lineCost    Decimal
+  consumedQty Decimal @db.Decimal(19, 4)
+  lineCost    Decimal @db.Decimal(19, 4)
 
   costCalculation CostCalculation @relation(fields: [costCalculationId], references: [id], onDelete: Cascade)
   formulaVersion  FormulaVersion  @relation(fields: [formulaVersionId], references: [id])
@@ -1305,7 +1307,7 @@ model SecondaryExpense {
   /// FOOD | TRANSPORT | FUEL | ELECTRICITY | WATER | INTERNET | CLEANING |
   /// OFFICE | MAINTENANCE | RENT | OTHER
   category    String
-  amount      Decimal
+  amount      Decimal @db.Decimal(19, 4)
   /// Optional — links to User until an HR Employee entity exists.
   employeeId  String?
   notes       String?
@@ -1354,13 +1356,13 @@ model DamageRecord {
   variantId         String?
   productionOrderId String?
 
-  quantity Decimal
+  quantity Decimal @db.Decimal(19, 4)
   /// Required by validation, not merely by convention.
   reason   String
 
-  materialCost Decimal @default(0)
-  laborCost    Decimal @default(0)
-  totalCost    Decimal @default(0)
+  materialCost Decimal @default(0) @db.Decimal(19, 4)
+  laborCost    Decimal @default(0) @db.Decimal(19, 4)
+  totalCost    Decimal @default(0) @db.Decimal(19, 4)
 
   /// DRAFT | PENDING | APPROVED | REJECTED
   status       String    @default("DRAFT")
@@ -1404,7 +1406,7 @@ model Penalty {
   damageId   String?
   employeeId String
 
-  amount Decimal
+  amount Decimal @db.Decimal(19, 4)
   reason String
 
   /// PENDING | APPROVED | PAID | CANCELLED
@@ -1472,10 +1474,10 @@ model Supply {
 
   /// Latest known purchase price. A reference for data entry, never the
   /// source of truth for a past transaction — those carry their own.
-  lastUnitCost Decimal?
+  lastUnitCost Decimal? @db.Decimal(19, 4)
   /// Running balance, derived from transactions.
-  onHand       Decimal  @default(0)
-  minStock     Decimal  @default(0)
+  onHand       Decimal  @default(0) @db.Decimal(19, 4)
+  minStock     Decimal  @default(0) @db.Decimal(19, 4)
 
   notes     String?
   isDeleted Boolean   @default(false)
@@ -1505,9 +1507,9 @@ model SupplyTransaction {
   type   String
   txDate DateTime
 
-  quantity  Decimal
-  unitCost  Decimal @default(0)
-  totalCost Decimal @default(0)
+  quantity  Decimal @db.Decimal(19, 4)
+  unitCost  Decimal @default(0) @db.Decimal(19, 4)
+  totalCost Decimal @default(0) @db.Decimal(19, 4)
 
   /// Linked when consumption belongs to a specific run.
   productionOrderId String?

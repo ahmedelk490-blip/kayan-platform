@@ -13,7 +13,7 @@ import {
   type QuotationStatus,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
-import { prisma } from '@/lib/prisma';
+import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 import { nextDocumentNumber, timeline, readLines, decimal, type FormState } from '../shared';
 
@@ -336,7 +336,7 @@ export async function convertToOrder(id: string): Promise<void> {
 
   const number = await nextDocumentNumber('SO', user.tenantId);
 
-  const order = await prisma.$transaction(async (tx) => {
+  const order = await tenantTransaction(async (tx) => {
     const created = await tx.salesOrder.create({
       data: {
         tenantId: user.tenantId,

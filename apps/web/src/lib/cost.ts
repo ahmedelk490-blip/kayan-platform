@@ -9,7 +9,7 @@ import {
   type CostResult,
   type EngineLine,
 } from '@erp/domain';
-import { prisma } from './prisma';
+import { prisma, tenantTransaction } from './prisma';
 
 /**
  * The bridge between the pure Cost Engine and the database.
@@ -165,7 +165,7 @@ export async function saveCostCalculation(
   gathered: GatheredFormulas,
   result: CostResult,
 ) {
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+  return tenantTransaction(async (tx) => {
     const calculation = await tx.costCalculation.create({
       data: {
         tenantId: input.tenantId,

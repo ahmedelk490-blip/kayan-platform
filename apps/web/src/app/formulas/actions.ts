@@ -10,7 +10,7 @@ import {
   requiresYield,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
-import { prisma } from '@/lib/prisma';
+import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 import { nextFormulaCode, type FormState } from './shared';
 
@@ -154,7 +154,7 @@ export async function publishVersion(versionId: string): Promise<void> {
   // free. Refuse rather than produce a confident zero.
   if (lineCount === 0) redirect(`/formulas/${version.formulaId}?err=empty`);
 
-  await prisma.$transaction(async (tx) => {
+  await tenantTransaction(async (tx) => {
     if (version.formula.currentVersionId && version.formula.currentVersionId !== versionId) {
       await tx.formulaVersion.update({
         where: { id: version.formula.currentVersionId },

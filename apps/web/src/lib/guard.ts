@@ -4,18 +4,26 @@ import { redirect } from 'next/navigation';
 import type { PermissionKey } from '@erp/domain';
 import { can, landingPathFor } from '@erp/domain';
 import { getSessionUser, type SessionUser } from './auth';
+import { setCurrentTenant } from './tenant-context';
 
 /**
  * Route guards — deny by default (NFR-12).
  *
  * Every protected page calls one of these as its first statement. A page that
  * forgets to has no session, so it cannot render user data by accident.
+ *
+ * Since Phase 7 this is also where the database learns which tenant it is
+ * serving. Because every protected route already begins here, no server
+ * action or page needed changing: the tenant reaches PostgreSQL on every
+ * query, and a route that forgets to guard itself gets no tenant and is
+ * therefore denied by policy rather than quietly reading everything.
  */
 
 /** Requires a signed-in user. Redirects to login otherwise. */
 export async function requireUser(): Promise<SessionUser> {
   const user = await getSessionUser();
   if (!user) redirect('/login');
+  setCurrentTenant(user.tenantId);
   return user;
 }
 

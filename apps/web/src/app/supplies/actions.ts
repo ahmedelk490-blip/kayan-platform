@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { dec, isSupplyKind, isSupplyTxType, supplyDelta, SUPPLY_CATEGORIES } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
-import { prisma } from '@/lib/prisma';
+import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 import { parseDateOr, type FormState } from '@/lib/ops';
 
@@ -122,7 +122,7 @@ export async function recordSupplyTransaction(
   const totalCost = quantity.times(unitCost);
   const delta = supplyDelta(parsed.data.type as 'PURCHASE' | 'CONSUMPTION', quantity);
 
-  await prisma.$transaction(async (tx) => {
+  await tenantTransaction(async (tx) => {
     await tx.supplyTransaction.create({
       data: {
         tenantId: user.tenantId,

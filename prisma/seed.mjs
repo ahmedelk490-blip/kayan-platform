@@ -8,7 +8,11 @@ import { PrismaClient } from '@prisma/client';
 import { hash } from '@node-rs/argon2';
 import { ROLES, PERMISSIONS, ROLE_PERMISSIONS } from '../packages/domain/src/rbac.ts';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  // Tooling spans tenants, so it uses the maintenance connection. The
+  // application role deliberately cannot see anything without a tenant.
+  datasources: { db: { url: process.env.MAINTENANCE_DATABASE_URL } },
+});
 
 const ARGON2_OPTIONS = { memoryCost: 19456, timeCost: 2, parallelism: 1 };
 

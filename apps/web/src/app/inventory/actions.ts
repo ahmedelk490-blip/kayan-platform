@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requirePermission } from '@/lib/guard';
-import { prisma } from '@/lib/prisma';
+import { prisma, tenantTransaction } from '@/lib/prisma';
 import { dec, formatQty } from '@erp/domain';
 import { audit, fieldErrors } from '@/lib/audit';
 import { TYPES, type MovementType } from './types';
@@ -14,7 +14,7 @@ export interface FormState {
   fieldErrors?: Record<string, string>;
 }
 
-type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+type Tx = Parameters<Parameters<typeof tenantTransaction>[0]>[0];
 
 /**
  * Apply a delta to the stock projection.
@@ -109,7 +109,7 @@ export async function postMovement(_prev: FormState, formData: FormData): Promis
     }
   }
 
-  await prisma.$transaction(async (tx) => {
+  await tenantTransaction(async (tx) => {
     await tx.stockMovement.create({
       data: {
         tenantId: user.tenantId,
@@ -158,7 +158,7 @@ export async function reverseMovement(movementId: string): Promise<void> {
 
   const meta = TYPES[original.type as MovementType] ?? TYPES.ADJUSTMENT;
 
-  await prisma.$transaction(async (tx) => {
+  await tenantTransaction(async (tx) => {
     await tx.stockMovement.create({
       data: {
         tenantId: user.tenantId,

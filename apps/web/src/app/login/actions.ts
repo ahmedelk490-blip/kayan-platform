@@ -4,7 +4,11 @@ import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { z } from 'zod';
 import { isLocked, lockUntil, shouldLock, landingPathFor, isRoleKey } from '@erp/domain';
-import { prisma } from '@/lib/prisma';
+// Login runs before any tenant is known — finding out which tenant this
+// person belongs to is the whole point of it — so these three queries use the
+// single BYPASSRLS connection. Everything after login goes through `prisma`,
+// which is bound to the tenant by the guard.
+import { authDb } from '@/lib/prisma';
 import { createSession, verifyPassword, destroySession } from '@/lib/auth';
 
 const LoginSchema = z.object({
@@ -52,7 +56,7 @@ export async function loginAction(
   const { email, password } = parsed.data;
   const generic = { error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.' };
 
-  const user = await prisma.user.findUnique({
+  const user = await authDb.user.findUnique({
     where: { email },
     include: { role: true },
   });
@@ -76,7 +80,7 @@ export async function loginAction(
   const ok = await verifyPassword(user.passwordHash, password);
 
   if (!ok) {
-    await prisma.user.update({
+    await authDb.user.update({
       where: { id: user.id },
       data: shouldLock(user.failedLogins)
         ? { failedLogins: 0, lockedUntil: lockUntil(now) }
@@ -84,7 +88,7 @@ export async function loginAction(
     });
 
     const headerList = await headers();
-    await prisma.auditLog.create({
+    await authDb.auditLog.create({
       data: {
         tenantId: user.tenantId,
         userId: user.id,
@@ -102,14 +106,14 @@ export async function loginAction(
     return { error: 'دور المستخدم غير معروف. تواصل مع مدير النظام.' };
   }
 
-  await prisma.user.update({
+  await authDb.user.update({
     where: { id: user.id },
     data: { failedLogins: 0, lockedUntil: null, lastLoginAt: now },
   });
 
   await createSession(user.id);
 
-  await prisma.auditLog.create({
+  await authDb.auditLog.create({
     data: {
       tenantId: user.tenantId,
       userId: user.id,
