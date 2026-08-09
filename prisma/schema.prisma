@@ -76,6 +76,9 @@ model Tenant {
   supplyTransactions SupplyTransaction[]
   purchaseOrders     PurchaseOrder[]
   goodsReceipts      GoodsReceipt[]
+  invoices           Invoice[]
+  payments           Payment[]
+  documentSequences  DocumentSequence[]
 }
 
 model Company {
@@ -84,6 +87,30 @@ model Company {
   name     String
   nameAr   String
   currency String @default("EGP")
+
+  /// ── Invoicing settings (Phase 10) ──────────────────────
+  ///
+  /// Three business facts nobody has supplied yet. They are settings rather
+  /// than constants so the module works today and the manager sets the truth
+  /// when they know it.
+
+  /// Default VAT percentage applied to new invoice lines.
+  ///
+  /// Zero, deliberately. A hardcoded 14 would produce invoices with a number
+  /// that looks right and might not be — visibly wrong beats plausibly wrong.
+  defaultTaxRate Decimal @default(0) @db.Decimal(19, 4)
+
+  /// Days between issue and due. Zero means due on issue, the most
+  /// conservative reading of "we have not agreed terms" — assuming a month of
+  /// free credit on the customer's behalf is a decision nobody made.
+  paymentTermDays Int @default(0)
+
+  /// Prefix for the gapless invoice sequence.
+  invoicePrefix String @default("INV")
+
+  /// Printed on the invoice when set. Not invented.
+  taxNumber          String?
+  commercialRegister String?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -137,6 +164,9 @@ model User {
   supplyTransactions    SupplyTransaction[]
   purchaseOrdersCreated PurchaseOrder[]     @relation("PurchaseCreator")
   goodsReceipts         GoodsReceipt[]
+  invoicesIssued        Invoice[]           @relation("InvoiceIssuer")
+  invoicesCreated       Invoice[]           @relation("InvoiceCreator")
+  paymentsRecorded      Payment[]
 
   @@index([tenantId])
   @@index([roleId])
@@ -370,6 +400,7 @@ model Product {
   productFormulas   ProductFormula[]
   costCalculations  CostCalculation[]
   damageRecords     DamageRecord[]
+  invoiceLines      InvoiceLine[]
 
   @@unique([tenantId, sku])
   @@index([tenantId, isDeleted])
@@ -410,6 +441,7 @@ model ProductVariant {
   costCalculations   CostCalculation[]
   damageRecords      DamageRecord[]
   purchaseOrderLines PurchaseOrderLine[]
+  invoiceLines       InvoiceLine[]
 
   @@unique([sku])
   @@unique([productId, colorId, sizeId])
@@ -640,6 +672,7 @@ model Customer {
   quotations       Quotation[]
   salesOrders      SalesOrder[]
   productionOrders ProductionOrder[]
+  invoices         Invoice[]
 
   @@unique([tenantId, code])
   @@index([tenantId, isDeleted])
@@ -832,6 +865,7 @@ model SalesOrder {
   movements        StockMovement[]
   attachments      Attachment[]
   productionOrders ProductionOrder[]
+  invoices         Invoice[]
 
   @@unique([tenantId, number])
   @@index([tenantId, isDeleted])
@@ -1299,6 +1333,161 @@ model Attachment {
   @@index([salesOrderId])
   @@index([expenseId])
   @@index([damageId])
+}
+
+// ═══════════════════════════════════════════════════════════
+// Invoicing & receivables — Phase 10
+// ═══════════════════════════════════════════════════════════
+
+/// عدّاد المستندات — gapless numbering.
+///
+/// Every other document in this system derives its number from the highest
+/// existing one, which is fine because a gap in a quotation number is nobody's
+/// business. An invoice is different: tax authorities generally require an
+/// unbroken sequence, and proving one after the fact is impossible.
+///
+/// So invoices allocate from here, inside the issuing transaction, with the
+/// row locked. Two clerks pressing Issue at the same instant queue rather than
+/// collide, and a rolled-back transaction returns the number rather than
+/// burning it.
+///
+/// The number is allocated on ISSUE, never on create — a draft that is
+/// deleted must not leave a hole.
+model DocumentSequence {
+  id         String @id @default(cuid())
+  tenantId   String
+  /// INVOICE — one row per kind per year.
+  kind       String
+  year       Int
+  /// Last number handed out. The next allocation is this plus one.
+  lastNumber Int    @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, kind, year])
+}
+
+/// فاتورة المبيعات.
+///
+/// Issued from a sales order, or standalone. Lines are copied, never joined:
+/// the same snapshot discipline the quotation and the cost calculation follow.
+/// Re-reading a two-year-old invoice must show what the customer was actually
+/// charged, whatever the price list says today.
+model Invoice {
+  id       String  @id @default(cuid())
+  tenantId String
+  /// Null until issued. Allocated gaplessly at that moment.
+  number   String?
+
+  customerId   String
+  salesOrderId String?
+
+  /// DRAFT | ISSUED | PARTIALLY_PAID | PAID | VOID
+  ///
+  /// The paid states are DERIVED from the payments, never typed.
+  status String @default("DRAFT")
+
+  issueDate DateTime?
+  /// issueDate + the tenant's payment term. Stored because the term may
+  /// change later and this invoice's promise must not.
+  dueDate   DateTime?
+
+  subtotal       Decimal @default(0) @db.Decimal(19, 4)
+  discountAmount Decimal @default(0) @db.Decimal(19, 4)
+  taxAmount      Decimal @default(0) @db.Decimal(19, 4)
+  total          Decimal @default(0) @db.Decimal(19, 4)
+  /// Sum of payments. A projection, maintained in the same transaction.
+  paidAmount     Decimal @default(0) @db.Decimal(19, 4)
+
+  notes      String?
+  voidReason String?
+
+  issuedById  String?
+  createdById String?
+  voidedAt    DateTime?
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tenant     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer   Customer      @relation(fields: [customerId], references: [id])
+  salesOrder SalesOrder?   @relation(fields: [salesOrderId], references: [id])
+  issuedBy   User?         @relation("InvoiceIssuer", fields: [issuedById], references: [id], onDelete: SetNull)
+  createdBy  User?         @relation("InvoiceCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  lines      InvoiceLine[]
+  payments   Payment[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, isDeleted])
+  @@index([tenantId, status])
+  @@index([customerId])
+  @@index([tenantId, dueDate])
+}
+
+/// بند الفاتورة — a copy, not a reference.
+model InvoiceLine {
+  id        String @id @default(cuid())
+  invoiceId String
+  lineNo    Int    @default(1)
+
+  /// Kept for reporting; the description is what the customer reads.
+  productId   String?
+  variantId   String?
+  /// Frozen at issue: the product may be renamed, the invoice may not change.
+  description String
+
+  quantity       Decimal @db.Decimal(19, 4)
+  unitPrice      Decimal @db.Decimal(19, 4)
+  discountAmount Decimal @default(0) @db.Decimal(19, 4)
+  taxRate        Decimal @default(0) @db.Decimal(19, 4)
+  taxAmount      Decimal @default(0) @db.Decimal(19, 4)
+  lineTotal      Decimal @db.Decimal(19, 4)
+
+  invoice Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product Product?        @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([invoiceId])
+}
+
+/// دفعة.
+///
+/// Append-only, like every other ledger here. A payment entered wrongly is
+/// corrected by a reversing payment that points at it, never by an edit —
+/// money that moved and then un-moved is a fact, not a typo.
+model Payment {
+  id        String @id @default(cuid())
+  tenantId  String
+  number    String
+  invoiceId String
+
+  amount    Decimal  @db.Decimal(19, 4)
+  /// CASH | BANK | CHEQUE | CARD | OTHER
+  method    String
+  paidAt    DateTime @default(now())
+  /// Cheque number, transfer reference, whatever proves it.
+  reference String?
+  notes     String?
+
+  /// Set when this payment reverses another. The original is never touched.
+  reversesId String?  @unique
+  reverses   Payment? @relation("PaymentReversal", fields: [reversesId], references: [id])
+  reversedBy Payment? @relation("PaymentReversal")
+
+  recordedById String?
+  createdAt    DateTime @default(now())
+
+  tenant     Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoice    Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  recordedBy User?   @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, number])
+  @@index([invoiceId])
+  @@index([tenantId, paidAt])
 }
 
 // ═══════════════════════════════════════════════════════════

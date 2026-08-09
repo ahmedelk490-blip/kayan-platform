@@ -31,6 +31,9 @@ const OWNED = [
   'SupplyTransaction', 'User', 'Warehouse',
   // Phase 9
   'PurchaseOrder', 'GoodsReceipt',
+  // Phase 10. DocumentSequence is tenant-scoped too: one tenant must never
+  // be able to read, still less advance, another tenant's invoice counter.
+  'Invoice', 'Payment', 'DocumentSequence',
 ];
 
 /**
@@ -72,6 +75,9 @@ const CHILD = {
   // Phase 9
   PurchaseOrderLine: `EXISTS (SELECT 1 FROM "PurchaseOrder" p WHERE p.id = t."purchaseOrderId" AND p."tenantId" = app_tenant())`,
   GoodsReceiptLine: `EXISTS (SELECT 1 FROM "GoodsReceipt" g WHERE g.id = t."goodsReceiptId" AND g."tenantId" = app_tenant())`,
+
+  // Phase 10
+  InvoiceLine: `EXISTS (SELECT 1 FROM "Invoice" i WHERE i.id = t."invoiceId" AND i."tenantId" = app_tenant())`,
 
   // Attachment hangs off any one of six owners, exactly one of which is set.
   Attachment: `(

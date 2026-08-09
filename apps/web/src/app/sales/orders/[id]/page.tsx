@@ -11,6 +11,7 @@ import {
   ORDER_STATUS_AR,
   isOrderStatus,
   RESERVING_STATUSES,
+  INVOICE_STATUS_AR,
   type OrderStatus,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
@@ -19,6 +20,7 @@ import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import { StatusBadge } from '../../StatusBadge';
 import { ProductionBadge } from '@/app/manufacturing/StatusBadge';
+import { createInvoiceFromOrder } from '@/app/invoices/actions';
 import { confirmOrder, cancelOrder, changeOrderStatus, deleteOrder } from '../actions';
 
 export const metadata: Metadata = { title: 'أمر البيع' };
@@ -54,6 +56,11 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           variant: { select: { sku: true } },
         },
       },
+      invoices: {
+        where: { isDeleted: false },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, number: true, status: true, total: true, paidAmount: true },
+      },
     },
   });
   if (!order) notFound();
@@ -61,6 +68,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   const canConfirm = can(user.role, 'sales.confirm');
   const canWrite = can(user.role, 'sales.write');
   const canProduce = can(user.role, 'manufacturing.write');
+  const canInvoice = can(user.role, 'invoices.write');
   const status = isOrderStatus(order.status) ? (order.status as OrderStatus) : 'DRAFT';
   const nextStates = ORDER_TRANSITIONS[status].filter((s) => s !== 'CANCELLED');
   const holdsReservations = RESERVING_STATUSES.includes(status);
@@ -228,6 +236,40 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                     <td className="tnum px-4 py-3 text-txt-2">{formatQty(p.quantity)}</td>
                     <td className="px-4 py-3">
                       <ProductionBadge status={p.status} />
+                    </td>
+                  </tr>
+                ))}
+              </Table>
+            </div>
+          )}
+          <div className="mt-8 flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-brand">الفواتير</h3>
+            {canInvoice && status !== 'DRAFT' && status !== 'CANCELLED' && (
+              <form action={createInvoiceFromOrder.bind(null, order.id)}>
+                <button type="submit" className="text-xs text-brand hover:underline">
+                  + إنشاء فاتورة من هذا الأمر
+                </button>
+              </form>
+            )}
+          </div>
+          {order.invoices.length === 0 ? (
+            <p className="erp-card mt-3 p-5 text-sm text-txt-3">
+              لا توجد فواتير لهذا الأمر بعد.
+            </p>
+          ) : (
+            <div className="mt-3">
+              <Table headers={['الرقم', 'الإجمالي', 'المدفوع', 'الحالة']} empty={false}>
+                {order.invoices.map((inv) => (
+                  <tr key={inv.id}>
+                    <td dir="ltr" className="tnum px-4 py-3 text-start">
+                      <Link href={`/invoices/${inv.id}`} className="text-brand hover:underline">
+                        {inv.number ?? 'مسودة'}
+                      </Link>
+                    </td>
+                    <td className="tnum px-4 py-3 text-txt-2">{formatMoney(inv.total)}</td>
+                    <td className="tnum px-4 py-3 text-txt-3">{formatMoney(inv.paidAmount)}</td>
+                    <td className="px-4 py-3 text-[0.7rem] text-txt-3">
+                      {(INVOICE_STATUS_AR as Record<string, string>)[inv.status] ?? inv.status}
                     </td>
                   </tr>
                 ))}

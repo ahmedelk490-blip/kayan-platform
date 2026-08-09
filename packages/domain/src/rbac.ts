@@ -114,6 +114,13 @@ export const PERMISSIONS = {
   'purchasing.confirm': { nameAr: 'تأكيد وإلغاء أوامر الشراء', group: 'المشتريات' },
   'purchasing.receive': { nameAr: 'استلام البضاعة من المورّد', group: 'المشتريات' },
 
+  // Phase 10. Issuing is separated from drafting because issuing burns a
+  // gapless tax number, and recording money is separate again.
+  'invoices.view': { nameAr: 'عرض الفواتير', group: 'الفواتير' },
+  'invoices.write': { nameAr: 'إنشاء مسودات الفواتير', group: 'الفواتير' },
+  'invoices.issue': { nameAr: 'إصدار وإلغاء الفواتير', group: 'الفواتير' },
+  'payments.record': { nameAr: 'تسجيل وعكس الدفعات', group: 'الفواتير' },
+
   'reports.view': { nameAr: 'عرض التقارير', group: 'التقارير' },
   'users.manage': { nameAr: 'إدارة المستخدمين', group: 'النظام' },
   'settings.manage': { nameAr: 'إدارة الإعدادات', group: 'النظام' },
@@ -168,6 +175,10 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'purchasing.write',
     'purchasing.confirm',
     'purchasing.receive',
+    'invoices.view',
+    'invoices.write',
+    'invoices.issue',
+    'payments.record',
     'reports.view',
   ],
 
@@ -187,6 +198,9 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     // approve them. Entry without approval is the whole point.
     'expenses.view',
     'expenses.write',
+    // A representative needs to see whether their customer has paid, but
+    // must not issue a tax document or record money against one.
+    'invoices.view',
     // Deliberately NOT cost.margin — a representative sees cost to quote
     // sensibly, but company margin is not theirs to see.
     // Deliberately NOT formula.view either — the cost is what they need to
