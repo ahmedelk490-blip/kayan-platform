@@ -29,6 +29,8 @@ const OWNED = [
   'PrintingOption', 'Product', 'ProductionOrder', 'Quotation', 'SalesOrder',
   'SecondaryExpense', 'Size', 'StockMovement', 'Supplier', 'Supply',
   'SupplyTransaction', 'User', 'Warehouse',
+  // Phase 9
+  'PurchaseOrder', 'GoodsReceipt',
 ];
 
 /**
@@ -66,6 +68,10 @@ const CHILD = {
   PenaltyEvent: `EXISTS (SELECT 1 FROM "Penalty" p WHERE p.id = t."penaltyId" AND p."tenantId" = app_tenant())`,
 
   Session: `EXISTS (SELECT 1 FROM "User" u WHERE u.id = t."userId" AND u."tenantId" = app_tenant())`,
+
+  // Phase 9
+  PurchaseOrderLine: `EXISTS (SELECT 1 FROM "PurchaseOrder" p WHERE p.id = t."purchaseOrderId" AND p."tenantId" = app_tenant())`,
+  GoodsReceiptLine: `EXISTS (SELECT 1 FROM "GoodsReceipt" g WHERE g.id = t."goodsReceiptId" AND g."tenantId" = app_tenant())`,
 
   // Attachment hangs off any one of six owners, exactly one of which is set.
   Attachment: `(
@@ -160,7 +166,13 @@ w(`-- Migration history is owner business only.`);
 w(`REVOKE ALL ON TABLE "_prisma_migrations" FROM kayan_app, kayan_auth;`);
 w();
 
-const dir = 'prisma/migrations/20260809180000_row_level_security';
+/**
+ * The output migration. Every statement is idempotent — ENABLE is a no-op
+ * when already enabled, and each policy is dropped before being created — so
+ * regenerating the whole file into a later migration is safe and keeps the
+ * policies in one reviewable place rather than scattered across phases.
+ */
+const dir = process.argv[2] ?? 'prisma/migrations/20260809180000_row_level_security';
 mkdirSync(dir, { recursive: true });
 writeFileSync(`${dir}/migration.sql`, lines.join('\n'), 'utf8');
 

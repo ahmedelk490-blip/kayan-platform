@@ -214,11 +214,38 @@ async function main() {
     `${forced[0].n} tables enabled but not forced`,
   );
 
-  const counts = await admin.$queryRawUnsafe(
-    `SELECT count(*)::int AS n FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity`,
+  // Derived, not a magic number: a hardcoded count goes stale the moment a
+  // phase adds a table, and a stale count fails loudly for the wrong reason
+  // while a genuinely unprotected table would slip past unnoticed.
+  const unprotected = await admin.$queryRawUnsafe(`
+    SELECT c.relname AS table
+      FROM pg_class c
+      JOIN pg_namespace ns ON ns.oid = c.relnamespace
+     WHERE ns.nspname = 'public' AND c.relkind = 'r' AND NOT c.relrowsecurity
+     ORDER BY 1`);
+  const names = unprotected.map((r) => r.table);
+  // The four documented globals, and nothing else, may lack RLS.
+  const ALLOWED = ['Permission', 'Role', 'RolePermission', '_prisma_migrations'];
+  const unexpected = names.filter((t) => !ALLOWED.includes(t));
+  check(
+    'no table lacks RLS except the four documented global ones',
+    unexpected.length === 0,
+    unexpected.length ? `UNPROTECTED: ${unexpected.join(', ')}` : names.join(', '),
   );
-  check('RLS is enabled on 47 tables', counts[0].n === 47, `${counts[0].n} tables`);
+
+  // And every table that carries a tenantId must be protected, always.
+  const tenantTablesUnprotected = await admin.$queryRawUnsafe(`
+    SELECT c.relname AS table
+      FROM pg_class c
+      JOIN pg_namespace ns ON ns.oid = c.relnamespace
+      JOIN information_schema.columns col
+        ON col.table_name = c.relname AND col.column_name = 'tenantId'
+     WHERE ns.nspname = 'public' AND c.relkind = 'r' AND NOT c.relrowsecurity`);
+  check(
+    'every table carrying tenantId has RLS',
+    tenantTablesUnprotected.length === 0,
+    tenantTablesUnprotected.map((r) => r.table).join(', ') || 'all protected',
+  );
 
   // ── Cleanup ───────────────────────────────────────────────
 

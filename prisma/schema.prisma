@@ -74,6 +74,8 @@ model Tenant {
   penalties          Penalty[]
   supplies           Supply[]
   supplyTransactions SupplyTransaction[]
+  purchaseOrders     PurchaseOrder[]
+  goodsReceipts      GoodsReceipt[]
 }
 
 model Company {
@@ -122,17 +124,19 @@ model User {
   // Phase 6.5. Three roles per record — the person it concerns, the person
   // who filed it, the person who approved it — so each needs its own named
   // relation rather than one ambiguous link.
-  expensesAsEmployee  SecondaryExpense[]  @relation("ExpenseEmployee")
-  expensesApproved    SecondaryExpense[]  @relation("ExpenseApprover")
-  expensesCreated     SecondaryExpense[]  @relation("ExpenseCreator")
-  damagesAsEmployee   DamageRecord[]      @relation("DamageEmployee")
-  damagesApproved     DamageRecord[]      @relation("DamageApprover")
-  damagesCreated      DamageRecord[]      @relation("DamageCreator")
-  penaltiesAsEmployee Penalty[]           @relation("PenaltyEmployee")
-  penaltiesApproved   Penalty[]           @relation("PenaltyApprover")
-  penaltiesCreated    Penalty[]           @relation("PenaltyCreator")
-  penaltyEvents       PenaltyEvent[]
-  supplyTransactions  SupplyTransaction[]
+  expensesAsEmployee    SecondaryExpense[]  @relation("ExpenseEmployee")
+  expensesApproved      SecondaryExpense[]  @relation("ExpenseApprover")
+  expensesCreated       SecondaryExpense[]  @relation("ExpenseCreator")
+  damagesAsEmployee     DamageRecord[]      @relation("DamageEmployee")
+  damagesApproved       DamageRecord[]      @relation("DamageApprover")
+  damagesCreated        DamageRecord[]      @relation("DamageCreator")
+  penaltiesAsEmployee   Penalty[]           @relation("PenaltyEmployee")
+  penaltiesApproved     Penalty[]           @relation("PenaltyApprover")
+  penaltiesCreated      Penalty[]           @relation("PenaltyCreator")
+  penaltyEvents         PenaltyEvent[]
+  supplyTransactions    SupplyTransaction[]
+  purchaseOrdersCreated PurchaseOrder[]     @relation("PurchaseCreator")
+  goodsReceipts         GoodsReceipt[]
 
   @@index([tenantId])
   @@index([roleId])
@@ -342,8 +346,8 @@ model Product {
   descriptionAr String?
   driveFolderId String?
   /// Storage only until the Cost Engine exists — see header note on money.
-  cost          Decimal? @db.Decimal(19, 4)
-  sellingPrice  Decimal? @db.Decimal(19, 4)
+  cost          Decimal?  @db.Decimal(19, 4)
+  sellingPrice  Decimal?  @db.Decimal(19, 4)
   /// ACTIVE | DRAFT | DISCONTINUED
   status        String    @default("ACTIVE")
   isDeleted     Boolean   @default(false)
@@ -385,26 +389,27 @@ model ProductVariant {
   sizeId       String?
   sku          String
   barcode      String?
-  cost         Decimal? @db.Decimal(19, 4)
-  sellingPrice Decimal? @db.Decimal(19, 4)
+  cost         Decimal?  @db.Decimal(19, 4)
+  sellingPrice Decimal?  @db.Decimal(19, 4)
   isActive     Boolean   @default(true)
   isDeleted    Boolean   @default(false)
   deletedAt    DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  product          Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
-  color            Color?            @relation(fields: [colorId], references: [id])
-  size             Size?             @relation(fields: [sizeId], references: [id])
-  images           ProductImage[]
-  stock            Stock[]
-  stockMovements   StockMovement[]
-  quotationLines   QuotationLine[]
-  salesOrderLines  SalesOrderLine[]
-  productionOrders ProductionOrder[]
-  productFormulas  ProductFormula[]
-  costCalculations CostCalculation[]
-  damageRecords    DamageRecord[]
+  product            Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  color              Color?              @relation(fields: [colorId], references: [id])
+  size               Size?               @relation(fields: [sizeId], references: [id])
+  images             ProductImage[]
+  stock              Stock[]
+  stockMovements     StockMovement[]
+  quotationLines     QuotationLine[]
+  salesOrderLines    SalesOrderLine[]
+  productionOrders   ProductionOrder[]
+  productFormulas    ProductFormula[]
+  costCalculations   CostCalculation[]
+  damageRecords      DamageRecord[]
+  purchaseOrderLines PurchaseOrderLine[]
 
   @@unique([sku])
   @@unique([productId, colorId, sizeId])
@@ -483,6 +488,7 @@ model Warehouse {
   locations      WarehouseLocation[]
   stock          Stock[]
   stockMovements StockMovement[]
+  goodsReceipts  GoodsReceipt[]
 
   @@unique([tenantId, code])
   @@index([tenantId, isDeleted])
@@ -564,6 +570,10 @@ model StockMovement {
   /// Manufacturing linkage — finished-goods receipts on completion.
   productionOrderId String?
 
+  /// Purchasing linkage — goods arriving from a supplier. Unique per type
+  /// below, so a receipt posted twice cannot move stock twice.
+  goodsReceiptLineId String?
+
   /// Set when this movement reverses another. The original is never touched.
   reversesId String?        @unique
   reverses   StockMovement? @relation("Reversal", fields: [reversesId], references: [id])
@@ -572,15 +582,16 @@ model StockMovement {
   occurredAt DateTime @default(now())
   createdAt  DateTime @default(now())
 
-  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  product         Product            @relation(fields: [productId], references: [id])
-  variant         ProductVariant     @relation(fields: [variantId], references: [id])
-  warehouse       Warehouse          @relation(fields: [warehouseId], references: [id])
-  location        WarehouseLocation? @relation(fields: [locationId], references: [id])
-  user            User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
-  salesOrder      SalesOrder?        @relation(fields: [salesOrderId], references: [id])
-  salesOrderLine  SalesOrderLine?    @relation(fields: [salesOrderLineId], references: [id])
-  productionOrder ProductionOrder?   @relation(fields: [productionOrderId], references: [id])
+  tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product          Product            @relation(fields: [productId], references: [id])
+  variant          ProductVariant     @relation(fields: [variantId], references: [id])
+  warehouse        Warehouse          @relation(fields: [warehouseId], references: [id])
+  location         WarehouseLocation? @relation(fields: [locationId], references: [id])
+  user             User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  salesOrder       SalesOrder?        @relation(fields: [salesOrderId], references: [id])
+  salesOrderLine   SalesOrderLine?    @relation(fields: [salesOrderLineId], references: [id])
+  productionOrder  ProductionOrder?   @relation(fields: [productionOrderId], references: [id])
+  goodsReceiptLine GoodsReceiptLine?  @relation(fields: [goodsReceiptLineId], references: [id])
 
   /// IDEMPOTENCY GUARDS.
   ///
@@ -593,6 +604,7 @@ model StockMovement {
   /// twice cannot book its output twice.
   @@unique([salesOrderLineId, type])
   @@unique([productionOrderId, type])
+  @@unique([goodsReceiptLineId, type])
   @@index([tenantId, occurredAt])
   @@index([variantId, occurredAt])
   @@index([warehouseId])
@@ -672,9 +684,10 @@ model Supplier {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  products    SupplierProduct[]
-  attachments Attachment[]
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products       SupplierProduct[]
+  attachments    Attachment[]
+  purchaseOrders PurchaseOrder[]
 
   @@unique([tenantId, code])
   @@index([tenantId, isDeleted])
@@ -1070,7 +1083,7 @@ model FormulaLine {
   basis String
 
   /// Consumption per basis unit — or the percentage, for PERCENT_OF_DIRECT.
-  quantity Decimal @db.Decimal(19, 4)
+  quantity Decimal  @db.Decimal(19, 4)
   /// Pieces produced by one `quantity`. PER_YIELD only: a 50 m roll that
   /// yields 400 shirts is quantity=50, yieldQty=400.
   yieldQty Decimal? @db.Decimal(19, 4)
@@ -1236,9 +1249,9 @@ model CostCalculationLine {
   unit     String?
 
   /// Copied from the formula line.
-  quantityPerBasis Decimal @db.Decimal(19, 4)
+  quantityPerBasis Decimal  @db.Decimal(19, 4)
   yieldQty         Decimal? @db.Decimal(19, 4)
-  unitCost         Decimal @db.Decimal(19, 4)
+  unitCost         Decimal  @db.Decimal(19, 4)
 
   /// Computed by the engine.
   consumedQty Decimal @db.Decimal(19, 4)
@@ -1289,6 +1302,159 @@ model Attachment {
 }
 
 // ═══════════════════════════════════════════════════════════
+// Purchasing — Phase 9
+// ═══════════════════════════════════════════════════════════
+
+/// أمر الشراء.
+///
+/// Mirrors the sales order deliberately: same discount-then-tax arithmetic,
+/// same snapshot discipline. A business that computes its buying differently
+/// from its selling will eventually disagree with itself about margin.
+model PurchaseOrder {
+  id         String @id @default(cuid())
+  tenantId   String
+  number     String
+  supplierId String
+
+  /// DRAFT | CONFIRMED | PARTIALLY_RECEIVED | RECEIVED | CANCELLED
+  ///
+  /// The two received states are DERIVED from the delivery notes, never
+  /// typed. A status the receipts do not support is a lie the warehouse
+  /// discovers at the worst moment.
+  status String @default("DRAFT")
+
+  orderDate    DateTime  @default(now())
+  expectedDate DateTime?
+  notes        String?
+
+  subtotal       Decimal @default(0) @db.Decimal(19, 4)
+  discountAmount Decimal @default(0) @db.Decimal(19, 4)
+  taxAmount      Decimal @default(0) @db.Decimal(19, 4)
+  total          Decimal @default(0) @db.Decimal(19, 4)
+
+  confirmedAt DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+
+  createdById String?
+  isDeleted   Boolean   @default(false)
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant    Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier  Supplier            @relation(fields: [supplierId], references: [id])
+  createdBy User?               @relation("PurchaseCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  lines     PurchaseOrderLine[]
+  receipts  GoodsReceipt[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, isDeleted])
+  @@index([tenantId, status])
+  @@index([supplierId])
+}
+
+/// بند أمر الشراء.
+///
+/// A line buys exactly one thing: a stocked variant, or a consumable supply.
+/// Both columns nullable, exactly one set — a line with neither cannot move a
+/// quantity or a cost, and would be an invoice line pretending to be a
+/// purchase line.
+model PurchaseOrderLine {
+  id              String @id @default(cuid())
+  purchaseOrderId String
+  lineNo          Int    @default(1)
+
+  /// VARIANT | SUPPLY
+  target      String
+  variantId   String?
+  supplyId    String?
+  /// What the supplier calls it, which is rarely what we call it.
+  description String?
+
+  quantity       Decimal @db.Decimal(19, 4)
+  unitPrice      Decimal @db.Decimal(19, 4)
+  discountAmount Decimal @default(0) @db.Decimal(19, 4)
+  taxRate        Decimal @default(0) @db.Decimal(19, 4)
+  taxAmount      Decimal @default(0) @db.Decimal(19, 4)
+  lineTotal      Decimal @db.Decimal(19, 4)
+
+  /// Running total of what has actually arrived. Maintained only by posting
+  /// a receipt, never edited directly.
+  receivedQty Decimal @default(0) @db.Decimal(19, 4)
+
+  notes String?
+
+  purchaseOrder PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  variant       ProductVariant?    @relation(fields: [variantId], references: [id])
+  supply        Supply?            @relation(fields: [supplyId], references: [id])
+  receiptLines  GoodsReceiptLine[]
+
+  @@index([purchaseOrderId])
+  @@index([variantId])
+  @@index([supplyId])
+}
+
+/// إذن استلام بضاعة.
+///
+/// A separate document because deliveries arrive in parts, and each part is
+/// its own event with its own date and its own evidence. Folding them into a
+/// "received quantity" field on the order would erase when things actually
+/// turned up.
+model GoodsReceipt {
+  id              String @id @default(cuid())
+  tenantId        String
+  number          String
+  purchaseOrderId String
+
+  receiptDate DateTime @default(now())
+  warehouseId String
+  /// The supplier's own delivery note number, when there is one.
+  reference   String?
+  notes       String?
+
+  receivedById String?
+  createdAt    DateTime @default(now())
+
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  purchaseOrder PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  warehouse     Warehouse          @relation(fields: [warehouseId], references: [id])
+  receivedBy    User?              @relation(fields: [receivedById], references: [id], onDelete: SetNull)
+  lines         GoodsReceiptLine[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, receiptDate])
+  @@index([purchaseOrderId])
+}
+
+/// بند الاستلام.
+///
+/// The idempotency anchor for purchasing: StockMovement carries a unique
+/// constraint on this row's id, so a receipt posted twice — a double-click, a
+/// retried request — cannot move stock twice. The database enforces it, not
+/// the application.
+model GoodsReceiptLine {
+  id                  String @id @default(cuid())
+  goodsReceiptId      String
+  purchaseOrderLineId String
+
+  quantity Decimal @db.Decimal(19, 4)
+  /// Copied from the order line at receipt time. The order may later be
+  /// corrected; what stock was valued at on the day must not move.
+  unitCost Decimal @db.Decimal(19, 4)
+
+  notes String?
+
+  goodsReceipt      GoodsReceipt        @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  purchaseOrderLine PurchaseOrderLine   @relation(fields: [purchaseOrderLineId], references: [id])
+  movements         StockMovement[]
+  supplyMovements   SupplyTransaction[]
+
+  @@index([goodsReceiptId])
+  @@index([purchaseOrderLineId])
+}
+
+// ═══════════════════════════════════════════════════════════
 // Operations — expenses, damage, penalties, supplies (Phase 6.5)
 // ═══════════════════════════════════════════════════════════
 
@@ -1307,7 +1473,7 @@ model SecondaryExpense {
   /// FOOD | TRANSPORT | FUEL | ELECTRICITY | WATER | INTERNET | CLEANING |
   /// OFFICE | MAINTENANCE | RENT | OTHER
   category    String
-  amount      Decimal @db.Decimal(19, 4)
+  amount      Decimal  @db.Decimal(19, 4)
   /// Optional — links to User until an HR Employee entity exists.
   employeeId  String?
   notes       String?
@@ -1475,6 +1641,13 @@ model Supply {
   /// Latest known purchase price. A reference for data entry, never the
   /// source of truth for a past transaction — those carry their own.
   lastUnitCost Decimal? @db.Decimal(19, 4)
+  /// Weighted average cost, recomputed on every delivery (Phase 9).
+  ///
+  /// This is what the Cost Engine should be priced from: the last invoice is
+  /// an accident of timing, the average is what the stock on the shelf
+  /// actually cost. Formula versions still freeze their own number — this
+  /// only tells the manager what the true figure is when they edit a draft.
+  avgCost      Decimal  @default(0) @db.Decimal(19, 4)
   /// Running balance, derived from transactions.
   onHand       Decimal  @default(0) @db.Decimal(19, 4)
   minStock     Decimal  @default(0) @db.Decimal(19, 4)
@@ -1485,8 +1658,9 @@ model Supply {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  transactions SupplyTransaction[]
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactions       SupplyTransaction[]
+  purchaseOrderLines PurchaseOrderLine[]
 
   @@unique([tenantId, code])
   @@index([tenantId, isDeleted])
@@ -1512,17 +1686,23 @@ model SupplyTransaction {
   totalCost Decimal @default(0) @db.Decimal(19, 4)
 
   /// Linked when consumption belongs to a specific run.
-  productionOrderId String?
-  notes             String?
-  userId            String?
+  productionOrderId  String?
+  /// Linked when a purchase delivery is what put these units on the shelf.
+  /// Unique below, for the same reason StockMovement is: a receipt posted
+  /// twice must not raise the balance twice.
+  goodsReceiptLineId String?
+  notes              String?
+  userId             String?
 
   createdAt DateTime @default(now())
 
-  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  supply          Supply           @relation(fields: [supplyId], references: [id], onDelete: Cascade)
-  productionOrder ProductionOrder? @relation(fields: [productionOrderId], references: [id], onDelete: SetNull)
-  user            User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supply           Supply            @relation(fields: [supplyId], references: [id], onDelete: Cascade)
+  productionOrder  ProductionOrder?  @relation(fields: [productionOrderId], references: [id], onDelete: SetNull)
+  user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  goodsReceiptLine GoodsReceiptLine? @relation(fields: [goodsReceiptLineId], references: [id])
 
+  @@unique([goodsReceiptLineId, type])
   @@index([tenantId, txDate])
   @@index([supplyId, txDate])
   @@index([tenantId, type])

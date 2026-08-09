@@ -35,6 +35,7 @@ const NAV: NavItem[] = [
   { href: '/warehouses', label: 'المخازن', permission: 'inventory.read', built: true },
   { href: '/customers', label: 'العملاء', permission: 'customers.read', built: true },
   { href: '/suppliers', label: 'الموردون', permission: 'suppliers.read', built: true },
+  { href: '/purchasing', label: 'المشتريات', permission: 'purchasing.view', built: true },
   { href: '/portal', label: 'بوابة العميل', permission: 'portal.view', built: true },
   { href: '/admin', label: 'الإدارة', permission: 'admin.view', built: true },
   { href: '/manufacturing', label: 'التصنيع', permission: 'manufacturing.view', built: true },

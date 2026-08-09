@@ -107,6 +107,13 @@ export const PERMISSIONS = {
   'supplies.view': { nameAr: 'عرض مستلزمات الطباعة والتطريز', group: 'المستلزمات' },
   'supplies.write': { nameAr: 'تسجيل حركات المستلزمات', group: 'المستلزمات' },
 
+  // Phase 9. Receiving is separated from ordering on purpose: the person who
+  // decides what to buy should not also be the one who certifies it arrived.
+  'purchasing.view': { nameAr: 'عرض أوامر الشراء', group: 'المشتريات' },
+  'purchasing.write': { nameAr: 'إنشاء وتعديل أوامر الشراء', group: 'المشتريات' },
+  'purchasing.confirm': { nameAr: 'تأكيد وإلغاء أوامر الشراء', group: 'المشتريات' },
+  'purchasing.receive': { nameAr: 'استلام البضاعة من المورّد', group: 'المشتريات' },
+
   'reports.view': { nameAr: 'عرض التقارير', group: 'التقارير' },
   'users.manage': { nameAr: 'إدارة المستخدمين', group: 'النظام' },
   'settings.manage': { nameAr: 'إدارة الإعدادات', group: 'النظام' },
@@ -157,6 +164,10 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'penalties.approve',
     'supplies.view',
     'supplies.write',
+    'purchasing.view',
+    'purchasing.write',
+    'purchasing.confirm',
+    'purchasing.receive',
     'reports.view',
   ],
 
