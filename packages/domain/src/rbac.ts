@@ -78,9 +78,17 @@ export const PERMISSIONS = {
   'manufacturing.view': { nameAr: 'عرض أوامر الإنتاج', group: 'التصنيع' },
   'manufacturing.write': { nameAr: 'إنشاء وتعديل أوامر الإنتاج', group: 'التصنيع' },
   'manufacturing.confirm': { nameAr: 'تأكيد وتشغيل وإلغاء أوامر الإنتاج', group: 'التصنيع' },
-  'formula.write': { nameAr: 'تعديل المعادلات', group: 'التصنيع' },
 
-  'cost.read': { nameAr: 'عرض التكلفة', group: 'التكلفة' },
+  // Phase 6. Reading a formula and editing one are separate: a formula is
+  // manufacturing know-how, and publishing a version changes what every
+  // future costing produces.
+  'formula.view': { nameAr: 'عرض المعادلات', group: 'التصنيع' },
+  'formula.write': { nameAr: 'إنشاء وتعديل ونشر المعادلات', group: 'التصنيع' },
+
+  // Phase 6 renamed `cost.read` to `.view` to match the naming the client
+  // specified, and for consistency with manufacturing.view. Nothing else
+  // about the cost permissions changed.
+  'cost.view': { nameAr: 'عرض التكلفة', group: 'التكلفة' },
   /** Margin is deliberately separable from cost — FR-IAM-006. */
   'cost.margin': { nameAr: 'عرض هامش الربح', group: 'التكلفة' },
 
@@ -121,8 +129,9 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'manufacturing.view',
     'manufacturing.write',
     'manufacturing.confirm',
+    'formula.view',
     'formula.write',
-    'cost.read',
+    'cost.view',
     'cost.margin',
     'reports.view',
   ],
@@ -137,10 +146,12 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'customers.write',
     'suppliers.read',
     'inventory.read',
-    'cost.read',
+    'cost.view',
     'reports.view',
     // Deliberately NOT cost.margin — a representative sees cost to quote
     // sensibly, but company margin is not theirs to see.
+    // Deliberately NOT formula.view either — the cost is what they need to
+    // quote; the recipe that produces it is manufacturing know-how.
   ],
 
   CUSTOMER: ['portal.view', 'products.read'],

@@ -272,14 +272,38 @@ async function main() {
 
   // ── 4. Sales order coupling ───────────────────────────────
 
-  const so = await prisma.salesOrder.findFirst({
+  // The coupling test creates its OWN sales order rather than borrowing a
+  // live one. An existing order may already carry production orders of its
+  // own, and those would legitimately hold it back from READY — which would
+  // look like a failure of this code when it is nothing of the sort.
+  const customer = await prisma.customer.findFirst({
     where: { tenantId: T, isDeleted: false },
-    include: { lines: true },
   });
-  if (so && so.lines.length > 0) {
-    const originalStatus = so.status;
-    await prisma.salesOrder.update({ where: { id: so.id }, data: { status: 'CONFIRMED' } });
 
+  const so = customer
+    ? await prisma.salesOrder.create({
+        data: {
+          tenantId: T,
+          number: `VERIFY-P5-SO-${Date.now()}`,
+          customerId: customer.id,
+          status: 'CONFIRMED',
+          total: 0,
+          lines: {
+            create: {
+              productId: variant.productId,
+              variantId: variant.id,
+              lineNo: 1,
+              quantity: 5,
+              unitPrice: 0,
+              lineTotal: 0,
+            },
+          },
+        },
+        include: { lines: true },
+      })
+    : null;
+
+  if (so && so.lines.length > 0) {
     const line = so.lines[0];
     const linked = await prisma.productionOrder.create({
       data: {
@@ -334,10 +358,13 @@ async function main() {
       linked.salesOrderLineId === line.id,
     );
 
-    // Restore the sales order exactly as found.
-    await prisma.salesOrder.update({ where: { id: so.id }, data: { status: originalStatus } });
+    // The test owns this sales order, so it removes it outright.
+    await prisma.stockMovement.deleteMany({ where: { salesOrderId: so.id } });
+    await prisma.productionOrder.deleteMany({ where: { salesOrderId: so.id } });
+    await prisma.salesOrderLine.deleteMany({ where: { salesOrderId: so.id } });
+    await prisma.salesOrder.delete({ where: { id: so.id } });
   } else {
-    check('a sales order with lines exists to test coupling', false, 'skipped — no fixture');
+    check('a customer exists to build the coupling fixture on', false, 'skipped — no customer');
   }
 
   // ── 5. Soft delete ────────────────────────────────────────

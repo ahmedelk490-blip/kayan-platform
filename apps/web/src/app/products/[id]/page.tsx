@@ -47,6 +47,21 @@ export default async function ProductDetailPage({
 
   const options = await loadProductOptions(user.tenantId);
   const canWrite = can(user.role, 'products.write');
+
+  // Phase 6. Read-only here on purpose: a formula is assigned from the
+  // formula's own page, where its version and lines are visible. Assigning
+  // one blind from the product page invites picking the wrong recipe.
+  const canSeeFormulas = can(user.role, 'formula.view');
+  const formulas = canSeeFormulas
+    ? await prisma.productFormula.findMany({
+        where: { productId: product.id },
+        include: {
+          formula: { include: { currentVersion: { select: { version: true } } } },
+          variant: { select: { sku: true } },
+        },
+        orderBy: { formula: { code: 'asc' } },
+      })
+    : [];
   const update = updateProduct.bind(null, product.id);
   const remove = deleteProduct.bind(null, product.id);
 
@@ -165,6 +180,45 @@ export default async function ProductDetailPage({
               })}
             </Table>
           </section>
+
+          {canSeeFormulas && (
+            <section className="erp-card p-6">
+              <div className="mb-4 flex items-baseline justify-between gap-3">
+                <h3 className="text-sm font-semibold text-brand">معادلات التكلفة</h3>
+                <Link href="/formulas" className="text-xs text-brand hover:underline">
+                  إدارة المعادلات
+                </Link>
+              </div>
+
+              {formulas.length === 0 ? (
+                <p className="text-[0.7rem] text-txt-4">
+                  لا توجد معادلة مرتبطة — حساب تكلفة هذا المنتج سينتج صفراً. اربط معادلة
+                  من صفحة المعادلة نفسها.
+                </p>
+              ) : (
+                <ul className="space-y-2 text-sm">
+                  {formulas.map((f) => (
+                    <li key={f.id} className="flex items-center justify-between gap-3">
+                      <Link
+                        href={`/formulas/${f.formula.id}`}
+                        className="text-txt-2 hover:text-brand"
+                      >
+                        {f.formula.nameAr}
+                        <span className="ms-2 text-[0.7rem] text-txt-4">
+                          {f.variant ? f.variant.sku : 'كل المتغيّرات'}
+                        </span>
+                      </Link>
+                      {f.formula.currentVersion ? (
+                        <Badge tone="ok">إصدار {f.formula.currentVersion.version}</Badge>
+                      ) : (
+                        <Badge tone="muted">غير منشورة</Badge>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
 
           {canWrite && (
             <section className="erp-card p-6">

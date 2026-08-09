@@ -64,6 +64,8 @@ model Tenant {
   quotations        Quotation[]
   salesOrders       SalesOrder[]
   productionOrders  ProductionOrder[]
+  formulas          Formula[]
+  costCalculations  CostCalculation[]
 }
 
 model Company {
@@ -106,6 +108,8 @@ model User {
   quotations               Quotation[]
   salesOrders              SalesOrder[]
   productionOrderAssignees ProductionOrderAssignee[]
+  formulaVersions          FormulaVersion[]
+  costCalculations         CostCalculation[]
 
   @@index([tenantId])
   @@index([roleId])
@@ -227,8 +231,9 @@ model Material {
   deletedAt DateTime?
   createdAt DateTime  @default(now())
 
-  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  products ProductMaterial[]
+  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products     ProductMaterial[]
+  formulaLines FormulaLine[]
 
   @@unique([tenantId, nameAr])
   @@index([tenantId, isDeleted])
@@ -335,6 +340,8 @@ model Product {
   quotationLines    QuotationLine[]
   salesOrderLines   SalesOrderLine[]
   productionOrders  ProductionOrder[]
+  productFormulas   ProductFormula[]
+  costCalculations  CostCalculation[]
 
   @@unique([tenantId, sku])
   @@index([tenantId, isDeleted])
@@ -371,6 +378,8 @@ model ProductVariant {
   quotationLines   QuotationLine[]
   salesOrderLines  SalesOrderLine[]
   productionOrders ProductionOrder[]
+  productFormulas  ProductFormula[]
+  costCalculations CostCalculation[]
 
   @@unique([sku])
   @@unique([productId, colorId, sizeId])
@@ -819,6 +828,7 @@ model SalesOrderLine {
   variant          ProductVariant    @relation(fields: [variantId], references: [id])
   movements        StockMovement[]
   productionOrders ProductionOrder[]
+  costCalculations CostCalculation[]
 
   @@index([salesOrderId])
   @@index([variantId])
@@ -876,15 +886,16 @@ model ProductionOrder {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  tenant         Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  salesOrder     SalesOrder?               @relation(fields: [salesOrderId], references: [id])
-  salesOrderLine SalesOrderLine?           @relation(fields: [salesOrderLineId], references: [id])
-  customer       Customer?                 @relation(fields: [customerId], references: [id])
-  product        Product                   @relation(fields: [productId], references: [id])
-  variant        ProductVariant            @relation(fields: [variantId], references: [id])
-  assignees      ProductionOrderAssignee[]
-  workOrders     WorkOrder[]
-  movements      StockMovement[]
+  tenant           Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  salesOrder       SalesOrder?               @relation(fields: [salesOrderId], references: [id])
+  salesOrderLine   SalesOrderLine?           @relation(fields: [salesOrderLineId], references: [id])
+  customer         Customer?                 @relation(fields: [customerId], references: [id])
+  product          Product                   @relation(fields: [productId], references: [id])
+  variant          ProductVariant            @relation(fields: [variantId], references: [id])
+  assignees        ProductionOrderAssignee[]
+  workOrders       WorkOrder[]
+  movements        StockMovement[]
+  costCalculations CostCalculation[]
 
   @@unique([tenantId, number])
   @@index([tenantId, isDeleted])
@@ -935,6 +946,281 @@ model WorkOrder {
 
   @@unique([productionOrderId, sequence])
   @@index([productionOrderId])
+}
+
+// ═══════════════════════════════════════════════════════════
+// Formula Engine + Cost Engine — Phase 6
+// ═══════════════════════════════════════════════════════════
+
+/// المعادلة — a named, versioned recipe for costing.
+///
+/// The header carries identity only. Everything that produces a number lives
+/// on a version, because a number that can change retroactively makes every
+/// historical cost a guess.
+model Formula {
+  id       String @id @default(cuid())
+  tenantId String
+  code     String
+  nameAr   String
+  /// PRINTING | EMBROIDERY | MANUFACTURING
+  kind     String
+
+  notes String?
+
+  /// The version used when this formula is applied. Null until one is
+  /// published — an unpublished formula deliberately cannot cost anything.
+  currentVersionId String? @unique
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  currentVersion FormulaVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  versions       FormulaVersion[] @relation("FormulaVersions")
+  products       ProductFormula[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isDeleted])
+  @@index([tenantId, kind])
+}
+
+/// إصدار المعادلة.
+///
+/// A PUBLISHED version is immutable. Editing a published formula creates the
+/// next version instead of changing this one, so a cost calculated in March
+/// still reads in December exactly as it was computed. That is the whole
+/// reason versions exist.
+model FormulaVersion {
+  id        String @id @default(cuid())
+  formulaId String
+  version   Int
+  /// DRAFT | PUBLISHED | ARCHIVED
+  status    String @default("DRAFT")
+
+  notes String?
+
+  publishedAt   DateTime?
+  publishedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  formula       Formula                  @relation("FormulaVersions", fields: [formulaId], references: [id], onDelete: Cascade)
+  publishedBy   User?                    @relation(fields: [publishedById], references: [id], onDelete: SetNull)
+  currentFor    Formula?                 @relation("CurrentVersion")
+  lines         FormulaLine[]
+  params        FormulaParam[]
+  usedIn        CostCalculationFormula[]
+  snapshotLines CostCalculationLine[]
+
+  @@unique([formulaId, version])
+  @@index([formulaId, status])
+}
+
+/// مكوّن المعادلة — one costed component.
+///
+/// `basis` says how `quantity` becomes a consumed quantity; the engine in
+/// @erp/domain holds the arithmetic. There is no expression to evaluate here
+/// — Article 5 forbids running manager-supplied code, so the flexibility is
+/// in the data, not in an interpreter.
+model FormulaLine {
+  id               String @id @default(cuid())
+  formulaVersionId String
+  sequence         Int
+
+  /// MATERIAL | INK | THREAD | LABOR | PACKAGING | MACHINE | OVERHEAD | WASTE
+  category   String
+  nameAr     String
+  /// Optional link to the materials master. Free-text lines are allowed
+  /// because ink colours and machine time are not stock materials.
+  materialId String?
+
+  /// PER_PIECE | PER_ORDER | PER_YIELD | PER_1000_STITCHES | PER_MINUTE |
+  /// PERCENT_OF_DIRECT
+  basis String
+
+  /// Consumption per basis unit — or the percentage, for PERCENT_OF_DIRECT.
+  quantity Decimal
+  /// Pieces produced by one `quantity`. PER_YIELD only: a 50 m roll that
+  /// yields 400 shirts is quantity=50, yieldQty=400.
+  yieldQty Decimal?
+  unit     String?
+  /// Cost of one unit, frozen into this version.
+  unitCost Decimal  @default(0)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+
+  formulaVersion FormulaVersion @relation(fields: [formulaVersionId], references: [id], onDelete: Cascade)
+  material       Material?      @relation(fields: [materialId], references: [id])
+
+  @@unique([formulaVersionId, sequence])
+  @@index([formulaVersionId])
+  @@index([materialId])
+}
+
+/// معامل المعادلة — a named number the engine reads.
+///
+/// Stitch count, machine speed, setup minutes. Kept apart from lines because
+/// several lines read the same figure and duplicating it would let two rows
+/// disagree about how many stitches a design has.
+model FormulaParam {
+  id               String  @id @default(cuid())
+  formulaVersionId String
+  key              String
+  nameAr           String
+  value            Decimal @default(0)
+  unit             String?
+
+  formulaVersion FormulaVersion @relation(fields: [formulaVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([formulaVersionId, key])
+  @@index([formulaVersionId])
+}
+
+/// ربط المعادلة بالمنتج.
+///
+/// variantId null = the formula applies to every variant of the product. A
+/// product may carry several formulas at once — a base manufacturing recipe
+/// plus a printing one plus an embroidery one — and the cost engine sums them.
+model ProductFormula {
+  id        String  @id @default(cuid())
+  productId String
+  variantId String?
+  formulaId String
+
+  createdAt DateTime @default(now())
+
+  product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  formula Formula         @relation(fields: [formulaId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, variantId, formulaId])
+  @@index([productId])
+  @@index([formulaId])
+}
+
+/// حساب التكلفة — an immutable snapshot.
+///
+/// Mirrors the Phase 4 pricing snapshot, for the same reason: the document
+/// stores the numbers it was computed with. Republishing a formula changes
+/// nothing here, because nothing here is recomputed. Ever.
+model CostCalculation {
+  id       String @id @default(cuid())
+  tenantId String
+
+  /// What was costed. A calculation can be an ad-hoc estimate with neither.
+  productionOrderId String?
+  salesOrderLineId  String?
+
+  productId String
+  variantId String
+  quantity  Decimal
+
+  /// ESTIMATE | ACTUAL
+  kind String @default("ESTIMATE")
+
+  /// The eight reported buckets, each summed from the snapshot lines.
+  materialCost  Decimal @default(0)
+  inkCost       Decimal @default(0)
+  threadCost    Decimal @default(0)
+  laborCost     Decimal @default(0)
+  packagingCost Decimal @default(0)
+  machineCost   Decimal @default(0)
+  overheadCost  Decimal @default(0)
+  wasteCost     Decimal @default(0)
+
+  directCost   Decimal @default(0)
+  indirectCost Decimal @default(0)
+  totalCost    Decimal @default(0)
+  costPerPiece Decimal @default(0)
+  /// Run minutes the time-based lines were charged on.
+  totalMinutes Decimal @default(0)
+
+  /// Optional pricing guidance. Null when no target was given — the engine
+  /// does not invent a margin.
+  targetMarginPercent Decimal?
+  suggestedPrice      Decimal?
+
+  notes String?
+
+  computedAt   DateTime @default(now())
+  computedById String?
+
+  tenant          Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productionOrder ProductionOrder?         @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  salesOrderLine  SalesOrderLine?          @relation(fields: [salesOrderLineId], references: [id], onDelete: Cascade)
+  product         Product                  @relation(fields: [productId], references: [id])
+  variant         ProductVariant           @relation(fields: [variantId], references: [id])
+  computedBy      User?                    @relation(fields: [computedById], references: [id], onDelete: SetNull)
+  formulas        CostCalculationFormula[]
+  lines           CostCalculationLine[]
+
+  @@index([tenantId, computedAt])
+  @@index([productionOrderId])
+  @@index([salesOrderLineId])
+  @@index([variantId])
+}
+
+/// المعادلات المستخدمة في الحساب.
+///
+/// Derivable from the lines, but kept explicit so "which versions produced
+/// this number" is one cheap query — and so a formula that contributed no
+/// lines is still recorded as having been consulted.
+model CostCalculationFormula {
+  id                String @id @default(cuid())
+  costCalculationId String
+  formulaId         String
+  formulaVersionId  String
+  /// Denormalised so the snapshot reads without a join.
+  version           Int
+  formulaCode       String
+  formulaNameAr     String
+  kind              String
+
+  costCalculation CostCalculation @relation(fields: [costCalculationId], references: [id], onDelete: Cascade)
+  formulaVersion  FormulaVersion  @relation(fields: [formulaVersionId], references: [id])
+
+  @@unique([costCalculationId, formulaVersionId])
+  @@index([costCalculationId])
+}
+
+/// بند التكلفة — a formula line as it was at calculation time.
+///
+/// Every input is copied, not referenced. The formula line it came from may
+/// later be superseded; this row must still explain the total it produced.
+model CostCalculationLine {
+  id                String @id @default(cuid())
+  costCalculationId String
+  sequence          Int
+
+  /// Provenance — which version this came from.
+  formulaId        String
+  formulaVersionId String
+  version          Int
+
+  category String
+  nameAr   String
+  basis    String
+  unit     String?
+
+  /// Copied from the formula line.
+  quantityPerBasis Decimal
+  yieldQty         Decimal?
+  unitCost         Decimal
+
+  /// Computed by the engine.
+  consumedQty Decimal
+  lineCost    Decimal
+
+  costCalculation CostCalculation @relation(fields: [costCalculationId], references: [id], onDelete: Cascade)
+  formulaVersion  FormulaVersion  @relation(fields: [formulaVersionId], references: [id])
+
+  @@unique([costCalculationId, sequence])
+  @@index([costCalculationId])
 }
 
 /// المرفقات.

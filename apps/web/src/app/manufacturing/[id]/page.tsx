@@ -20,6 +20,8 @@ import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import { ProductionBadge, PriorityBadge, WorkOrderBadge } from '../StatusBadge';
 import { WorkOrderForm } from '../WorkOrderForm';
+import { CostBreakdown } from '../CostBreakdown';
+import { calculateProductionCost } from '../cost-actions';
 import {
   changeProductionStatus,
   deleteProductionOrder,
@@ -49,12 +51,31 @@ export default async function ProductionOrderPage({
       workOrders: { orderBy: { sequence: 'asc' } },
       assignees: { include: { user: { select: { nameAr: true, name: true } } } },
       movements: { orderBy: { createdAt: 'asc' }, include: { warehouse: { select: { nameAr: true } } } },
+      costCalculations: {
+        orderBy: { computedAt: 'desc' },
+        include: { lines: { orderBy: { sequence: 'asc' } }, formulas: true },
+      },
     },
   });
   if (!order) notFound();
 
   const canWrite = can(user.role, 'manufacturing.write');
   const canConfirm = can(user.role, 'manufacturing.confirm');
+  const canCost = can(user.role, 'cost.view');
+  const canMargin = can(user.role, 'cost.margin');
+
+  // The newest calculation is what the page shows. Older ones are kept and
+  // never altered — they are the audit trail of what was believed and when.
+  const latestCost = order.costCalculations[0] ?? null;
+  const assignedFormulas = canCost
+    ? await prisma.productFormula.count({
+        where: {
+          productId: order.productId,
+          OR: [{ variantId: null }, { variantId: order.variantId }],
+          formula: { isDeleted: false, currentVersionId: { not: null } },
+        },
+      })
+    : 0;
   const status: ProductionStatus = isProductionStatus(order.status) ? order.status : 'DRAFT';
   const nextStates = PRODUCTION_TRANSITIONS[status].filter((s) => s !== 'CANCELLED');
   const canCancel = PRODUCTION_TRANSITIONS[status].includes('CANCELLED');
@@ -210,10 +231,29 @@ export default async function ProductionOrderPage({
               </Table>
             )}
             <p className="mt-2 text-[0.7rem] text-txt-4">
-              لا تُسجَّل حركة صرف خامات في هذه المرحلة — لا توجد قائمة مكوّنات (BOM) بعد،
-              فلا كمية معلومة يمكن صرفها. صرف الخامات يأتي مع محرك المعادلات.
+              لا تُسجَّل حركة صرف خامات تلقائياً بعد. محرك المعادلات يحسب الاستهلاك، لكن
+              ربطه بحركة صرف فعلية من المخزون يحتاج ربط بنود المعادلة بالخامات المخزنية —
+              وهي خطوة لاحقة مقصودة.
             </p>
           </section>
+
+          {canCost && latestCost && (
+            <section>
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="text-sm font-semibold text-brand">تفصيل التكلفة</h3>
+                {order.costCalculations.length > 1 && (
+                  <span className="text-[0.7rem] text-txt-4">
+                    {order.costCalculations.length} حساب محفوظ — يُعرض الأحدث
+                  </span>
+                )}
+              </div>
+              <CostBreakdown calculation={latestCost} showMargin={canMargin} />
+              <p className="mt-3 text-[0.7rem] text-txt-4">
+                هذه لقطة محفوظة وقت الحساب. تعديل المعادلة أو نشر إصدار جديد لا يغيّر هذا
+                الرقم — الحساب لا يُعاد أبداً في مكانه.
+              </p>
+            </section>
+          )}
         </div>
 
         <aside className="space-y-6">
@@ -227,27 +267,57 @@ export default async function ProductionOrderPage({
             </dl>
           </section>
 
-          <section className="erp-card p-5">
-            <h3 className="mb-3 text-sm font-semibold text-brand">التكلفة</h3>
-            <dl className="space-y-2 text-sm">
-              <div className="flex justify-between gap-4">
-                <dt className="text-txt-3">تكلفة تقديرية</dt>
-                <dd className="tnum text-txt-2">
-                  {order.estimatedCost === null ? '—' : formatMoney(order.estimatedCost)}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-txt-3">تكلفة فعلية</dt>
-                <dd className="tnum text-txt-2">
-                  {order.actualCost === null ? '—' : formatMoney(order.actualCost)}
-                </dd>
-              </div>
-            </dl>
-            <p className="mt-3 text-[0.7rem] text-txt-4">
-              الحقول جاهزة وفارغة عمداً — محرك التكلفة لم يُبنَ بعد، وإظهار رقم غير محسوب
-              أسوأ من إظهار لا شيء.
-            </p>
-          </section>
+          {canCost && (
+            <section className="erp-card p-5">
+              <h3 className="mb-3 text-sm font-semibold text-brand">التكلفة</h3>
+              <dl className="space-y-2 text-sm">
+                <div className="flex justify-between gap-4">
+                  <dt className="text-txt-3">تكلفة تقديرية</dt>
+                  <dd className="tnum text-txt-2">
+                    {order.estimatedCost === null ? '—' : formatMoney(order.estimatedCost)}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-txt-3">تكلفة فعلية</dt>
+                  <dd className="tnum text-txt-2">
+                    {order.actualCost === null ? '—' : formatMoney(order.actualCost)}
+                  </dd>
+                </div>
+              </dl>
+
+              {canWrite && (
+                <form
+                  action={calculateProductionCost.bind(null, order.id)}
+                  className="mt-4 space-y-3 border-t border-line pt-4"
+                >
+                  <label htmlFor="targetMarginPercent" className="block text-xs text-txt-2">
+                    هامش مستهدف ٪ (اختياري)
+                  </label>
+                  <input
+                    id="targetMarginPercent"
+                    name="targetMarginPercent"
+                    type="number"
+                    dir="ltr"
+                    min="0"
+                    max="99"
+                    step="0.1"
+                    placeholder="اتركه فارغاً بلا اقتراح سعر"
+                    className="erp-input py-2"
+                  />
+                  <button type="submit" className="erp-btn w-full">
+                    {order.status === 'COMPLETED' ? 'حساب التكلفة الفعلية' : 'حساب التكلفة التقديرية'}
+                  </button>
+                </form>
+              )}
+
+              {assignedFormulas === 0 && (
+                <p className="mt-3 text-[0.7rem] text-warn">
+                  لا توجد معادلة منشورة مرتبطة بهذا المنتج. الحساب سينتج صفراً حتى تُربط
+                  معادلة وتُنشر.
+                </p>
+              )}
+            </section>
+          )}
 
           <section className="erp-card p-5">
             <h3 className="mb-3 text-sm font-semibold text-brand">العاملون المكلَّفون</h3>
