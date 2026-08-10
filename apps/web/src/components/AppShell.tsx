@@ -44,7 +44,7 @@ const NAV: NavItem[] = [
   { href: '/supplies', label: 'المستلزمات', permission: 'supplies.view', built: true },
   { href: '/expenses', label: 'المصروفات الثانوية', permission: 'expenses.view', built: true },
   { href: '/damage', label: 'الهالك والجزاءات', permission: 'damage.view', built: true },
-  { href: '/reports', label: 'التقارير', permission: 'reports.view', built: false },
+  { href: '/reports', label: 'التقارير', permission: 'reports.view', built: true },
 ];
 
 export function AppShell({
