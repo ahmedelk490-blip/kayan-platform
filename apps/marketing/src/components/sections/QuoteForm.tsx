@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { EASE } from '@erp/motion';
-import { SectionShell } from '@erp/ui-market';
+import { SectionShell, AnimatedText } from '@erp/ui-market';
 import { QUOTE_SERVICES } from '@/site';
 
 /**
@@ -91,9 +91,11 @@ export function QuoteForm() {
               <span className="h-px w-10 bg-brand-fill" />
               اطلب عرض سعر
             </span>
-            <h2 className="font-display text-display-3 leading-[1.2] text-body">
-              عطنا فكرة عن طلبك، ونرجع لك بالسعر.
-            </h2>
+            <AnimatedText
+              as="h2"
+              text="عطنا فكرة عن طلبك، ونرجع لك بالسعر."
+              className="font-display text-display-3 leading-[1.2] text-body"
+            />
             <p className="mt-5 max-w-[46ch] text-lg leading-[1.85] text-body-muted">
               اكتب لنا نوع الزي والكمية التقريبية، ونرسل لك تسعيرة مفصّلة بند بند.
               وإذا حبيت عيّنة قبل الكمية، قلها لنا في الملاحظات.

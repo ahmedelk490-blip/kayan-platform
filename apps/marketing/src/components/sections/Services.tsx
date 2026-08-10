@@ -2,7 +2,7 @@
 
 import { motion } from 'motion/react';
 import { EASE } from '@erp/motion';
-import { SectionShell } from '@erp/ui-market';
+import { SectionShell, AnimatedText } from '@erp/ui-market';
 import { SERVICES } from '@/site';
 
 /**
@@ -26,9 +26,11 @@ export function Services() {
             <span className="h-px w-10 bg-brand-fill" />
             الطباعة والتطريز
           </span>
-          <h2 className="font-display text-display-3 leading-[1.2] text-body">
-            شعارك على القماش، بيدنا من البداية للنهاية.
-          </h2>
+          <AnimatedText
+            as="h2"
+            text="شعارك على القماش، بيدنا من البداية للنهاية."
+            className="font-display text-display-3 leading-[1.2] text-body"
+          />
         </motion.div>
 
         <div className="grid gap-4 md:grid-cols-2">

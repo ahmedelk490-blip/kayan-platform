@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { motion, useMotionValue, useSpring, useTransform, type PanInfo } from 'motion/react';
 import { Logo } from '@erp/brand/logo';
 import { EASE, usePrefersReducedMotion } from '@erp/motion';
+import { Parallax } from '@/components/Parallax';
 
 /**
  * الواجهة الرئيسية — Hero بشرائح عمق (coverflow).
@@ -217,17 +218,23 @@ export function Hero() {
         }}
       />
 
-      {/* اسم المنتج ضخماً خلف الصور — طبقة عمق، لا نص يُقرأ */}
-      <motion.span
-        key={current.name}
-        aria-hidden
-        initial={{ opacity: 0, y: 18 }}
-        animate={{ opacity: 0.055, y: 0 }}
-        transition={{ duration: 0.9, ease: EASE.outExpo }}
-        className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 select-none text-center text-[22vw] font-bold leading-none text-brand lg:text-[15vw]"
+      {/* اسم المنتج ضخماً خلف الصور — طبقة عمق، لا نص يُقرأ.
+          ينجرف أبطأ من التمرير فيبدو أبعد. */}
+      <Parallax
+        distance={70}
+        className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2"
       >
-        {current.name}
-      </motion.span>
+        <motion.span
+          key={current.name}
+          aria-hidden
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 0.055, y: 0 }}
+          transition={{ duration: 0.9, ease: EASE.outExpo }}
+          className="block select-none text-center text-[22vw] font-bold leading-none text-brand lg:text-[15vw]"
+        >
+          {current.name}
+        </motion.span>
+      </Parallax>
 
       <div className="relative z-10 mx-auto w-full max-w-[1400px] px-6 md:px-10 lg:px-16">
         {/* ── النص ── */}
@@ -352,6 +359,19 @@ export function Hero() {
                     priority
                     draggable={false}
                   />
+
+                  {/* لمعة تمرّ مرة واحدة عند تغيّر المنتج النشط — مرتبطة
+                      بالمفتاح فتُعاد مع كل تبديل، ولا تدور من تلقاء نفسها. */}
+                  {isCentre && !reduced && (
+                    <motion.span
+                      key={`sheen-${slide.src}`}
+                      aria-hidden
+                      initial={{ x: '-120%' }}
+                      animate={{ x: '120%' }}
+                      transition={{ duration: 1.1, ease: EASE.outQuart, delay: 0.15 }}
+                      className="pointer-events-none absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-white/14 to-transparent"
+                    />
+                  )}
 
                   {isCentre && (
                     <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/62 via-black/22 to-transparent p-5 pt-14 text-right">

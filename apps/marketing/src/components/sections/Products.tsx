@@ -3,7 +3,8 @@
 import Image from 'next/image';
 import { motion } from 'motion/react';
 import { EASE } from '@erp/motion';
-import { SectionShell } from '@erp/ui-market';
+import { SectionShell, AnimatedText } from '@erp/ui-market';
+import { ImageReveal } from '@/components/Parallax';
 import { PRODUCTS, PRODUCTS_WITHOUT_PHOTOS } from '@/site';
 
 /**
@@ -27,9 +28,16 @@ export function Products() {
             <span className="h-px w-10 bg-brand-fill" />
             منتجاتنا
           </span>
-          <h2 className="font-display text-display-3 leading-[1.2] text-body">
-            شغل تشوفه قبل لا تطلبه.
-          </h2>
+          {/* Masked line reveal rather than a fade: the words rise out from
+              behind a clip, which reads as typeset rather than as loading.
+              AnimatedText keeps the whole string as one accessible label —
+              splitting it per word in the tree makes a screen reader announce
+              a headline one word at a time. */}
+          <AnimatedText
+            as="h2"
+            text="شغل تشوفه قبل لا تطلبه."
+            className="font-display text-display-3 leading-[1.2] text-body"
+          />
           <p className="mt-5 text-lg leading-[1.85] text-body-muted">
             كل صورة تحت من إنتاج المصنع فعلاً — مو صور جاهزة من الإنترنت.
           </p>
@@ -48,10 +56,18 @@ export function Products() {
               // one property here that cannot be composited, and paying for it
               // on a single hovered card is fine where paying for it on twelve
               // entering cards would not be.
-              whileHover={{ y: -8, scale: 1.015 }}
+              // Spring rather than a tween on hover: a card that settles reads
+              // as a physical object, where a linear ease reads as a slide.
+              // The spring lives INSIDE whileHover so it applies to the hover
+              // only — the entrance keeps its own eased timing above.
+              whileHover={{
+                y: -8,
+                scale: 1.015,
+                transition: { type: 'spring', stiffness: 320, damping: 24 },
+              }}
               className="group overflow-hidden rounded-2xl border border-edge-strong bg-panel/70 shadow-[0_0_0_rgba(0,0,0,0)] transition-shadow duration-300 ease-out hover:shadow-[0_24px_50px_-28px_rgba(0,0,0,0.85)]"
             >
-              <div className="relative aspect-[4/3] overflow-hidden">
+              <ImageReveal delay={(index % 3) * 0.08} className="relative aspect-[4/3] overflow-hidden">
                 <Image
                   src={`/products/${product.folder}/01.webp`}
                   alt={product.name}
@@ -60,10 +76,12 @@ export function Products() {
                   className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.07]"
                 />
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink-950/80 via-ink-950/10 to-transparent" />
+                {/* لمعة تمرّ مرة واحدة عند المرور — لا تدور بلا نهاية */}
+                <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/12 to-transparent transition-transform duration-[900ms] ease-out group-hover:translate-x-full" />
                 <span className="absolute bottom-4 start-4 rounded-full bg-page/80 px-3 py-1 text-[0.7rem] text-body-muted backdrop-blur">
                   {product.images} صور
                 </span>
-              </div>
+              </ImageReveal>
 
               <div className="p-6">
                 <p className="text-xs tracking-[0.12em] text-brand">{product.line}</p>

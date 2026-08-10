@@ -2,7 +2,7 @@
 
 import { motion } from 'motion/react';
 import { EASE } from '@erp/motion';
-import { SectionShell } from '@erp/ui-market';
+import { SectionShell, AnimatedText } from '@erp/ui-market';
 import { WHY_KAYAN } from '@/site';
 
 /**
@@ -26,9 +26,11 @@ export function WhyKayan() {
             <span className="h-px w-10 bg-brand-fill" />
             ليش كيان
           </span>
-          <h2 className="font-display text-display-3 leading-[1.2] text-body">
-            خمسة أسباب تخليك ترتاح للطلب.
-          </h2>
+          <AnimatedText
+            as="h2"
+            text="خمسة أسباب تخليك ترتاح للطلب."
+            className="font-display text-display-3 leading-[1.2] text-body"
+          />
         </motion.div>
 
         <ul>
