@@ -32,7 +32,19 @@ const kufiArabic = Noto_Kufi_Arabic({
   display: 'swap',
 });
 
+/**
+ * The site's own address, needed to turn the relative OG image path into the
+ * absolute URL every social platform requires.
+ *
+ * Read from the environment because it is a deployment fact, not a source
+ * fact — and left undefined rather than guessed at when it is missing. Next
+ * then falls back to localhost and says so at build time, which is a loud
+ * reminder to set it. Hardcoding a domain here would make a wrong URL silent.
+ */
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+
 export const metadata: Metadata = {
+  ...(siteUrl ? { metadataBase: new URL(siteUrl) } : {}),
   title: {
     default: `${BRAND.nameAr} | ${BRAND.name} — ${BRAND.tagline.ar}`,
     template: `%s · ${BRAND.nameAr}`,

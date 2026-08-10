@@ -14,3 +14,6 @@ dist/
 data/
 *.db
 *.db-journal
+
+# Deployment bundles — rebuildable from scripts/package-hostinger.mjs
+dist-hostinger/
