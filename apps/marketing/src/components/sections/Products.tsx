@@ -23,14 +23,14 @@ export function Products() {
           transition={{ duration: 0.8, ease: EASE.outExpo }}
           className="mb-14 max-w-[52ch]"
         >
-          <span className="mb-5 flex items-center gap-3 text-xs tracking-[0.16em] text-neutral-400">
-            <span className="h-px w-10 bg-accent" />
+          <span className="mb-5 flex items-center gap-3 text-xs tracking-[0.16em] text-body-muted">
+            <span className="h-px w-10 bg-brand-fill" />
             منتجاتنا
           </span>
-          <h2 className="font-display text-display-3 leading-[1.2] text-neutral-100">
+          <h2 className="font-display text-display-3 leading-[1.2] text-body">
             شغل تشوفه قبل لا تطلبه.
           </h2>
-          <p className="mt-5 text-lg leading-[1.85] text-neutral-300">
+          <p className="mt-5 text-lg leading-[1.85] text-body-muted">
             كل صورة تحت من إنتاج المصنع فعلاً — مو صور جاهزة من الإنترنت.
           </p>
         </motion.div>
@@ -49,7 +49,7 @@ export function Products() {
               // on a single hovered card is fine where paying for it on twelve
               // entering cards would not be.
               whileHover={{ y: -8, scale: 1.015 }}
-              className="group overflow-hidden rounded-2xl border border-ink-700 bg-ink-900/60 shadow-[0_0_0_rgba(0,0,0,0)] transition-shadow duration-300 ease-out hover:shadow-[0_24px_50px_-28px_rgba(0,0,0,0.85)]"
+              className="group overflow-hidden rounded-2xl border border-edge-strong bg-panel/70 shadow-[0_0_0_rgba(0,0,0,0)] transition-shadow duration-300 ease-out hover:shadow-[0_24px_50px_-28px_rgba(0,0,0,0.85)]"
             >
               <div className="relative aspect-[4/3] overflow-hidden">
                 <Image
@@ -60,15 +60,15 @@ export function Products() {
                   className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.07]"
                 />
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink-950/80 via-ink-950/10 to-transparent" />
-                <span className="absolute bottom-4 start-4 rounded-full bg-ink-950/80 px-3 py-1 text-[0.7rem] text-neutral-300 backdrop-blur">
+                <span className="absolute bottom-4 start-4 rounded-full bg-page/80 px-3 py-1 text-[0.7rem] text-body-muted backdrop-blur">
                   {product.images} صور
                 </span>
               </div>
 
               <div className="p-6">
-                <p className="text-xs tracking-[0.12em] text-accent">{product.line}</p>
-                <h3 className="mt-2 text-xl text-neutral-100">{product.name}</h3>
-                <p className="mt-3 text-sm leading-[1.85] text-neutral-400">{product.body}</p>
+                <p className="text-xs tracking-[0.12em] text-brand">{product.line}</p>
+                <h3 className="mt-2 text-xl text-body">{product.name}</h3>
+                <p className="mt-3 text-sm leading-[1.85] text-body-muted">{product.body}</p>
               </div>
             </motion.article>
           ))}
@@ -79,10 +79,10 @@ export function Products() {
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.8, ease: EASE.outExpo }}
-          className="mt-10 text-sm leading-[1.9] text-neutral-400"
+          className="mt-10 text-sm leading-[1.9] text-body-muted"
         >
           ونصنع كذلك{' '}
-          <span className="text-neutral-200">{PRODUCTS_WITHOUT_PHOTOS.join(' · ')}</span> — ما
+          <span className="text-body">{PRODUCTS_WITHOUT_PHOTOS.join(' · ')}</span> — ما
           نزّلنا صورها بعد، واللي يبي يشوف عيّنة منها نجهّزها له.
         </motion.p>
       </div>

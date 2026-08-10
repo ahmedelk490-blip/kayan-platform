@@ -87,14 +87,14 @@ export function QuoteForm() {
             viewport={{ once: true, margin: '-60px' }}
             transition={{ duration: 0.7, ease: EASE.outQuart }}
           >
-            <span className="mb-5 flex items-center gap-3 text-xs tracking-[0.16em] text-neutral-400">
-              <span className="h-px w-10 bg-accent" />
+            <span className="mb-5 flex items-center gap-3 text-xs tracking-[0.16em] text-body-muted">
+              <span className="h-px w-10 bg-brand-fill" />
               اطلب عرض سعر
             </span>
-            <h2 className="font-display text-display-3 leading-[1.2] text-neutral-100">
+            <h2 className="font-display text-display-3 leading-[1.2] text-body">
               عطنا فكرة عن طلبك، ونرجع لك بالسعر.
             </h2>
-            <p className="mt-5 max-w-[46ch] text-lg leading-[1.85] text-neutral-300">
+            <p className="mt-5 max-w-[46ch] text-lg leading-[1.85] text-body-muted">
               اكتب لنا نوع الزي والكمية التقريبية، ونرسل لك تسعيرة مفصّلة بند بند.
               وإذا حبيت عيّنة قبل الكمية، قلها لنا في الملاحظات.
             </p>
@@ -111,7 +111,7 @@ export function QuoteForm() {
             whileInView={{ opacity: 1 }}
             viewport={{ once: true, margin: '-40px' }}
             transition={{ duration: 0.6, ease: EASE.outQuart }}
-            className="rounded-2xl border border-ink-700 bg-ink-900/60 p-7 md:p-9"
+            className="rounded-2xl border border-edge-strong bg-panel/70 p-7 md:p-9"
           >
             <div className="grid gap-5 sm:grid-cols-2">
               <Field name="name" label="الاسم" required error={errors.name} />
@@ -126,14 +126,14 @@ export function QuoteForm() {
               <Field name="company" label="اسم الشركة" error={errors.company} />
 
               <div>
-                <label htmlFor="service" className="mb-2 block text-xs text-neutral-400">
+                <label htmlFor="service" className="mb-2 block text-xs text-body-muted">
                   نوع الخدمة المطلوبة
                 </label>
                 <select
                   id="service"
                   name="service"
                   defaultValue=""
-                  className="w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-3 text-sm text-neutral-100 outline-none transition-colors focus:border-accent"
+                  className="w-full rounded-lg border border-edge-strong bg-page px-4 py-3 text-sm text-body outline-none transition-colors focus:border-brand"
                 >
                   <option value="">اختر…</option>
                   {QUOTE_SERVICES.map((s) => (
@@ -146,7 +146,7 @@ export function QuoteForm() {
             </div>
 
             <div className="mt-5">
-              <label htmlFor="message" className="mb-2 block text-xs text-neutral-400">
+              <label htmlFor="message" className="mb-2 block text-xs text-body-muted">
                 ملاحظات
               </label>
               <textarea
@@ -154,7 +154,7 @@ export function QuoteForm() {
                 name="message"
                 rows={4}
                 placeholder="الكمية التقريبية، الألوان، مكان الشعار…"
-                className="w-full resize-y rounded-lg border border-ink-700 bg-ink-950 px-4 py-3 text-sm text-neutral-100 outline-none transition-colors placeholder:text-neutral-600 focus:border-accent"
+                className="w-full resize-y rounded-lg border border-edge-strong bg-page px-4 py-3 text-sm text-body outline-none transition-colors placeholder:text-body-subtle focus:border-brand"
               />
             </div>
 
@@ -162,13 +162,13 @@ export function QuoteForm() {
               <button
                 type="submit"
                 disabled={status === 'sending'}
-                className="rounded-full bg-accent px-8 py-4 text-sm font-medium text-ink-950 transition-opacity hover:opacity-90 disabled:opacity-60"
+                className="rounded-full bg-brand-fill px-8 py-4 text-sm font-medium text-on-brand transition-opacity hover:opacity-90 disabled:opacity-60"
               >
                 {status === 'sending' ? 'جارٍ الإرسال…' : 'أرسل الطلب'}
               </button>
 
               {status === 'sent' && (
-                <p role="status" className="text-sm text-accent">
+                <p role="status" className="text-sm text-brand">
                   وصلنا طلبك. بنتواصل معك على الرقم اللي كتبته.
                 </p>
               )}
@@ -202,9 +202,9 @@ function Field({
 }) {
   return (
     <div>
-      <label htmlFor={name} className="mb-2 block text-xs text-neutral-400">
+      <label htmlFor={name} className="mb-2 block text-xs text-body-muted">
         {label}
-        {required && <span className="ms-1 text-accent">*</span>}
+        {required && <span className="ms-1 text-brand">*</span>}
       </label>
       <input
         id={name}
@@ -213,8 +213,8 @@ function Field({
         dir={dir}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${name}-error` : undefined}
-        className={`w-full rounded-lg border bg-ink-950 px-4 py-3 text-sm text-neutral-100 outline-none transition-colors focus:border-accent ${
-          error ? 'border-red-500' : 'border-ink-700'
+        className={`w-full rounded-lg border bg-page px-4 py-3 text-sm text-body outline-none transition-colors focus:border-brand ${
+          error ? 'border-red-500' : 'border-edge-strong'
         } ${dir === 'ltr' ? 'text-start' : ''}`}
       />
       {error && (

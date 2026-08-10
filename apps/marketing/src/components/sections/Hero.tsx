@@ -80,6 +80,9 @@ export function Hero() {
   /** Small screens get the same carousel with the depth costs removed. */
   const [simplified, setSimplified] = useState(false);
   const deckRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  /** Timestamp of the last accepted wheel step, for the cooldown. */
+  const lastWheel = useRef(0);
 
   const go = useCallback((delta: number) => {
     setActive((current) => (current + delta + SLIDES.length) % SLIDES.length);
@@ -115,6 +118,52 @@ export function Hero() {
     return () => window.removeEventListener('mousemove', onMove);
   }, [reduced, simplified, pointerX, pointerY]);
 
+  /**
+   * العجلة فوق الـ Hero تغيّر المنتج.
+   *
+   * ── The rule that keeps this from being hostile ────────────
+   *
+   * Taking the wheel away from a visitor is a real accessibility cost, so it
+   * is taken back the moment the carousel has nothing left to give:
+   *
+   *   - scrolling DOWN on the last product releases to the page
+   *   - scrolling UP on the first product releases to the page
+   *
+   * That is why the wheel does NOT wrap, while the arrows and dots do. A
+   * wrapping wheel would trap the reader in the hero forever, which is
+   * exactly the behaviour that gives scroll-jacking its bad name.
+   *
+   * A 700ms cooldown, just over the 660ms transition, turns one flick of a
+   * trackpad's momentum into one product rather than five. Disabled entirely
+   * under reduced motion, where the page simply scrolls.
+   */
+  useEffect(() => {
+    if (reduced) return;
+    const node = sectionRef.current;
+    if (!node) return;
+
+    function onWheel(event: WheelEvent) {
+      // Ctrl+wheel is the browser's zoom. Never take that.
+      if (event.ctrlKey) return;
+      if (Math.abs(event.deltaY) < 4) return;
+
+      const forward = event.deltaY > 0;
+      const exhausted = forward ? active === SLIDES.length - 1 : active === 0;
+      if (exhausted) return; // hand the wheel back to the page
+
+      event.preventDefault();
+
+      const now = Date.now();
+      if (now - lastWheel.current < 700) return;
+      lastWheel.current = now;
+      setActive((current) => current + (forward ? 1 : -1));
+    }
+
+    // passive:false because preventDefault is the whole mechanism.
+    node.addEventListener('wheel', onWheel, { passive: false });
+    return () => node.removeEventListener('wheel', onWheel);
+  }, [reduced, active]);
+
   function onKeyDown(event: React.KeyboardEvent) {
     // RTL: ArrowLeft advances, because forward is leftward on this page.
     if (event.key === 'ArrowLeft') {
@@ -145,9 +194,10 @@ export function Hero() {
 
   return (
     <section
+      ref={sectionRef}
       id="top"
       dir="rtl"
-      className="relative isolate flex min-h-[92svh] flex-col justify-center overflow-hidden bg-[var(--color-neutral-50)] pb-24 pt-24 md:pb-28 md:pt-28"
+      className="relative isolate flex min-h-[92svh] flex-col justify-center overflow-hidden bg-page pb-24 pt-24 md:pb-28 md:pt-28"
     >
       {/* نبرة السطح تنجرف مع المنتج النشط — تغيّر محسوس بلا أن يكون صاخباً */}
       <motion.div
@@ -174,7 +224,7 @@ export function Hero() {
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 0.055, y: 0 }}
         transition={{ duration: 0.9, ease: EASE.outExpo }}
-        className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 select-none text-center text-[22vw] font-bold leading-none text-[var(--color-primary-600)] lg:text-[15vw]"
+        className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 select-none text-center text-[22vw] font-bold leading-none text-brand lg:text-[15vw]"
       >
         {current.name}
       </motion.span>
@@ -191,7 +241,7 @@ export function Hero() {
             <Logo height={52} className="rounded-lg" />
           </motion.div>
 
-          <h1 className="mt-7 text-[clamp(1.9rem,4.6vw,3.4rem)] font-semibold leading-[1.3] text-[var(--color-neutral-900)]">
+          <h1 className="mt-7 text-[clamp(1.9rem,4.6vw,3.4rem)] font-semibold leading-[1.3] text-body">
             {WORDS.map((word, index) => (
               <span key={word}>
                 {index > 0 ? ' ' : ''}
@@ -201,7 +251,7 @@ export function Hero() {
                   transition={{ duration: 0.8, ease: EASE.outExpo, delay: 0.16 + index * 0.075 }}
                   className={
                     word === 'بكيان'
-                      ? 'inline-block text-[var(--color-primary-600)]'
+                      ? 'inline-block text-brand'
                       : 'inline-block'
                   }
                 >
@@ -215,7 +265,7 @@ export function Hero() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.75, ease: EASE.outExpo, delay: 0.58 }}
-            className="mt-5 text-base text-[var(--color-neutral-700)] md:text-lg"
+            className="mt-5 text-base text-body-muted md:text-lg"
           >
             يلكات • تيشيرتات • زي الشركات والمطاعم
           </motion.p>
@@ -224,7 +274,7 @@ export function Hero() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.75, ease: EASE.outExpo, delay: 0.66 }}
-            className="mt-2 text-sm text-[var(--color-neutral-600)]"
+            className="mt-2 text-sm text-body-subtle"
           >
             خامات ممتازة | ستايلات عصرية | تطريز وطباعة
           </motion.p>
@@ -238,7 +288,7 @@ export function Hero() {
           aria-label="منتجات كيان"
           tabIndex={0}
           onKeyDown={onKeyDown}
-          className="relative mt-10 h-[300px] outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary-600)] focus-visible:ring-offset-4 sm:h-[360px] lg:mt-12 lg:h-[420px]"
+          className="relative mt-10 h-[300px] outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-4 sm:h-[360px] lg:mt-12 lg:h-[420px]"
           style={{ perspective: 1400 }}
         >
           <motion.div
@@ -279,7 +329,7 @@ export function Hero() {
                   }}
                   transition={SWITCH}
                   style={{ zIndex: 30 - depth, pointerEvents: hidden ? 'none' : 'auto' }}
-                  className="absolute inset-x-[12%] inset-y-0 mx-auto overflow-hidden rounded-[24px] bg-white shadow-[0_30px_80px_-34px_rgba(30,11,17,0.5)] ring-1 ring-black/5 sm:inset-x-[18%]"
+                  className="absolute inset-x-[12%] inset-y-0 mx-auto overflow-hidden rounded-[24px] bg-panel shadow-[0_30px_80px_-34px_rgba(30,11,17,0.5)] ring-1 ring-black/5 sm:inset-x-[18%]"
                 >
                   {/* النقر على منتج جانبي يجعله المركز */}
                   {!isCentre && !hidden && (
@@ -327,7 +377,7 @@ export function Hero() {
               type="button"
               onClick={() => go(-1)}
               aria-label="المنتج السابق"
-              className="grid h-11 w-11 place-items-center rounded-full border border-[var(--color-neutral-500)] bg-white text-lg text-[var(--color-neutral-700)] transition-colors hover:border-[var(--color-primary-600)] hover:text-[var(--color-primary-600)]"
+              className="grid h-11 w-11 place-items-center rounded-full border border-edge-strong bg-panel text-lg text-body-muted transition-colors hover:border-brand hover:text-brand"
             >
               ›
             </button>
@@ -343,8 +393,8 @@ export function Hero() {
                   onClick={() => setActive(index)}
                   className={`h-1.5 rounded-full transition-all duration-300 ${
                     index === active
-                      ? 'w-7 bg-[var(--color-primary-600)]'
-                      : 'w-1.5 bg-[var(--color-neutral-400)] hover:bg-[var(--color-neutral-500)]'
+                      ? 'w-7 bg-brand-fill'
+                      : 'w-1.5 bg-edge-strong hover:bg-body-subtle'
                   }`}
                 />
               ))}
@@ -354,7 +404,7 @@ export function Hero() {
               type="button"
               onClick={() => go(1)}
               aria-label="المنتج التالي"
-              className="grid h-11 w-11 place-items-center rounded-full border border-[var(--color-neutral-500)] bg-white text-lg text-[var(--color-neutral-700)] transition-colors hover:border-[var(--color-primary-600)] hover:text-[var(--color-primary-600)]"
+              className="grid h-11 w-11 place-items-center rounded-full border border-edge-strong bg-panel text-lg text-body-muted transition-colors hover:border-brand hover:text-brand"
             >
               ‹
             </button>
@@ -422,8 +472,8 @@ function MagneticCta({
       style={reduced ? undefined : { x: springX, y: springY }}
       className={
         primary
-          ? 'inline-flex items-center rounded-full bg-[var(--color-primary-600)] px-8 py-4 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-700)]'
-          : 'inline-flex items-center rounded-full border border-[var(--color-neutral-500)] px-8 py-4 text-sm font-medium text-[var(--color-neutral-800)] transition-colors hover:border-[var(--color-primary-600)] hover:text-[var(--color-primary-600)]'
+          ? 'inline-flex items-center rounded-full bg-brand-fill px-8 py-4 text-sm font-medium text-on-brand transition-colors hover:opacity-90'
+          : 'inline-flex items-center rounded-full border border-edge-strong px-8 py-4 text-sm font-medium text-body transition-colors hover:border-brand hover:text-brand'
       }
     >
       {children}

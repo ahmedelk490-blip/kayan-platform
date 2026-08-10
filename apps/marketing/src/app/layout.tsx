@@ -65,6 +65,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       dir="rtl"
       className={`${spaceGrotesk.variable} ${inter.variable} ${kufiArabic.variable}`}
     >
+      <head>
+        {/*
+          Applies the stored theme BEFORE the first paint.
+
+          Doing this in an effect would render one frame of the default theme
+          and then correct it — the white flash that gives away every
+          bolted-on dark mode. It has to be a blocking inline script in the
+          head; there is no React-shaped way to run code earlier than this.
+
+          Falls back to the operating system preference, then to light.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{
+var stored=localStorage.getItem('kayan-theme');
+var system=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+document.documentElement.setAttribute('data-theme', stored || system);
+}catch(e){document.documentElement.setAttribute('data-theme','light');}})();`,
+          }}
+        />
+      </head>
       <body>
         {/* لمستخدمي لوحة المفاتيح: تخطّي الأقسام السينمائية. */}
         <a

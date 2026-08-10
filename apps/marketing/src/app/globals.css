@@ -5,6 +5,66 @@
    declaring explicitly or its utility classes are stripped from the build. */
 @source '../../../../packages/ui-market/src';
 
+/* ---------- Theme-aware utilities (Phase 9.2) -----------------
+   The raw scales in @erp/brand are fixed values; the SEMANTIC tokens
+   (--color-bg, --color-text, --color-accent …) are the ones that flip when
+   data-theme changes. Until now the marketing page painted itself from the
+   raw scale, which is why it could only ever be dark.
+
+   `@theme inline` is what makes this work: the generated utility references
+   the variable at use time instead of baking its value at build time, so
+   `bg-page` really does change when the attribute on <html> changes.
+
+   Names deliberately avoid the `ink-` prefix, which already belongs to the
+   fixed dark scale — shadowing it would make two different things answer to
+   one name.                                                                */
+@theme inline {
+  --color-page: var(--color-bg);
+  --color-panel: var(--color-surface);
+  --color-panel-2: var(--color-surface-raised);
+  /* Decorative dividers — no contrast floor applies to these. */
+  --color-edge: var(--color-border);
+  /* The boundary of a CONTROL, which WCAG 1.4.11 requires at 3:1 because it
+     is often the only thing identifying the control at all.
+     --color-border-strong measures 1.68:1 on light and 1.45:1 on dark and
+     fails both, so this points at neutral-500 instead: 4.42:1 light,
+     3.75:1 dark. One value that clears the bar in either theme. */
+  --color-edge-strong: var(--color-neutral-500);
+  --color-body: var(--color-text);
+  --color-body-muted: var(--color-text-muted);
+  /* NOT --color-text-subtle. Measured, it lands at 4.42:1 on light and
+     4.12:1 on dark, both under the 4.5:1 floor for normal text. There is
+     only room for two legible text weights against these surfaces, so the
+     third collapses into the second rather than shipping a level that fails
+     in both themes. */
+  --color-body-subtle: var(--color-text-muted);
+  /* Text-safe accent: a lighter tint on dark, the exact maroon on light.
+     The brand tokens already resolve that difference. */
+  --color-brand: var(--color-accent);
+  /* Fill accent: always the exact logo maroon, with white on it. */
+  --color-brand-fill: var(--color-primary);
+  --color-on-brand: var(--color-text-on-accent);
+}
+
+@layer base {
+  /* One transition for the theme switch itself. Colour only — nothing here
+     moves, so switching cannot shift the page under a reader. Skipped
+     entirely for anyone who has asked for reduced motion. */
+  @media (prefers-reduced-motion: no-preference) {
+    html.theme-ready body,
+    html.theme-ready section,
+    html.theme-ready header,
+    html.theme-ready footer,
+    html.theme-ready article,
+    html.theme-ready aside {
+      transition:
+        background-color 320ms ease,
+        border-color 320ms ease,
+        color 320ms ease;
+    }
+  }
+}
+
 @layer base {
   html {
     /* Lenis drives scrolling; native smooth scroll would fight it. */

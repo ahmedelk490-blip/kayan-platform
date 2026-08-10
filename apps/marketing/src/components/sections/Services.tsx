@@ -22,11 +22,11 @@ export function Services() {
           transition={{ duration: 0.8, ease: EASE.outExpo }}
           className="mb-14 max-w-[52ch]"
         >
-          <span className="mb-5 flex items-center gap-3 text-xs tracking-[0.16em] text-neutral-400">
-            <span className="h-px w-10 bg-accent" />
+          <span className="mb-5 flex items-center gap-3 text-xs tracking-[0.16em] text-body-muted">
+            <span className="h-px w-10 bg-brand-fill" />
             الطباعة والتطريز
           </span>
-          <h2 className="font-display text-display-3 leading-[1.2] text-neutral-100">
+          <h2 className="font-display text-display-3 leading-[1.2] text-body">
             شعارك على القماش، بيدنا من البداية للنهاية.
           </h2>
         </motion.div>
@@ -42,7 +42,7 @@ export function Services() {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true, margin: '-60px' }}
               transition={{ duration: 0.75, ease: EASE.outExpo, delay: index * 0.09 }}
-              className="group relative overflow-hidden rounded-2xl border border-ink-700 bg-ink-900/60 p-8 transition-colors hover:border-accent/50"
+              className="group relative overflow-hidden rounded-2xl border border-edge-strong bg-panel/70 p-8 transition-colors hover:border-brand/50"
             >
               {/* The marker lands first, the words follow it — confident
                   rather than playful, which is the tone this section wants. */}
@@ -51,7 +51,7 @@ export function Services() {
                 whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.5, ease: EASE.outExpo, delay: index * 0.09 + 0.12 }}
-                className="tnum inline-block text-xs text-accent"
+                className="tnum inline-block text-xs text-brand"
               >
                 {String(index + 1).padStart(2, '0')}
               </motion.span>
@@ -61,7 +61,7 @@ export function Services() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.6, ease: EASE.outExpo, delay: index * 0.09 + 0.2 }}
-                className="mt-4 text-xl text-neutral-100"
+                className="mt-4 text-xl text-body"
               >
                 {service.name}
               </motion.h3>
@@ -71,12 +71,12 @@ export function Services() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.6, ease: EASE.outExpo, delay: index * 0.09 + 0.28 }}
-                className="mt-3 max-w-[46ch] text-sm leading-[1.9] text-neutral-400"
+                className="mt-3 max-w-[46ch] text-sm leading-[1.9] text-body-muted"
               >
                 {service.body}
               </motion.p>
               {/* خط يمتد عند المرور — حركة صغيرة تكفي */}
-              <span className="absolute bottom-0 start-0 h-px w-0 bg-accent transition-all duration-500 ease-out group-hover:w-full" />
+              <span className="absolute bottom-0 start-0 h-px w-0 bg-brand-fill transition-all duration-500 ease-out group-hover:w-full" />
             </motion.article>
           ))}
         </div>

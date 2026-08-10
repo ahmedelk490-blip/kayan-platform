@@ -12,25 +12,25 @@ import { FOOTER_GROUPS } from '@/site';
  */
 export function SiteFooter() {
   return (
-    <footer className="border-t border-ink-800 px-6 py-16 md:px-10 lg:px-16">
+    <footer className="border-t border-edge px-6 py-16 md:px-10 lg:px-16">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_repeat(4,1fr)] lg:gap-8">
           <div>
             <Link href="/" aria-label={`${BRAND.nameAr} — الرئيسية`} className="inline-flex">
               <Logo height={56} className="rounded-lg" />
             </Link>
-            <p className="mt-5 max-w-[34ch] text-sm leading-loose text-neutral-400">
+            <p className="mt-5 max-w-[34ch] text-sm leading-loose text-body-muted">
               {BRAND.tagline.ar}
             </p>
-            <p className="mt-4 max-w-[34ch] text-sm leading-loose text-neutral-500">
+            <p className="mt-4 max-w-[34ch] text-sm leading-loose text-body-subtle">
               {BRAND.message.ar}
             </p>
-            <p className="mt-5 text-sm text-accent">{BRAND.slogan.ar}</p>
+            <p className="mt-5 text-sm text-brand">{BRAND.slogan.ar}</p>
           </div>
 
           {FOOTER_GROUPS.map((group) => (
             <nav key={group.title} aria-label={group.title}>
-              <h2 className="text-[0.65rem] uppercase tracking-[0.18em] text-neutral-500">
+              <h2 className="text-[0.65rem] uppercase tracking-[0.18em] text-body-subtle">
                 {group.title}
               </h2>
               <ul className="mt-4 space-y-2.5">
@@ -40,7 +40,7 @@ export function SiteFooter() {
                   <li key={link.label}>
                     <Link
                       href={link.href}
-                      className="text-sm text-neutral-400 transition-colors duration-300 hover:text-neutral-100"
+                      className="text-sm text-body-muted transition-colors duration-300 hover:text-body"
                     >
                       {link.label}
                     </Link>
@@ -58,7 +58,7 @@ export function SiteFooter() {
           {BRAND.name}
         </p>
 
-        <div className="mt-8 flex flex-col gap-4 border-t border-ink-800 pt-8 text-xs text-neutral-500 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-8 flex flex-col gap-4 border-t border-edge pt-8 text-xs text-body-subtle sm:flex-row sm:items-center sm:justify-between">
           <span>
             {BRAND.nameAr} | {BRAND.name} — مصنع الزي الموحد والطباعة والتطريز
           </span>

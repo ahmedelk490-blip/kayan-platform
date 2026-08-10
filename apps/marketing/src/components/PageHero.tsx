@@ -34,13 +34,13 @@ export function PageHero({ eyebrow, title, lead, meta }: PageHeroProps) {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: EASE.outExpo }}
-          className="mb-7 flex items-center gap-3 text-xs uppercase tracking-[0.24em] text-neutral-400"
+          className="mb-7 flex items-center gap-3 text-xs uppercase tracking-[0.24em] text-body-muted"
         >
-          <span className="h-px w-10 bg-accent" />
+          <span className="h-px w-10 bg-brand-fill" />
           {eyebrow}
         </motion.div>
 
-        <h1 className="max-w-[20ch] font-display text-display-2 leading-[0.98] text-neutral-100">
+        <h1 className="max-w-[20ch] font-display text-display-2 leading-[0.98] text-body">
           <AnimatedText text={title} by="word" />
         </h1>
 
@@ -48,7 +48,7 @@ export function PageHero({ eyebrow, title, lead, meta }: PageHeroProps) {
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: EASE.outExpo, delay: 0.35 }}
-          className="mt-7 max-w-[58ch] text-lead leading-relaxed text-neutral-400"
+          className="mt-7 max-w-[58ch] text-lead leading-relaxed text-body-muted"
         >
           {lead}
         </motion.p>
@@ -58,14 +58,14 @@ export function PageHero({ eyebrow, title, lead, meta }: PageHeroProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.6 }}
-            className="mt-14 flex flex-wrap gap-x-12 gap-y-6 border-t border-ink-800 pt-7"
+            className="mt-14 flex flex-wrap gap-x-12 gap-y-6 border-t border-edge pt-7"
           >
             {meta.map((item) => (
               <div key={item.label}>
-                <dt className="text-[0.65rem] uppercase tracking-[0.18em] text-neutral-500">
+                <dt className="text-[0.65rem] uppercase tracking-[0.18em] text-body-subtle">
                   {item.label}
                 </dt>
-                <dd className="mt-1.5 font-display text-sm text-neutral-200">{item.value}</dd>
+                <dd className="mt-1.5 font-display text-sm text-body">{item.value}</dd>
               </div>
             ))}
           </motion.dl>

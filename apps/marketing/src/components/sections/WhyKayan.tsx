@@ -22,11 +22,11 @@ export function WhyKayan() {
           transition={{ duration: 0.8, ease: EASE.outExpo }}
           className="mb-14 max-w-[52ch]"
         >
-          <span className="mb-5 flex items-center gap-3 text-xs tracking-[0.16em] text-neutral-400">
-            <span className="h-px w-10 bg-accent" />
+          <span className="mb-5 flex items-center gap-3 text-xs tracking-[0.16em] text-body-muted">
+            <span className="h-px w-10 bg-brand-fill" />
             ليش كيان
           </span>
-          <h2 className="font-display text-display-3 leading-[1.2] text-neutral-100">
+          <h2 className="font-display text-display-3 leading-[1.2] text-body">
             خمسة أسباب تخليك ترتاح للطلب.
           </h2>
         </motion.div>
@@ -45,7 +45,7 @@ export function WhyKayan() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.6 }}
               transition={{ duration: 0.85, ease: EASE.outQuart }}
-              className="relative grid gap-3 border-t border-ink-700 py-8 md:grid-cols-[0.8fr_1.2fr] md:gap-10"
+              className="relative grid gap-3 border-t border-edge-strong py-8 md:grid-cols-[0.8fr_1.2fr] md:gap-10"
             >
               {/* The rule draws itself across before the words settle. */}
               <motion.span
@@ -54,14 +54,14 @@ export function WhyKayan() {
                 whileInView={{ scaleX: 1 }}
                 viewport={{ once: true, amount: 0.6 }}
                 transition={{ duration: 1, ease: EASE.outExpo }}
-                className="absolute inset-x-0 top-0 h-px origin-right bg-accent/40"
+                className="absolute inset-x-0 top-0 h-px origin-right bg-brand-fill/40"
               />
               <motion.h3
                 initial={{ opacity: 0 }}
                 whileInView={{ opacity: 1 }}
                 viewport={{ once: true, amount: 0.6 }}
                 transition={{ duration: 0.7, ease: EASE.outQuart, delay: 0.12 }}
-                className="text-lg text-neutral-100"
+                className="text-lg text-body"
               >
                 {item.title}
               </motion.h3>
@@ -70,7 +70,7 @@ export function WhyKayan() {
                 whileInView={{ opacity: 1 }}
                 viewport={{ once: true, amount: 0.6 }}
                 transition={{ duration: 0.7, ease: EASE.outQuart, delay: 0.2 }}
-                className="max-w-[54ch] text-sm leading-[1.9] text-neutral-400"
+                className="max-w-[54ch] text-sm leading-[1.9] text-body-muted"
               >
                 {item.body}
               </motion.p>
