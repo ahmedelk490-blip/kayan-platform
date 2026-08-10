@@ -72,6 +72,7 @@ export default async function InvoicePrintPage({
           currency: company?.currency ?? 'EGP',
           taxNumber: company?.taxNumber,
           commercialRegister: company?.commercialRegister,
+          paymentTerms: company?.paymentTerms,
         }}
         party={{
           name: invoice.customer.companyName ?? invoice.customer.contactName,

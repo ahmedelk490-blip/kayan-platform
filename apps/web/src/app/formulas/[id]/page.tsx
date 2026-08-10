@@ -20,12 +20,14 @@ import { FormulaForm } from '../FormulaForm';
 import { LineForm } from '../LineForm';
 import { ParamForm } from '../ParamForm';
 import { AssignForm, type ProductOption } from '../AssignForm';
+import { PriceEditor } from '../PriceEditor';
 import {
   updateFormula,
   deleteFormula,
   publishVersion,
   startNewVersion,
   addLine,
+  updateVersionPrices,
   deleteLine,
   setParam,
   deleteParam,
@@ -53,6 +55,13 @@ export default async function FormulaDetailPage({
   const { id } = await params;
   const sp = await searchParams;
   const errKey = Array.isArray(sp.err) ? sp.err[0] : sp.err;
+
+  // The currency label on the price screen: read, never guessed. A manager
+  // typing costs must see the unit those numbers are in.
+  const company = await prisma.company.findFirst({
+    where: { tenantId: user.tenantId },
+    select: { currency: true },
+  });
 
   const formula = await prisma.formula.findFirst({
     where: { id, tenantId: user.tenantId, isDeleted: false },
@@ -256,13 +265,37 @@ export default async function FormulaDetailPage({
               </Table>
 
               {canWrite && shown.status === 'DRAFT' && (
-                <div className="erp-card mt-4 p-5">
-                  <h4 className="mb-4 text-xs font-semibold text-brand">إضافة بند</h4>
-                  <LineForm
-                    action={addLine.bind(null, shown.id)}
-                    materials={materials.map((m) => ({ value: m.id, label: m.nameAr }))}
-                  />
-                </div>
+                <>
+                  {/* Prices first: this is the screen the whole cost engine
+                      was waiting on, so it comes before the add-a-line form. */}
+                  <div className="mt-6">
+                    <h4 className="mb-3 text-sm font-semibold text-brand">أسعار الوحدات</h4>
+                    <PriceEditor
+                      action={updateVersionPrices.bind(null, formula.id, shown.id)}
+                      currency={company?.currency ?? 'EGP'}
+                      rows={shown.lines.map((l) => ({
+                        id: l.id,
+                        sequence: l.sequence,
+                        category: l.category,
+                        nameAr: l.nameAr,
+                        basis: l.basis,
+                        unit: l.unit,
+                        // Decimal does not cross to a client component.
+                        quantity: l.quantity.toString(),
+                        yieldQty: l.yieldQty ? l.yieldQty.toString() : null,
+                        unitCost: l.unitCost.toString(),
+                      }))}
+                    />
+                  </div>
+
+                  <div className="erp-card mt-6 p-5">
+                    <h4 className="mb-4 text-xs font-semibold text-brand">إضافة بند</h4>
+                    <LineForm
+                      action={addLine.bind(null, shown.id)}
+                      materials={materials.map((m) => ({ value: m.id, label: m.nameAr }))}
+                    />
+                  </div>
+                </>
               )}
             </section>
           )}

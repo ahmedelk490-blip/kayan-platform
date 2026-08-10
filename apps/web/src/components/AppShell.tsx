@@ -45,6 +45,7 @@ const NAV: NavItem[] = [
   { href: '/expenses', label: 'المصروفات الثانوية', permission: 'expenses.view', built: true },
   { href: '/damage', label: 'الهالك والجزاءات', permission: 'damage.view', built: true },
   { href: '/reports', label: 'التقارير', permission: 'reports.view', built: true },
+  { href: '/settings', label: 'الإعدادات المالية', permission: 'settings.manage', built: true },
 ];
 
 export function AppShell({

@@ -47,6 +47,8 @@ export interface PrintCompany {
   currency: string;
   taxNumber?: string | null;
   commercialRegister?: string | null;
+  /** Printed verbatim when the business has stated its terms. */
+  paymentTerms?: string | null;
 }
 
 export function PrintDocument({
@@ -179,6 +181,15 @@ export function PrintDocument({
         <section className="print-notes">
           <p className="print-label">ملاحظات</p>
           <p>{notes}</p>
+        </section>
+      )}
+
+      {/* The terms sentence the business itself entered. Absent means absent —
+          a generic "payable within 30 days" would be a term nobody agreed. */}
+      {company.paymentTerms && (
+        <section className="print-notes">
+          <p className="print-label">شروط الدفع</p>
+          <p>{company.paymentTerms}</p>
         </section>
       )}
 

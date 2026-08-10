@@ -88,6 +88,7 @@ export default async function QuotationPrintPage({
           currency: company?.currency ?? 'EGP',
           taxNumber: company?.taxNumber,
           commercialRegister: company?.commercialRegister,
+          paymentTerms: company?.paymentTerms,
         }}
         party={{
           name: quotation.customer.companyName ?? quotation.customer.contactName,

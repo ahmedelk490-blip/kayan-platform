@@ -105,6 +105,11 @@ model Company {
   /// free credit on the customer's behalf is a decision nobody made.
   paymentTermDays Int @default(0)
 
+  /// The terms sentence printed on the document, in the words the business
+  /// uses with its own customers. Null means nothing is printed — a generic
+  /// "الدفع خلال 30 يوماً" would be a term nobody agreed to.
+  paymentTerms String?
+
   /// Prefix for the gapless invoice sequence.
   invoicePrefix String @default("INV")
 

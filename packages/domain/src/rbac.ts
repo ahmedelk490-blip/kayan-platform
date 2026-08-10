@@ -180,6 +180,11 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'invoices.issue',
     'payments.record',
     'reports.view',
+    // The company's own financial facts — VAT rate, payment terms, tax
+    // number — are the manager's to state. They are printed on tax documents
+    // and nobody else in this business knows them. Deliberately NOT
+    // 'users.manage': settings are business data, accounts are access.
+    'settings.manage',
   ],
 
   SALES: [

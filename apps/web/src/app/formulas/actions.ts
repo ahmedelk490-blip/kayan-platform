@@ -332,6 +332,124 @@ export async function addLine(
   return { ok: 'تمت إضافة البند.' };
 }
 
+/**
+ * تعديل بند قائم في مسودة.
+ *
+ * ── Why this had to exist ──────────────────────────────────
+ *
+ * Until now a line could only be ADDED or DELETED. Changing a price meant
+ * deleting the line and retyping it, which lost its sequence and its notes —
+ * and that is the real reason the KAYAN printing rates were still zero
+ * months after the consumption figures were confirmed. Entering a price was
+ * more destructive than leaving it wrong.
+ *
+ * Only a DRAFT is editable. A published version is immutable, so no cost
+ * already calculated can move because someone corrected a rate today.
+ */
+export async function updateLine(
+  formulaId: string,
+  lineId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requirePermission('formula.write');
+
+  const line = await prisma.formulaLine.findFirst({
+    where: {
+      id: lineId,
+      formulaVersion: { status: 'DRAFT', formula: { id: formulaId, tenantId: user.tenantId } },
+    },
+  });
+  if (!line) return { error: 'لا يمكن التعديل إلا على بند في إصدار مسودة.' };
+
+  const parsed = LineSchema.safeParse(readLine(formData));
+  if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
+
+  await prisma.formulaLine.update({
+    where: { id: lineId },
+    data: {
+      category: parsed.data.category,
+      nameAr: parsed.data.nameAr,
+      materialId: parsed.data.materialId || null,
+      basis: parsed.data.basis,
+      quantity: parsed.data.quantity,
+      yieldQty: parsed.data.basis === 'PER_YIELD' ? (parsed.data.yieldQty ?? 0) : null,
+      unit: parsed.data.unit || null,
+      unitCost: parsed.data.unitCost,
+      notes: parsed.data.notes || null,
+    },
+  });
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'formula.line.update',
+    entityType: 'FormulaLine',
+    entityId: lineId,
+    detail: `${parsed.data.nameAr} @ ${parsed.data.unitCost}`,
+  });
+
+  revalidatePath(`/formulas/${formulaId}`);
+  return { ok: 'تم حفظ البند.' };
+}
+
+/**
+ * إدخال الأسعار دفعةً واحدة لكل بنود المسودة.
+ *
+ * The focused path for the job this module actually blocks on: a manager
+ * holding a supplier invoice wants to type six numbers, not open six forms.
+ * Only `unitCost` is touched — consumption was confirmed by the business and
+ * must not be edited by accident on a screen meant for prices.
+ */
+export async function updateVersionPrices(
+  formulaId: string,
+  versionId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requirePermission('formula.write');
+
+  const version = await prisma.formulaVersion.findFirst({
+    where: { id: versionId, status: 'DRAFT', formula: { id: formulaId, tenantId: user.tenantId } },
+    include: { lines: true },
+  });
+  if (!version) return { error: 'لا يمكن تعديل الأسعار إلا على إصدار مسودة.' };
+
+  const updates: { id: string; unitCost: number }[] = [];
+  for (const line of version.lines) {
+    const raw = formData.get(`cost-${line.id}`);
+    if (raw === null) continue;
+    const value = Number(String(raw).trim());
+    if (!Number.isFinite(value) || value < 0) {
+      return { fieldErrors: { [`cost-${line.id}`]: 'قيمة غير صحيحة.' } };
+    }
+    updates.push({ id: line.id, unitCost: value });
+  }
+
+  if (updates.length === 0) return { error: 'لا توجد بنود لتسعيرها.' };
+
+  await tenantTransaction(async (tx) => {
+    for (const update of updates) {
+      await tx.formulaLine.update({
+        where: { id: update.id },
+        data: { unitCost: update.unitCost },
+      });
+    }
+  });
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'formula.prices.update',
+    entityType: 'FormulaVersion',
+    entityId: versionId,
+    detail: `${updates.length} lines priced`,
+  });
+
+  revalidatePath(`/formulas/${formulaId}`);
+  return { ok: `تم حفظ أسعار ${updates.length} بند.` };
+}
+
 export async function deleteLine(formulaId: string, lineId: string): Promise<void> {
   const user = await requirePermission('formula.write');
   const line = await prisma.formulaLine.findFirst({
