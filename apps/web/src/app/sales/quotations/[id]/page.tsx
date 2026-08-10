@@ -75,6 +75,9 @@ export default async function QuotationDetailPage({
             <Link href="/sales/quotations" className="erp-btn-ghost">
               رجوع
             </Link>
+            <Link href={`/sales/quotations/${quotation.id}/print`} className="erp-btn-ghost">
+              طباعة / PDF
+            </Link>
             {canWrite && (
               <form action={duplicateQuotation.bind(null, quotation.id)}>
                 <button type="submit" className="erp-btn-ghost">

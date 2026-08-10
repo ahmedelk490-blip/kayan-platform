@@ -77,6 +77,9 @@ export default async function InvoicePage({
             <Link href="/invoices" className="erp-btn-ghost">
               رجوع
             </Link>
+            <Link href={`/invoices/${invoice.id}/print`} className="erp-btn-ghost">
+              طباعة / PDF
+            </Link>
             {canIssue && status === 'DRAFT' && (
               <form action={issueInvoice.bind(null, invoice.id)}>
                 <button type="submit" className="erp-btn">

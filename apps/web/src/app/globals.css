@@ -208,3 +208,121 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   الطباعة — عروض الأسعار والفواتير
+   ═══════════════════════════════════════════════════════════
+
+   The PDF pipeline is the browser's own print dialog. That choice is what
+   makes Arabic come out correct: shaping, ligatures and bidirectional runs
+   are the renderer's job, and a JavaScript PDF library has to reimplement
+   all three. The output is selectable text, not a raster.                */
+
+.print-doc {
+  max-width: 210mm;
+  margin: 0 auto;
+  padding: 14mm;
+  background: #fff;
+  color: var(--color-txt);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.print-status {
+  margin-bottom: 10mm;
+  border: 1px solid var(--color-warn);
+  background: var(--color-warn-soft);
+  color: var(--color-warn);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.print-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 8mm;
+  border-bottom: 2px solid var(--color-brand);
+}
+
+.print-head-end { text-align: end; }
+.print-company { margin-top: 8px; font-weight: 600; color: var(--color-brand); }
+.print-title { font-size: 22px; font-weight: 700; color: var(--color-brand); }
+.print-number { font-variant-numeric: tabular-nums; font-weight: 600; margin-top: 2px; }
+.print-meta { font-size: 11px; color: var(--color-txt-3); }
+.print-label { font-size: 10px; color: var(--color-txt-3); letter-spacing: 0.08em; }
+
+.print-party { margin-top: 8mm; }
+.print-party-name { font-size: 15px; font-weight: 600; margin-top: 2px; }
+
+.print-table { width: 100%; border-collapse: collapse; margin-top: 8mm; }
+.print-table th {
+  text-align: start;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-txt-2);
+  border-bottom: 1px solid var(--color-line-2);
+  padding: 8px 6px;
+}
+.print-table td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--color-line);
+  vertical-align: top;
+}
+.print-table .num { text-align: end; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.print-table .strong { font-weight: 600; }
+
+.print-totals { margin-top: 6mm; display: flex; justify-content: flex-start; }
+.print-totals dl { width: 72mm; }
+.print-totals div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 5px 0;
+}
+.print-totals dt { color: var(--color-txt-3); }
+.print-totals dd { font-variant-numeric: tabular-nums; }
+.print-totals .strong {
+  border-top: 1px solid var(--color-line-2);
+  margin-top: 4px;
+  padding-top: 8px;
+  font-weight: 700;
+  color: var(--color-brand);
+}
+
+.print-notes { margin-top: 8mm; }
+.print-foot {
+  margin-top: 12mm;
+  padding-top: 5mm;
+  border-top: 1px solid var(--color-line);
+  font-size: 10px;
+  color: var(--color-txt-3);
+}
+.print-warn { color: var(--color-warn); margin-top: 4px; }
+
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  /* Anything that is not the document itself must not reach paper. */
+  .no-print { display: none !important; }
+
+  body { background: #fff; }
+
+  .print-doc {
+    padding: 0;
+    max-width: none;
+    font-size: 11px;
+  }
+
+  /* A row split across a page break is unreadable on a costed document. */
+  .print-table tr,
+  .print-totals { break-inside: avoid; }
+  .print-table thead { display: table-header-group; }
+
+  /* Backgrounds are dropped by default in print; these carry meaning. */
+  .print-status { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
