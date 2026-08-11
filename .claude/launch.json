@@ -4,14 +4,32 @@
     {
       "name": "erp",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:erp"],
+      "runtimeArgs": [
+        "run",
+        "dev:erp"
+      ],
       "port": 3300
     },
     {
       "name": "marketing",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:marketing"],
+      "runtimeArgs": [
+        "run",
+        "dev:marketing"
+      ],
       "port": 3200
+    },
+    {
+      "name": "erp-basepath",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev:erp"
+      ],
+      "port": 3300,
+      "env": {
+        "NEXT_PUBLIC_BASE_PATH": "/erp"
+      }
     }
   ]
 }

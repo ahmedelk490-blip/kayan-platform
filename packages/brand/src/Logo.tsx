@@ -34,7 +34,14 @@ export function Logo({
   decorative = false,
 }: LogoProps) {
   const [missing, setMissing] = useState(false);
-  const src = variant === 'mark' ? LOGO.mark : LOGO.primary;
+  // A plain <img> is NOT rewritten by Next's basePath — only next/image and
+  // next/link are. Mounted under a prefix the logo would 404 and this
+  // component would silently fall back to plain type, which is exactly the
+  // "logo replaced by something else" the identity directive forbids.
+  // Inlined per app at build time: empty for the marketing site, "/erp" for
+  // the ERP.
+  const prefix = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
+  const src = `${prefix}${variant === 'mark' ? LOGO.mark : LOGO.primary}`;
 
   // Asset not yet on disk. Renders the name as plain type — deliberately NOT
   // a reconstruction of the mark, so nothing here can be mistaken for it.

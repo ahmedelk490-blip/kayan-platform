@@ -29,24 +29,69 @@ const OUT = path.join(ROOT, 'dist-hostinger');
 const STAGE = path.join(OUT, 'kayan-uniform-vps');
 
 const DOMAIN = 'kayan-uniform.com';
-const ERP_HOST = `erp.${DOMAIN}`;
+/** Where the ERP is mounted on that same domain. Matches NEXT_PUBLIC_BASE_PATH. */
+const ERP_PATH = '/erp';
 
 // ── nginx ───────────────────────────────────────────────────
 //
-// Two server blocks, one certificate request covering both names. The ERP
-// block adds no basePath rewriting: the app is served at the root of its own
-// hostname, so not one line of application code changes to run here.
+// ONE server block, one hostname, one certificate.
+//
+// The ERP sits under ${ERP_PATH} rather than on a subdomain because two
+// Next.js apps cannot both serve /_next/static/... on one host — same
+// prefix, different bundles, and whichever is routed second gets the other
+// app's JavaScript. The ERP's basePath moves its assets to ${ERP_PATH}/_next/,
+// which is what makes sharing a hostname possible at all.
+//
+// /login is intercepted with an EXACT match so the staff button lands on the
+// real sign-in form. The marketing app keeps a /login page of its own as a
+// fallback for running without this proxy; here nginx wins, because "= /login"
+// outranks the prefix "/" match.
 const NGINX = `# /etc/nginx/sites-available/kayan
 #
-# الموقع التسويقي على النطاق الأساسي، والنظام على نطاق فرعي منه.
-# كلاهما على نفس الخادم، والزر ينقل بينهما دون مغادرة النطاق الأساسي.
+# موقع واحد ونطاق واحد:
+#   kayan-uniform.com/          → الموقع التسويقي   (المنفذ 3200)
+#   kayan-uniform.com${ERP_PATH}/      → نظام ERP          (المنفذ 3300)
+#   kayan-uniform.com/login     → تحويل إلى شاشة دخول النظام
 
 server {
     listen 80;
     listen [::]:80;
-    server_name ${DOMAIN} www.${DOMAIN} ${ERP_HOST};
+    server_name ${DOMAIN} www.${DOMAIN};
 
     # certbot يستبدل هذا بتحويل إلى HTTPS عند إصدار الشهادة.
+
+    # حدّ حجم الطلب: النظام يستقبل مرفقات، لا ملفات ضخمة.
+    client_max_body_size 12M;
+
+    # ── زر "دخول النظام" ────────────────────────────────────
+    # مطابقة تامة (=) حتى لا تبتلع /login أي مسار آخر. هذه هي
+    # النقطة التي تجعل الضغط على الزر يصل لشاشة الدخول الحقيقية.
+    location = /login {
+        return 302 ${ERP_PATH}/login;
+    }
+
+    # ── نظام ERP ────────────────────────────────────────────
+    # بلا إعادة كتابة للمسار: التطبيق مبنيّ بـ basePath=${ERP_PATH}
+    # ويتوقّع أن يصله الطلب كاملاً بالبادئة.
+    location = ${ERP_PATH} {
+        return 302 ${ERP_PATH}/;
+    }
+
+    location ${ERP_PATH}/ {
+        proxy_pass http://127.0.0.1:3300;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        # سجلّ التدقيق يقرأ هذه الترويسة لتسجيل عنوان المستخدم.
+        # بدونها كل سطر في السجل سيقول 127.0.0.1.
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # ── الموقع التسويقي ─────────────────────────────────────
     location / {
         proxy_pass http://127.0.0.1:3200;
         proxy_http_version 1.1;
@@ -59,35 +104,7 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 }
-
-server {
-    listen 80;
-    listen [::]:80;
-    server_name ${ERP_HOST};
-
-    # حدّ حجم الطلب: النظام يستقبل مرفقات، لا ملفات ضخمة.
-    client_max_body_size 12M;
-
-    location / {
-        proxy_pass http://127.0.0.1:3300;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        # سجلّ التدقيق يقرأ هذا الترويسة لتسجيل عنوان المستخدم.
-        # بدونها كل سطر في السجل سيقول 127.0.0.1.
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
 `;
-
-// The marketing block above deliberately lists the ERP host too, because
-// nginx matches the MOST specific server_name — the dedicated ERP block wins
-// for that hostname. Listing it in both is what makes a single certbot run
-// cover all three names.
 
 const SYSTEMD_SITE = `[Unit]
 Description=KAYAN marketing site (Next.js)
@@ -137,7 +154,7 @@ set -euo pipefail
 
 BASE=/srv/kayan
 DOMAIN=${DOMAIN}
-ERP_HOST=${ERP_HOST}
+ERP_PATH=${ERP_PATH}
 
 log() { printf '\\n\\033[1;35m▸ %s\\033[0m\\n' "$1"; }
 die() { printf '\\n\\033[1;31m✗ %s\\033[0m\\n' "$1" >&2; exit 1; }
@@ -205,14 +222,14 @@ log "تم"
 cat <<EOF
 
   الموقع  →  http://$DOMAIN
-  النظام  →  http://$ERP_HOST
+  النظام  →  http://$DOMAIN$ERP_PATH/login
 
   الخطوة الأخيرة، شهادة HTTPS لكلا النطاقين:
 
-    certbot --nginx -d $DOMAIN -d www.$DOMAIN -d $ERP_HOST
+    certbot --nginx -d $DOMAIN -d www.$DOMAIN
 
   بعدها اضبط في $BASE/site/.env:
-    NEXT_PUBLIC_ERP_URL=https://$ERP_HOST/login
+    (لا شيء — الزر يعمل عبر التحويل في nginx)
   ثم: systemctl restart kayan-site
 
   ⚠ لم تُنشأ حسابات بعد. شغّل البذرة يدوياً بعد مراجعة كلمات المرور:
@@ -229,6 +246,26 @@ site/     الموقع التسويقي      → المنفذ 3200
 erp/      نظام ERP             → المنفذ 3300
 deploy/   nginx + systemd + install.sh
 \`\`\`
+
+## كيف يبدو للزائر
+| العنوان | ما يفتح |
+|---|---|
+| \`${DOMAIN}/\` | الموقع التسويقي |
+| \`${DOMAIN}/login\` | **شاشة دخول النظام** (تحويل تلقائي) |
+| \`${DOMAIN}${ERP_PATH}/\` | نظام ERP |
+
+نطاق واحد، شهادة واحدة، ولا نطاق فرعي. الضغط على "دخول النظام" في
+القائمة يفتح \`/login\` فيصل المستخدم مباشرةً لنموذج اسم المستخدم
+وكلمة المرور.
+
+## لماذا النظام تحت بادئة \`${ERP_PATH}\`
+تطبيقا Next لا يمكن أن يخدما \`/_next/static/...\` معاً على نفس المضيف:
+نفس البادئة ومحتوى مختلف، فأيّهما وُجّه ثانياً يستلم جافاسكربت الآخر
+وتنكسر الصفحة. البادئة تنقل أصول النظام إلى \`${ERP_PATH}/_next/\`، وهي ما
+يجعل مشاركة النطاق ممكنة أصلاً.
+
+ولهذا \`/login\` تحويل لا خدمة مباشرة: الشاشة نفسها تحتاج أصولها من
+\`${ERP_PATH}/_next/\`.
 
 ## لماذا تطبيقان داخل ملف واحد وليس تطبيقاً مدمجاً
 التطبيقان يحملان نظامَي تصميم متعارضين: كلاهما يعرّف \`--color-brand\`
@@ -260,7 +297,7 @@ Next واحد يضع ملفَّي الأنماط في حزمة واحدة، في
 5. \`bash /srv/kayan/deploy/install.sh\`
 6. شهادة HTTPS لكلا النطاقين:
    \`\`\`bash
-   certbot --nginx -d ${DOMAIN} -d www.${DOMAIN} -d ${ERP_HOST}
+   certbot --nginx -d ${DOMAIN} -d www.${DOMAIN}
    \`\`\`
 7. بعد نجاح الشهادة، اضبط \`NEXT_PUBLIC_ERP_URL\` في \`site/.env\` ثم
    \`systemctl restart kayan-site\`. **قبل هذه الخطوة يعرض الموقع
