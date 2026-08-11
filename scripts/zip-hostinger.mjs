@@ -114,7 +114,7 @@ async function writeZip(sourceDir, zipPath) {
 }
 
 async function main() {
-  for (const name of ['kayan-marketing', 'kayan-erp']) {
+  for (const name of ['kayan-marketing', 'kayan-erp', 'kayan-uniform-vps']) {
     const src = path.join(ROOT, 'dist-hostinger', name);
     const zip = path.join(ROOT, 'dist-hostinger', `${name}.zip`);
     const count = await writeZip(src, zip);

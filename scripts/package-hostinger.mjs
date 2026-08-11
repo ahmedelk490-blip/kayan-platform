@@ -21,7 +21,7 @@
 import { cp, mkdir, rm, readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'dist-hostinger');
@@ -57,8 +57,15 @@ const TARGETS = {
       'package.json',
     ],
     exclude: [],
-    // The ERP is nothing without its schema and migration history.
-    extra: [{ from: 'prisma', to: 'prisma' }],
+    extra: [
+      // The ERP is nothing without its schema and migration history.
+      { from: 'prisma', to: 'prisma' },
+      // The verification suites travel too. Tenant isolation is the one
+      // claim that must be re-proven on the machine that will actually
+      // hold customer data — asserting it from a laptop proves nothing
+      // about the server's roles and policies.
+      { from: 'scripts', to: 'scripts', only: /^verify-.*\.mjs$/ },
+    ],
   },
 };
 
@@ -201,15 +208,7 @@ Node.js، والموقع يحتاجه: نموذج طلب عرض السعر مس�
 `,
 };
 
-const target = process.argv[2];
-if (!TARGETS[target]) {
-  console.error(`Usage: package-hostinger.mjs <${Object.keys(TARGETS).join('|')}>`);
-  process.exit(1);
-}
-const spec = TARGETS[target];
-const stage = path.join(OUT, `kayan-${target}`);
-
-async function dirSize(dir) {
+export async function dirSize(dir) {
   let total = 0;
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
@@ -218,7 +217,17 @@ async function dirSize(dir) {
   return total;
 }
 
-async function main() {
+/**
+ * Stage one application into `stage`, self-contained.
+ *
+ * Exported so the VPS bundle can call it twice — once per app — into two
+ * subfolders of a single archive, without either script drifting from the
+ * other's idea of what a deployable app contains.
+ */
+export async function stageApp(target, stage, { includeDocs = true } = {}) {
+  const spec = TARGETS[target];
+  if (!spec) throw new Error(`unknown target ${target}`);
+
   await rm(stage, { recursive: true, force: true });
   await mkdir(stage, { recursive: true });
 
@@ -236,8 +245,15 @@ async function main() {
     });
   }
 
-  for (const { from, to } of spec.extra ?? []) {
-    await cp(path.join(ROOT, from), path.join(stage, to), { recursive: true });
+  for (const { from, to, only } of spec.extra ?? []) {
+    const source = path.join(ROOT, from);
+    await cp(source, path.join(stage, to), {
+      recursive: true,
+      // `only` keeps directories (cp needs them to recurse) and filters the
+      // files, so build tooling does not travel with the deployment.
+      filter: (src) =>
+        !only || src === source || !src.endsWith('.mjs') || only.test(path.basename(src)),
+    });
   }
 
   // ── Workspace packages, flattened ─────────────────────────
@@ -279,38 +295,51 @@ async function main() {
     }
   }
 
-  // Hostinger runs npm itself, then the start script. `next start` needs the
-  // port it is given rather than the one this repo uses in development.
+  // The host runs npm itself, then the start script. Each app is given its
+  // port explicitly so two of them can share one machine behind a proxy.
   pkg.scripts = {
     build: pkg.scripts.build,
-    start: 'next start',
+    start: `next start --port ${target === 'erp' ? 3300 : 3200}`,
     ...(target === 'erp' ? { postinstall: 'prisma generate' } : {}),
   };
   pkg.name = `kayan-${target}`;
   pkg.private = true;
-  // Hostinger offers 18/20/22/24. Next 15 and React 19 want 20 as a floor.
+  // Next 15 and React 19 want Node 20 as a floor.
   pkg.engines = { node: '>=20.0.0' };
 
-  // devDependencies travel because Hostinger BUILDS on the server: the build
-  // needs typescript, tailwind and the eslint config, so pruning them here
-  // would break the very step this bundle exists for.
+  // devDependencies travel because the server BUILDS: the build needs
+  // typescript, tailwind and the eslint config, so pruning them here would
+  // break the very step this bundle exists for.
   await writeFile(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
 
-  // ── Deployment notes and the environment template ─────────
   await writeFile(path.join(stage, '.env.example'), ENV[target]);
-  // ASCII filename on purpose: an Arabic name inside a ZIP bound for a
-  // Linux server survives only if every tool honours the UTF-8 flag, and the
-  // round-trip test showed one that does not. The CONTENT stays Arabic.
-  await writeFile(path.join(stage, 'README-DEPLOY.md'), README[target]);
+  if (includeDocs) {
+    // ASCII filename on purpose: an Arabic name inside a ZIP bound for a
+    // Linux server survives only if every tool honours the UTF-8 flag, and
+    // the round-trip test showed one that does not. The CONTENT stays Arabic.
+    await writeFile(path.join(stage, 'README-DEPLOY.md'), README[target]);
+  }
 
-  const bytes = await dirSize(stage);
-  console.log(`staged ${path.relative(ROOT, stage)}`);
-  console.log(`  ${spec.packages.length} workspace packages vendored as file: deps`);
-  console.log(`  ${(bytes / 1024 / 1024).toFixed(1)} MB before compression`);
-  console.log('  node_modules deliberately excluded — Hostinger installs on Linux');
+  return { packages: spec.packages.length, bytes: await dirSize(stage) };
 }
 
-main().catch((error) => {
-  console.error(error.message);
-  process.exit(1);
-});
+// Run directly (not imported) → stage a single app, as before.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const target = process.argv[2];
+  if (!TARGETS[target]) {
+    console.error(`Usage: package-hostinger.mjs <${Object.keys(TARGETS).join('|')}>`);
+    process.exit(1);
+  }
+  const stage = path.join(OUT, `kayan-${target}`);
+  stageApp(target, stage)
+    .then(({ packages, bytes }) => {
+      console.log(`staged ${path.relative(ROOT, stage)}`);
+      console.log(`  ${packages} workspace packages vendored as file: deps`);
+      console.log(`  ${(bytes / 1024 / 1024).toFixed(1)} MB before compression`);
+      console.log('  node_modules deliberately excluded — the server installs on Linux');
+    })
+    .catch((error) => {
+      console.error(error.message);
+      process.exit(1);
+    });
+}
