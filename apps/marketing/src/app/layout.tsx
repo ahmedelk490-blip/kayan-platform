@@ -5,6 +5,7 @@ import { SmoothScroller, ScrollProgress } from '@erp/ui-market';
 import { IntroMount } from '@/components/IntroMount';
 import { Navigation } from '@/components/Navigation';
 import { SiteFooter } from '@/components/SiteFooter';
+import { SITE_URL } from '@/site';
 import './globals.css';
 
 const spaceGrotesk = Space_Grotesk({
@@ -32,19 +33,11 @@ const kufiArabic = Noto_Kufi_Arabic({
   display: 'swap',
 });
 
-/**
- * The site's own address, needed to turn the relative OG image path into the
- * absolute URL every social platform requires.
- *
- * Read from the environment because it is a deployment fact, not a source
- * fact — and left undefined rather than guessed at when it is missing. Next
- * then falls back to localhost and says so at build time, which is a loud
- * reminder to set it. Hardcoding a domain here would make a wrong URL silent.
- */
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-
 export const metadata: Metadata = {
-  ...(siteUrl ? { metadataBase: new URL(siteUrl) } : {}),
+  // Turns every relative path — the OG image, the canonical link — into the
+  // absolute URL social platforms and search engines require.
+  metadataBase: new URL(SITE_URL),
+  alternates: { canonical: '/' },
   title: {
     default: `${BRAND.nameAr} | ${BRAND.name} — ${BRAND.tagline.ar}`,
     template: `%s · ${BRAND.nameAr}`,

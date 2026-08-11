@@ -7,6 +7,35 @@
  * اللهجة: خليجية مهنية راقية.
  */
 
+/**
+ * عنوان الموقع الرسمي.
+ *
+ * One source for the canonical host. It feeds metadataBase, the canonical
+ * link on every page, the sitemap and robots.txt — four places that must
+ * never disagree, because a canonical URL pointing at a host the sitemap
+ * does not list is how a site ends up competing with itself in search.
+ *
+ * Overridable by environment so a staging deployment does not announce
+ * itself as the production domain, and normalised without a trailing slash
+ * so `${SITE_URL}/contact` never becomes a double slash.
+ */
+export const SITE_URL = (
+  process.env.NEXT_PUBLIC_SITE_URL ?? 'https://kayan-uniform.com'
+).replace(/\/$/, '');
+
+/**
+ * الصفحات القابلة للفهرسة.
+ *
+ * `/login` عمداً ليست منها — صفحة تحويل لفريق المصنع، لا قيمة لها في البحث
+ * ولا داعي للإعلان عن واجهة النظام الداخلي في خريطة الموقع.
+ */
+export const INDEXABLE_ROUTES = [
+  { path: '/', changeFrequency: 'monthly' as const, priority: 1 },
+  { path: '/contact', changeFrequency: 'yearly' as const, priority: 0.8 },
+  { path: '/legal/privacy', changeFrequency: 'yearly' as const, priority: 0.3 },
+  { path: '/legal/terms', changeFrequency: 'yearly' as const, priority: 0.3 },
+];
+
 export const NAV_LINKS = [
   { href: '#products', label: 'منتجاتنا' },
   { href: '#services', label: 'الطباعة والتطريز' },

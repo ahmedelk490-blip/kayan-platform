@@ -5,6 +5,7 @@ import { LegalBody, LegalNotice } from '@/components/LegalBody';
 export const metadata: Metadata = {
   title: 'Privacy',
   description: 'What this site collects, why, and how long it is kept.',
+  alternates: { canonical: '/legal/privacy' },
 };
 
 export default function PrivacyPage() {

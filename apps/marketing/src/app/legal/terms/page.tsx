@@ -5,6 +5,7 @@ import { LegalBody, LegalNotice } from '@/components/LegalBody';
 export const metadata: Metadata = {
   title: 'Terms',
   description: 'Terms governing use of this website.',
+  alternates: { canonical: '/legal/terms' },
 };
 
 export default function TermsPage() {

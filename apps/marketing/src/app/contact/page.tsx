@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   title: 'اطلب عرض سعر',
   description:
     'أرسل تفاصيل طلبك من الزي الموحد أو الطباعة والتطريز، ونرجع لك بعرض سعر واضح وموعد تسليم محدد.',
+  alternates: { canonical: '/contact' },
 };
 
 const STEPS = [
