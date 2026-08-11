@@ -5,7 +5,8 @@ import { SmoothScroller, ScrollProgress } from '@erp/ui-market';
 import { IntroMount } from '@/components/IntroMount';
 import { Navigation } from '@/components/Navigation';
 import { SiteFooter } from '@/components/SiteFooter';
-import { SITE_URL } from '@/site';
+import { WhatsAppButton } from '@/components/WhatsAppButton';
+import { SITE_URL, whatsappHref } from '@/site';
 import './globals.css';
 
 const spaceGrotesk = Space_Grotesk({
@@ -111,6 +112,9 @@ document.documentElement.setAttribute('data-theme', stored || system);
           <Navigation />
           <main id="main">{children}</main>
           <SiteFooter />
+          {/* يُحسب على الخادم فيصل للعميل رابطاً جاهزاً أو لا شيء —
+              ولا يصل الرقم إلى الحزمة حين لا يكون مضبوطاً. */}
+          <WhatsAppButton href={whatsappHref()} />
         </SmoothScroller>
       </body>
     </html>

@@ -180,12 +180,23 @@ export const QUOTE_SERVICES = [
 ] as const;
 
 /**
- * ⚠ لا توجد بيانات تواصل هنا عمداً.
+ * رقم الواتساب.
  *
- * لم يُزوَّد الموقع برقم جوال أو بريد رسمي، واختراع رقم أسوأ من عدم عرضه:
- * عميل يتصل برقم غير صحيح خسارة حقيقية. نموذج طلب عرض السعر هو قناة
- * التواصل الوحيدة حتى تُزوَّد الأرقام الفعلية.
+ * يأتي من البيئة ولا يُكتب هنا. اختراع رقم أسوأ من عدم عرض واحد: عميل
+ * يراسل رقماً خاطئاً خسارة مؤكدة، وصاحب الرقم الحقيقي يتلقّى رسائل ليست له.
+ *
+ * حين يكون فارغاً لا يظهر الزر إطلاقاً — لا زر معطّل ولا رابط لا يفتح شيئاً.
+ * يُضبط بصيغة دولية بلا رموز: 9647XXXXXXXXX
  */
+export const WHATSAPP_NUMBER = (process.env.NEXT_PUBLIC_WHATSAPP ?? '').replace(/[^\d]/g, '');
+
+/** الرسالة المبدئية في محادثة الواتساب — يعدّلها العميل قبل الإرسال. */
+export const WHATSAPP_MESSAGE = 'السلام عليكم، أرغب بالاستفسار عن أسعار الزي الموحد.';
+
+export function whatsappHref(): string | null {
+  if (!WHATSAPP_NUMBER) return null;
+  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`;
+}
 
 export const FOOTER_GROUPS = [
   {
