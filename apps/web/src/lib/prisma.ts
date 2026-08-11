@@ -88,12 +88,36 @@ export async function tenantTransaction<T>(
  * `kayan_auth` holds BYPASSRLS for exactly that, and is used by nothing but
  * `lib/auth.ts`. Keeping it a separate client makes the exception one
  * greppable import rather than a flag someone can set anywhere.
+ *
+ * Built LAZILY, on first use rather than on import. `next build` imports
+ * every page to collect its configuration, so constructing this at module
+ * scope made the build itself require AUTH_DATABASE_URL — and fail with
+ * `Invalid value undefined for datasource "db"`, an error that names neither
+ * the variable nor the file. A build has no business needing database
+ * credentials; only a request does.
  */
-export const authDb =
-  globalForPrisma.prismaAuth ??
-  new PrismaClient({
-    datasources: { db: { url: process.env.AUTH_DATABASE_URL } },
-    log: ['error'],
-  });
+function createAuthClient(): PrismaClient {
+  const url = process.env.AUTH_DATABASE_URL;
+  if (!url) {
+    // Deliberately NOT falling back to DATABASE_URL. That connection is the
+    // one without BYPASSRLS, so login would query the identity tables under
+    // a policy that denies them and report "wrong password" for a correct
+    // one — a misconfiguration disguised as a rejected sign-in.
+    throw new Error(
+      'AUTH_DATABASE_URL is not set. Login and session lookup need the ' +
+        'BYPASSRLS connection; set it in the environment before starting ' +
+        'the app. See .env.example.',
+    );
+  }
+  return new PrismaClient({ datasources: { db: { url } }, log: ['error'] });
+}
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prismaAuth = authDb;
+let authClient: PrismaClient | undefined;
+
+export const authDb = new Proxy({} as PrismaClient, {
+  get(_target, property) {
+    authClient ??= globalForPrisma.prismaAuth ?? createAuthClient();
+    if (process.env.NODE_ENV !== 'production') globalForPrisma.prismaAuth = authClient;
+    return Reflect.get(authClient, property, authClient);
+  },
+});
