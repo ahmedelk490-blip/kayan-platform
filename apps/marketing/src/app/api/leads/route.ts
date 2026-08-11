@@ -174,7 +174,17 @@ export async function POST(request: Request) {
   };
 
   try {
-    const dir = path.join(process.cwd(), '.leads');
+    // LEADS_DIR must point OUTSIDE the deployed build.
+    //
+    // Hosts that deploy into a versioned directory — Hostinger extracts each
+    // release to hbuilds/versions/<uuid>/ — make process.cwd() move on every
+    // deploy. Enquiries written relative to it are left orphaned in the
+    // previous release folder, so a customer who asked for a quote before the
+    // last deploy is simply never seen. Verified on the live server: the
+    // first submission landed inside the version directory.
+    //
+    // Falls back to cwd for local development, where nothing moves.
+    const dir = process.env.LEADS_DIR || path.join(process.cwd(), '.leads');
     await mkdir(dir, { recursive: true });
     await appendFile(path.join(dir, 'leads.jsonl'), `${JSON.stringify(record)}\n`, 'utf8');
   } catch (error) {
