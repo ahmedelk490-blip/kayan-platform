@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
+import { isPriceService } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
@@ -298,5 +299,91 @@ export async function deleteVariant(productId: string, variantId: string): Promi
     detail: `movements=${movements}`,
   });
 
+  revalidatePath(`/catalog/products/${productId}`);
+}
+
+// ── شرائح الأسعار ───────────────────────────────────────────
+//
+// سعر البيع ليس رقماً واحداً: القطعة لها سعر مع التطريز وآخر مع DTF،
+// ولكلٍّ سعر جملة وسعر للكميات الصغيرة. كل شريحة صف يُضاف ويُحذف من هنا.
+
+const TierSchema = z
+  .object({
+    service: z.string().refine(isPriceService, 'خدمة غير معروفة.'),
+    minQty: z.number().int().min(1, 'أقل كمية 1.'),
+    maxQty: z.number().int().min(1).nullable(),
+    price: z.number().min(0, 'السعر لا يكون سالباً.'),
+    variantId: z.string().optional(),
+  })
+  // نطاق مقلوب لا يغطّي شيئاً، ويمرّ بصمت لو لم يُفحص هنا.
+  .refine((v) => v.maxQty === null || v.maxQty >= v.minQty, {
+    message: 'الحد الأعلى يجب ألا يقل عن الأدنى.',
+    path: ['maxQty'],
+  });
+
+export async function addPriceTier(
+  productId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requirePermission('products.write');
+
+  const rawMax = String(formData.get('maxQty') ?? '').trim();
+  const parsed = TierSchema.safeParse({
+    service: String(formData.get('service') ?? ''),
+    minQty: Number(String(formData.get('minQty') ?? '')),
+    maxQty: rawMax === '' ? null : Number(rawMax),
+    price: Number(String(formData.get('price') ?? '')),
+    variantId: String(formData.get('variantId') ?? '') || undefined,
+  });
+  if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
+
+  const company = await prisma.company.findFirst({
+    where: { tenantId: user.tenantId },
+    select: { currency: true },
+  });
+
+  try {
+    await prisma.priceTier.create({
+      data: {
+        tenantId: user.tenantId,
+        productId,
+        variantId: parsed.data.variantId ?? null,
+        service: parsed.data.service,
+        minQty: parsed.data.minQty,
+        maxQty: parsed.data.maxQty,
+        price: parsed.data.price.toFixed(4),
+        currency: company?.currency ?? 'IQD',
+      },
+    });
+  } catch {
+    // القيد الفريد على قاعدة البيانات هو ما يمنع التكرار — لا فحص في الكود،
+    // لأن طلبين متزامنين يمرّان عليه معاً.
+    return { error: 'توجد شريحة بنفس الخدمة ونفس الحد الأدنى لهذا المنتج.' };
+  }
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'price-tier.create',
+    entityType: 'PriceTier',
+    entityId: productId,
+    detail: `${parsed.data.service} · من ${parsed.data.minQty} · ${parsed.data.price}`,
+  });
+
+  revalidatePath(`/catalog/products/${productId}`);
+  return { ok: 'أُضيفت الشريحة.' };
+}
+
+export async function deletePriceTier(productId: string, tierId: string) {
+  const user = await requirePermission('products.write');
+  await prisma.priceTier.deleteMany({ where: { id: tierId, tenantId: user.tenantId } });
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'price-tier.delete',
+    entityType: 'PriceTier',
+    entityId: tierId,
+  });
   revalidatePath(`/catalog/products/${productId}`);
 }

@@ -2,15 +2,16 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { can, dec, formatQty } from '@erp/domain';
+import { can, dec, formatQty, PRICE_SERVICE_AR, coverageGaps } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import { ProductForm } from '../ProductForm';
-import { updateProduct, deleteProduct, deleteVariant } from '../actions';
+import { updateProduct, deleteProduct, deleteVariant, addPriceTier, deletePriceTier } from '../actions';
 import { loadProductOptions } from '../options';
 import { VariantForm } from './VariantForm';
+import { PriceTierForm } from './PriceTierForm';
 
 export const metadata: Metadata = { title: 'بيانات المنتج' };
 
@@ -28,6 +29,7 @@ export default async function ProductDetailPage({
       category: true,
       images: { orderBy: { sortOrder: 'asc' } },
       materials: true,
+      priceTiers: { orderBy: [{ service: 'asc' }, { minQty: 'asc' }] },
       printingOptions: true,
       embroideryOptions: true,
       variants: {
@@ -226,6 +228,76 @@ export default async function ProductDetailPage({
               <VariantForm productId={product.id} colors={options.colors} sizes={options.sizes} />
             </section>
           )}
+
+          {/* ── أسعار البيع حسب الخدمة والكمية ──────────────── */}
+          <section className="erp-card p-6">
+            <h3 className="mb-1 text-sm font-semibold text-brand">أسعار البيع</h3>
+            <p className="mb-4 text-[0.7rem] leading-[1.9] text-txt-4">
+              سعر لكل خدمة ونطاق كمية. تظهر على الموقع العام فور الحفظ، بلا نشر.
+            </p>
+
+            <Table
+              headers={['الخدمة', 'الكمية', 'السعر', 'المتغيّر', '']}
+              empty={product.priceTiers.length === 0}
+            >
+              {product.priceTiers.map((t) => (
+                <tr key={t.id}>
+                  <td className="px-4 py-2.5 text-txt">
+                    {(PRICE_SERVICE_AR as Record<string, string>)[t.service] ?? t.service}
+                  </td>
+                  <td className="tnum px-4 py-2.5 text-txt-3">
+                    {t.maxQty === null ? `${t.minQty} فأكثر` : `${t.minQty} – ${t.maxQty}`}
+                  </td>
+                  <td className="tnum px-4 py-2.5 font-medium text-txt">
+                    {Number(t.price).toLocaleString('ar-IQ')} {t.currency}
+                  </td>
+                  <td className="px-4 py-2.5 text-[0.7rem] text-txt-4">
+                    {t.variantId
+                      ? (product.variants.find((v) => v.id === t.variantId)?.sku ?? '—')
+                      : 'كل المتغيّرات'}
+                  </td>
+                  <td className="px-4 py-2.5 text-end">
+                    {canWrite && (
+                      <form action={deletePriceTier.bind(null, product.id, t.id)}>
+                        <button type="submit" className="text-[0.7rem] text-bad hover:underline">
+                          حذف
+                        </button>
+                      </form>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </Table>
+
+            {/* فجوات التغطية تُعلَن هنا لا تُكتشف عند أول عرض سعر بلا سعر. */}
+            {(['EMBROIDERY', 'DTF'] as const).map((service) => {
+              const gaps = coverageGaps(
+                product.priceTiers.map((t) => ({ ...t, price: t.price.toString() })),
+                service,
+              );
+              if (product.priceTiers.every((t) => t.service !== service)) return null;
+              if (gaps.length === 0) return null;
+              return (
+                <p
+                  key={service}
+                  className="mt-3 rounded-lg border border-warn bg-warn-soft px-4 py-2.5 text-[0.7rem] text-warn"
+                >
+                  {PRICE_SERVICE_AR[service]}: لا سعر للكميات {gaps.join(' · ')} — أي طلب بهذه
+                  الكمية لن يجد سعراً.
+                </p>
+              );
+            })}
+
+            {canWrite && (
+              <div className="mt-6 border-t border-line pt-5">
+                <PriceTierForm
+                  action={addPriceTier.bind(null, product.id)}
+                  currency={product.priceTiers[0]?.currency ?? 'IQD'}
+                  variants={product.variants.map((v) => ({ value: v.id, label: v.sku }))}
+                />
+              </div>
+            )}
+          </section>
         </div>
       </div>
     </AppShell>

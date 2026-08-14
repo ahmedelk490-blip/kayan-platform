@@ -1,4 +1,5 @@
 import { Hero } from '@/components/site/sections/Hero';
+import { publicProducts } from '@/lib/catalog';
 import { Products } from '@/components/site/sections/Products';
 import { Services } from '@/components/site/sections/Services';
 import { WhyKayan } from '@/components/site/sections/WhyKayan';
@@ -17,11 +18,15 @@ import { QuoteForm } from '@/components/site/sections/QuoteForm';
  *
  * لا ذكر لنظام ERP هنا. هذه صفحة مصنع تبيع زياً موحداً وطباعة وتطريز.
  */
-export default function HomePage() {
+export const dynamic = 'force-dynamic';
+
+export default async function HomePage() {
+  const products = await publicProducts();
+
   return (
     <>
       <Hero />
-      <Products />
+      <Products products={products} />
       <Services />
       <WhyKayan />
       <QuoteForm />

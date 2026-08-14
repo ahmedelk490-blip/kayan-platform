@@ -5,7 +5,8 @@ import { motion } from 'motion/react';
 import { EASE } from '@erp/motion';
 import { SectionShell, AnimatedText } from '@erp/ui-market';
 import { ImageReveal } from '@/components/site/Parallax';
-import { PRODUCTS, PRODUCTS_WITHOUT_PHOTOS } from '@/site';
+import { PRODUCTS_WITHOUT_PHOTOS } from '@/site';
+import type { PublicProduct } from '@/lib/catalog';
 
 /**
  * المنتجات.
@@ -13,7 +14,13 @@ import { PRODUCTS, PRODUCTS_WITHOUT_PHOTOS } from '@/site';
  * كل بطاقة تعرض صورة حقيقية من إنتاج المصنع. المنتجات التي لا نملك صورها
  * تُذكر نصاً تحت الشبكة بدل أن تُعطى صورة مستعارة — العميل يشتري ما يرى.
  */
-export function Products() {
+/**
+ * بطاقات المنتجات على الصفحة الرئيسية.
+ *
+ * المنتجات تصل كخاصيّة من الخادم بعد قراءتها من جدول Product — لا تُقرأ
+ * من site.ts بعد اليوم. التصميم كما اعتُمد؛ المتغيّر هو المصدر وحده.
+ */
+export function Products({ products }: { products: PublicProduct[] }) {
   return (
     <SectionShell size="tall">
       <div id="products" className="mx-auto w-full max-w-[1400px]">
@@ -44,7 +51,7 @@ export function Products() {
         </motion.div>
 
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {PRODUCTS.map((product, index) => (
+          {products.map((product, index) => (
             <motion.article
               key={product.id}
               initial={{ opacity: 0, y: 26 }}
@@ -69,8 +76,8 @@ export function Products() {
             >
               <ImageReveal delay={(index % 3) * 0.08} className="relative aspect-[4/3] overflow-hidden">
                 <Image
-                  src={`/products/${product.folder}/01.webp`}
-                  alt={product.name}
+                  src={product.image ?? ''}
+                  alt={product.nameAr}
                   fill
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                   className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.07]"
@@ -79,14 +86,14 @@ export function Products() {
                 {/* لمعة تمرّ مرة واحدة عند المرور — لا تدور بلا نهاية */}
                 <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/12 to-transparent transition-transform duration-[900ms] ease-out group-hover:translate-x-full" />
                 <span className="absolute bottom-4 start-4 rounded-full bg-page/80 px-3 py-1 text-[0.7rem] text-body-muted backdrop-blur">
-                  {product.images} صور
+                  {product.imageCount} صور
                 </span>
               </ImageReveal>
 
               <div className="p-6">
-                <p className="text-xs tracking-[0.12em] text-brand">{product.line}</p>
-                <h3 className="mt-2 text-xl text-body">{product.name}</h3>
-                <p className="mt-3 text-sm leading-[1.85] text-body-muted">{product.body}</p>
+                <p className="text-xs tracking-[0.12em] text-brand">{product.materials.join(' · ') || product.sku}</p>
+                <h3 className="mt-2 text-xl text-body">{product.nameAr}</h3>
+                <p className="mt-3 text-sm leading-[1.85] text-body-muted">{product.descriptionAr ?? ''}</p>
               </div>
             </motion.article>
           ))}
