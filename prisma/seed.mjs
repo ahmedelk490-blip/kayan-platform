@@ -24,7 +24,17 @@ const USERS = [
   { email: 'customer@kayan.eg', name: 'Customer Account', nameAr: 'حساب عميل', role: 'CUSTOMER' },
 ];
 
-const DEV_PASSWORD = 'Kayan#2026';
+// كلمة مرور حسابات التطوير — من البيئة لا من المصدر.
+//
+// كانت مكتوبة هنا، وهذا مقبول ما دام المستودع محلياً. لحظة ربطه بمستودع
+// بعيد تصير كلمة مرور منشورة في تاريخ Git لا يمحوها تعديل لاحق.
+//
+// بلا قيمة لا تُنشأ حسابات بكلمة افتراضية معروفة: البذرة تتوقف وتطلبها.
+const DEV_PASSWORD = process.env.SEED_PASSWORD;
+if (!DEV_PASSWORD) {
+  console.error('اضبط SEED_PASSWORD قبل تشغيل البذرة. لن تُنشأ حسابات بكلمة مكتوبة في الكود.');
+  process.exit(1);
+}
 
 async function main() {
   const tenant = await prisma.tenant.upsert({

@@ -25,7 +25,7 @@ const authDb = new PrismaClient({ datasources: { db: { url: process.env.AUTH_DAT
 const app = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
 
 const EMAIL = 'manager@kayan.eg';
-const PASSWORD = 'Kayan#2026';
+const PASSWORD = process.env.SEED_PASSWORD ?? '';
 
 const results = [];
 function check(name, pass, detail = '') {
