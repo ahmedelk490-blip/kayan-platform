@@ -51,6 +51,21 @@ export interface PublicProduct {
 export async function publicProducts(): Promise<PublicProduct[]> {
   setCurrentTenant(PUBLIC_TENANT);
 
+  try {
+    return await queryProducts();
+  } catch (error) {
+    // قاعدة البيانات غير متاحة. الصفحة العامة تُعرض بلا منتجات بدل أن
+    // تعطي 500: زائر يرى الموقع بلا كتالوج أفضل من زائر يرى صفحة خطأ.
+    //
+    // ليس التفافاً على المعمارية ولا قائمة بديلة مكتوبة في الكود — لا شيء
+    // يُخترع هنا. الخطأ يُسجَّل كاملاً ليُرى، والصفحة تقول بصراحة إنها لا
+    // تعرض منتجات الآن.
+    console.error('[catalog] الكتالوج العام تعذّر قراءته من قاعدة البيانات', error);
+    return [];
+  }
+}
+
+async function queryProducts(): Promise<PublicProduct[]> {
   const rows = await prisma.product.findMany({
     where: { tenantId: PUBLIC_TENANT, isDeleted: false, status: 'ACTIVE' },
     orderBy: { sku: 'asc' },

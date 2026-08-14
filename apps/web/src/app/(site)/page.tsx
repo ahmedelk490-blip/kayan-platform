@@ -37,7 +37,9 @@ export default async function HomePage() {
 
   return (
     <>
-      <Hero slides={slides} />
+      {/* الكاروسيل يقسم على عدد الشرائح ويفهرس به: صفر يعني NaN ومؤشراً
+          خارج النطاق، أي انهيار الصفحة كلها. فلا يُركَّب بلا شرائح. */}
+      {slides.length > 0 && <Hero slides={slides} />}
       <Products products={products} />
       <Services />
       <WhyKayan />
