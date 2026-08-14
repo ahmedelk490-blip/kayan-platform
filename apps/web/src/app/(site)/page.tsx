@@ -23,9 +23,21 @@ export const dynamic = 'force-dynamic';
 export default async function HomePage() {
   const products = await publicProducts();
 
+  // الشرائح من نفس المنتجات: ما له صورة فقط. التدرّج اللوني يُشتق من
+  // الترتيب — قيمة بصرية لا يملكها العمل ولا تُخزَّن.
+  const slides = products
+    .filter((p) => p.image)
+    .slice(0, 6)
+    .map((p, i) => ({
+      src: p.image as string,
+      name: p.nameAr,
+      note: p.materials.join(' · ') || p.descriptionAr?.slice(0, 40) || p.sku,
+      tint: `rgba(92, 35, 52, ${(0.04 + (i % 4) * 0.015).toFixed(3)})`,
+    }));
+
   return (
     <>
-      <Hero />
+      <Hero slides={slides} />
       <Products products={products} />
       <Services />
       <WhyKayan />

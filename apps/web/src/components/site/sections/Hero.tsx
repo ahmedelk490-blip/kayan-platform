@@ -29,53 +29,30 @@ import { Parallax } from '@/components/site/Parallax';
  * to a plain cross-fade rather than pretending to have depth it cannot afford.
  */
 
-/** Real photographs from the factory. No stock imagery, no invented products. */
-const SLIDES = [
-  {
-    src: '/products/tshirts/tshirts-001/01.webp',
-    name: 'التيشيرتات',
-    note: 'قطن مفرّز · يقبل الطباعة والتطريز',
-    /** Tone the surface drifts toward while this slide is active. */
-    tint: 'rgba(92, 35, 52, 0.055)',
-  },
-  {
-    src: '/products/vest-turkish/vest-turkish-001/01.webp',
-    name: 'اليلك التركي',
-    note: 'شرائط عاكسة · خياطة مقوّاة',
-    tint: 'rgba(92, 35, 52, 0.085)',
-  },
-  {
-    src: '/products/vest-chinese/vest-chinese-001/01.webp',
-    name: 'اليلك الصيني',
-    note: 'خيار اقتصادي للكميات',
-    tint: 'rgba(92, 35, 52, 0.04)',
-  },
-  {
-    src: '/products/aprons/aprons-001/01.webp',
-    name: 'المرايل',
-    note: 'مطاعم وكافيهات ومصانع',
-    tint: 'rgba(92, 35, 52, 0.07)',
-  },
-  {
-    src: '/products/shemagh/shemagh-001/01.webp',
-    name: 'الشماغ',
-    note: 'تفصيل حسب الطلب',
-    tint: 'rgba(92, 35, 52, 0.05)',
-  },
-  {
-    src: '/products/tshirts/tshirts-002/01.webp',
-    name: 'البولو',
-    note: 'ياقة وقصّة أقرب للرسمي',
-    tint: 'rgba(92, 35, 52, 0.065)',
-  },
-];
+/**
+ * الشرائح تصل من الخادم بعد قراءتها من جدول Product.
+ *
+ * كانت مكتوبة هنا: المسار والاسم والوصف لكل شريحة. فمنتج يوقفه المدير
+ * يبقى في الهيرو، ومنتج جديد لا يظهر فيه حتى يعدّل أحد الكود.
+ *
+ * التدرّج اللوني يُشتق من الترتيب لا من قاعدة البيانات: قيمة بصرية بحتة
+ * لا يملكها العمل ولا معنى لتخزينها.
+ */
+export interface HeroSlide {
+  src: string;
+  name: string;
+  note: string;
+  tint: string;
+}
 
 const WORDS = ['كل', 'علامة', 'ناجحة', 'تبدأ', 'بكيان'];
 
 /** 660ms — inside the 600–700 the brief asked for, on the brand's own curve. */
 const SWITCH = { duration: 0.66, ease: EASE.outExpo };
 
-export function Hero() {
+export function Hero({ slides }: { slides: HeroSlide[] }) {
+  const SLIDES = slides;
+
   const reduced = usePrefersReducedMotion();
   const [active, setActive] = useState(0);
   /** Small screens get the same carousel with the depth costs removed. */
@@ -85,9 +62,11 @@ export function Hero() {
   /** Timestamp of the last accepted wheel step, for the cooldown. */
   const lastWheel = useRef(0);
 
+  // SLIDES صارت مشتقّة من خاصيّة لا ثابتاً في الوحدة، فطولها اعتمادية
+  // حقيقية: إغلاق قديم على عدد مختلف يدور على شريحة غير موجودة.
   const go = useCallback((delta: number) => {
     setActive((current) => (current + delta + SLIDES.length) % SLIDES.length);
-  }, []);
+  }, [SLIDES.length]);
 
   useEffect(() => {
     const query = window.matchMedia('(max-width: 767px), (pointer: coarse)');
@@ -163,7 +142,7 @@ export function Hero() {
     // passive:false because preventDefault is the whole mechanism.
     node.addEventListener('wheel', onWheel, { passive: false });
     return () => node.removeEventListener('wheel', onWheel);
-  }, [reduced, active]);
+  }, [reduced, active, SLIDES.length]);
 
   function onKeyDown(event: React.KeyboardEvent) {
     // RTL: ArrowLeft advances, because forward is leftward on this page.
