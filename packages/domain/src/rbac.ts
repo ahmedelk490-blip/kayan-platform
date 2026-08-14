@@ -182,9 +182,16 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'reports.view',
     // The company's own financial facts — VAT rate, payment terms, tax
     // number — are the manager's to state. They are printed on tax documents
-    // and nobody else in this business knows them. Deliberately NOT
-    // 'users.manage': settings are business data, accounts are access.
+    // and nobody else in this business knows them.
     'settings.manage',
+    // إدارة حسابات الفريق. المدير هو من يوظّف ويُنهي، فهو من يفتح الحساب
+    // ويغلقه — انتظار مدير النظام لفتح حساب مندوب جديد يعني حساباً مشتركاً
+    // بين اثنين، وهو أسوأ من الصلاحية نفسها.
+    //
+    // ⚠ لا يستطيع إنشاء حساب ADMIN. الحد مفروض في الإجراء الخادمي لا في
+    //   الواجهة: مدير يصنع مديرَ نظام يمنح نفسه كل شيء، وهي تصعيد صلاحيات
+    //   لا تفويض.
+    'users.manage',
   ],
 
   SALES: [

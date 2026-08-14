@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { headers } from 'next/headers';
-import { prisma } from './prisma';
+import { withTenant } from './prisma';
 
 /**
  * Write an audit row. Append-only (DI-1).
@@ -18,7 +18,10 @@ export async function audit(input: {
   detail?: string | null;
 }) {
   const headerList = await headers();
-  await prisma.auditLog.create({
+  // المستأجر يُعلَن صراحةً: صف السجل يحمله أصلاً، والاعتماد على السياق
+  // الضمني هنا رفضته RLS داخل الإجراءات الخادمية.
+  await withTenant(input.tenantId, (tx) =>
+    tx.auditLog.create({
     data: {
       tenantId: input.tenantId,
       userId: input.userId ?? null,
@@ -27,8 +30,9 @@ export async function audit(input: {
       entityId: input.entityId ?? null,
       detail: input.detail ?? null,
       ip: headerList.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
-    },
-  });
+      },
+    }),
+  );
 }
 
 /** Turn a Zod error into a field -> message map for the form. */

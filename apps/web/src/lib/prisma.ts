@@ -68,6 +68,27 @@ export const prisma = base.$extends({
  * `prisma.$transaction` directly would open a transaction with no tenant
  * declared, and RLS would correctly refuse to do anything.
  */
+/**
+ * كتابة تعلن مستأجرها صراحةً بدل الاعتماد على سياق الطلب.
+ *
+ * لبعض الكتابات مستأجرها معروف في معاملاتها — سجلّ التدقيق يحمل `tenantId`
+ * أصلاً. والاعتماد على السياق الضمني هناك أثبت هشاشته: الإجراء الخادمي رفض
+ * كتابة سجل تدقيق بـ`42501` لأن `app_tenant()` لم تكن مضبوطة في تلك اللحظة،
+ * رغم أن المستأجر مكتوب في الصف نفسه.
+ *
+ * لا توسيع للصلاحيات: المستأجر يأتي من جلسة مُتحقَّق منها، والسياسة نفسها
+ * تفحص الصف. الفرق أن الإعلان صريح لا مُستنتج.
+ */
+export async function withTenant<T>(
+  tenantId: string,
+  fn: (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>,
+): Promise<T> {
+  return base.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
+    return fn(tx);
+  });
+}
+
 export async function tenantTransaction<T>(
   fn: (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>,
 ): Promise<T> {

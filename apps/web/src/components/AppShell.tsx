@@ -33,6 +33,7 @@ const NAV: NavItem[] = [
   { href: '/catalog/categories', label: 'التصنيفات والقوائم', permission: 'products.read', built: true },
   { href: '/inventory', label: 'المخزون', permission: 'inventory.read', built: true },
   { href: '/warehouses', label: 'المخازن', permission: 'inventory.read', built: true },
+  { href: '/requests', label: 'طلبات العملاء', permission: 'customers.read', built: true },
   { href: '/customers', label: 'العملاء', permission: 'customers.read', built: true },
   { href: '/suppliers', label: 'الموردون', permission: 'suppliers.read', built: true },
   { href: '/purchasing', label: 'المشتريات', permission: 'purchasing.view', built: true },
@@ -45,6 +46,7 @@ const NAV: NavItem[] = [
   { href: '/expenses', label: 'المصروفات الثانوية', permission: 'expenses.view', built: true },
   { href: '/damage', label: 'الهالك والجزاءات', permission: 'damage.view', built: true },
   { href: '/reports', label: 'التقارير', permission: 'reports.view', built: true },
+  { href: '/users', label: 'حسابات الفريق', permission: 'users.manage', built: true },
   { href: '/settings', label: 'الإعدادات المالية', permission: 'settings.manage', built: true },
 ];
 
