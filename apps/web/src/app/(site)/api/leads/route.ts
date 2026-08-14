@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { appendFile, mkdir } from 'node:fs/promises';
-import path from 'node:path';
+import { createLead } from '@/lib/leads';
 
 export const runtime = 'nodejs';
 
@@ -14,11 +13,15 @@ export const runtime = 'nodejs';
  *   - strict schema: reject rather than coerce
  *   - rate limited per client, stricter than any authenticated endpoint
  *
- * ⚠ INTERIM STORAGE. The ERP CRM does not exist yet (Phase 4), so submissions
- * are appended to a local JSONL file rather than queued into the CRM. This
- * keeps leads from being silently dropped, but it is NOT the production path:
- * the file is unencrypted, so this must be replaced by the queued intake
- * before the site handles real enquiries. Tracked in 07_UI_UX §11.2.
+ * Submissions now create a real Customer with an INQUIRY activity, in the
+ * same database the ERP reads. The interim JSONL file is gone: it lived
+ * beside the deployment, unencrypted and invisible to everyone inside the
+ * system, so a manager had to open a file on the server to learn that
+ * somebody had asked for a quote.
+ *
+ * It deliberately stops at an unqualified customer. A quotation carries
+ * prices and terms, and nobody can price a request they have not read yet —
+ * so sales opens the quotation after review. See lib/leads.ts.
  */
 
 const MAX_LENGTHS = {
@@ -174,19 +177,7 @@ export async function POST(request: Request) {
   };
 
   try {
-    // LEADS_DIR must point OUTSIDE the deployed build.
-    //
-    // Hosts that deploy into a versioned directory — Hostinger extracts each
-    // release to hbuilds/versions/<uuid>/ — make process.cwd() move on every
-    // deploy. Enquiries written relative to it are left orphaned in the
-    // previous release folder, so a customer who asked for a quote before the
-    // last deploy is simply never seen. Verified on the live server: the
-    // first submission landed inside the version directory.
-    //
-    // Falls back to cwd for local development, where nothing moves.
-    const dir = process.env.LEADS_DIR || path.join(process.cwd(), '.leads');
-    await mkdir(dir, { recursive: true });
-    await appendFile(path.join(dir, 'leads.jsonl'), `${JSON.stringify(record)}\n`, 'utf8');
+    await createLead(record);
   } catch (error) {
     console.error('[leads] failed to persist submission', error);
     return NextResponse.json(

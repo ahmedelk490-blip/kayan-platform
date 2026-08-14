@@ -375,7 +375,7 @@ export default async function FormulaDetailPage({
               <ul className="space-y-2 text-sm">
                 {formula.products.map((a) => (
                   <li key={a.id} className="flex items-center justify-between gap-3">
-                    <Link href={`/products/${a.product.id}`} className="text-txt-2 hover:text-brand">
+                    <Link href={`/catalog/products/${a.product.id}`} className="text-txt-2 hover:text-brand">
                       {a.product.nameAr}
                       <span className="ms-2 text-[0.7rem] text-txt-4">
                         {a.variant ? a.variant.sku : 'كل المتغيّرات'}

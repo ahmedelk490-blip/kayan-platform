@@ -96,7 +96,7 @@ export default async function ProductsPage({
 
       <div className="mb-4 flex flex-wrap gap-2">
         <Link
-          href="/products"
+          href="/catalog/products"
           className={
             categoryFilter
               ? 'rounded-full border border-line-2 px-3 py-1.5 text-xs text-txt-2'
@@ -180,7 +180,7 @@ export default async function ProductsPage({
                       }}
                     />
                   )}
-                  <Link href={`/products/${row.id}`} className="text-xs text-brand hover:underline">
+                  <Link href={`/catalog/products/${row.id}`} className="text-xs text-brand hover:underline">
                     عرض
                   </Link>
                 </div>
@@ -190,7 +190,7 @@ export default async function ProductsPage({
         })}
       </Table>
 
-      <Pager basePath="/products" query={query} count={count} />
+      <Pager basePath="/catalog/products" query={query} count={count} />
     </AppShell>
   );
 }

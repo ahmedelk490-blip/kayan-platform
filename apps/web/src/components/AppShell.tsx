@@ -29,7 +29,7 @@ const NAV: NavItem[] = [
   { href: '/sales', label: 'لوحة المبيعات', permission: 'sales.view', built: true },
   { href: '/sales/quotations', label: 'عروض الأسعار', permission: 'sales.documents', built: true },
   { href: '/sales/orders', label: 'أوامر البيع', permission: 'sales.documents', built: true },
-  { href: '/products', label: 'المنتجات', permission: 'products.read', built: true },
+  { href: '/catalog/products', label: 'المنتجات', permission: 'products.read', built: true },
   { href: '/catalog/categories', label: 'التصنيفات والقوائم', permission: 'products.read', built: true },
   { href: '/inventory', label: 'المخزون', permission: 'inventory.read', built: true },
   { href: '/warehouses', label: 'المخازن', permission: 'inventory.read', built: true },

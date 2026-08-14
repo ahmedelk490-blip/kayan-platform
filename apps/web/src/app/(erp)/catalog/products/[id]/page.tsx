@@ -71,7 +71,7 @@ export default async function ProductDetailPage({
         title={product.nameAr}
         action={
           <div className="flex gap-2">
-            <Link href="/products" className="erp-btn-ghost">
+            <Link href="/catalog/products" className="erp-btn-ghost">
               رجوع
             </Link>
             {canWrite && (

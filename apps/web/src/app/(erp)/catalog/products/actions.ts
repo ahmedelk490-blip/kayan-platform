@@ -108,14 +108,14 @@ async function createProductCore(
     detail: created.sku,
   });
 
-  revalidatePath('/products');
+  revalidatePath('/catalog/products');
   return { state: {}, id: created.id, sku: created.sku };
 }
 
 export async function createProduct(_prev: FormState, formData: FormData): Promise<FormState> {
   const result = await createProductCore(formData);
   if (!result.id) return result.state;
-  redirect(`/products/${result.id}`);
+  redirect(`/catalog/products/${result.id}`);
 }
 
 /**
@@ -177,8 +177,8 @@ export async function updateProduct(
     detail: parsed.data.sku,
   });
 
-  revalidatePath('/products');
-  revalidatePath(`/products/${id}`);
+  revalidatePath('/catalog/products');
+  revalidatePath(`/catalog/products/${id}`);
   return { ok: 'تم حفظ التعديلات.' };
 }
 
@@ -187,7 +187,7 @@ export async function deleteProduct(id: string): Promise<void> {
   const current = await prisma.product.findFirst({
     where: { id, tenantId: user.tenantId, isDeleted: false },
   });
-  if (!current) redirect('/products');
+  if (!current) redirect('/catalog/products');
 
   await prisma.product.update({
     where: { id },
@@ -203,8 +203,8 @@ export async function deleteProduct(id: string): Promise<void> {
     detail: current.sku,
   });
 
-  revalidatePath('/products');
-  redirect('/products');
+  revalidatePath('/catalog/products');
+  redirect('/catalog/products');
 }
 
 // ── Variants ────────────────────────────────────────────────
@@ -273,7 +273,7 @@ export async function createVariant(
     detail: created.sku,
   });
 
-  revalidatePath(`/products/${productId}`);
+  revalidatePath(`/catalog/products/${productId}`);
   return {};
 }
 
@@ -298,5 +298,5 @@ export async function deleteVariant(productId: string, variantId: string): Promi
     detail: `movements=${movements}`,
   });
 
-  revalidatePath(`/products/${productId}`);
+  revalidatePath(`/catalog/products/${productId}`);
 }

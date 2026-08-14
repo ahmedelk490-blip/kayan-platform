@@ -36,7 +36,7 @@ export function RecentProducts({ products }: { products: RecentProduct[] }) {
           transition={{ delay: 0.1 + index * 0.07, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         >
           <Link
-            href="/products"
+            href="/catalog/products"
             className="erp-card erp-card-hover group block overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             {/* 4:5 rather than 3:4 — garment shots are portrait, but a

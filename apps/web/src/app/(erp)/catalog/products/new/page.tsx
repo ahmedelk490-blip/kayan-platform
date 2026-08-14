@@ -18,7 +18,7 @@ export default async function NewProductPage() {
       <ModuleHeader
         title="منتج جديد"
         action={
-          <Link href="/products" className="erp-btn-ghost">
+          <Link href="/catalog/products" className="erp-btn-ghost">
             رجوع
           </Link>
         }
