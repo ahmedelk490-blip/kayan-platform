@@ -4,6 +4,10 @@ import Link from 'next/link';
 import { SectionShell } from '@erp/ui-market';
 import { PageHero } from '@/components/site/PageHero';
 import { publicProducts } from '@/lib/catalog';
+import { PRICE_SERVICE_AR } from '@erp/domain';
+
+/** أسماء الخدمات بالعربية — من الحزمة لا مكرّرة هنا. */
+const SERVICE_AR: Record<string, string> = PRICE_SERVICE_AR;
 
 export const metadata: Metadata = {
   title: 'منتجاتنا',
@@ -100,17 +104,36 @@ export default async function ProductsPage() {
                     )}
                   </dl>
 
+                  {/* شرائح السعر من قاعدة البيانات. لا سعر مخترع: ما لم
+                      تُدخله الإدارة لا يُعرض له رقم. */}
+                  {p.tiers.length > 0 && (
+                    <ul className="mt-4 space-y-1.5 border-t border-edge pt-4">
+                      {p.tiers.map((t) => (
+                        <li
+                          key={`${t.service}-${t.minQty}`}
+                          className="flex items-baseline justify-between gap-3 text-[0.75rem]"
+                        >
+                          <span className="text-body-muted">
+                            {SERVICE_AR[t.service] ?? t.service}
+                            <span className="ms-1.5 text-body-subtle">
+                              {t.maxQty === null
+                                ? `${t.minQty} قطعة فأكثر`
+                                : `${t.minQty}–${t.maxQty} قطعة`}
+                            </span>
+                          </span>
+                          <span className="tnum shrink-0 font-medium text-brand">
+                            {Number(t.price).toLocaleString('ar-IQ')} {t.currency === 'IQD' ? 'د.ع' : t.currency}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
                   <div className="mt-5 flex items-center justify-between gap-3 border-t border-edge pt-4">
-                    {/* السعر يظهر فقط إن أدخله المدير. لا سعر مخترع، ولا
-                        "اتصل للسعر" مكتوبة فوق رقم موجود. */}
-                    {p.sellingPrice ? (
-                      <span className="tnum text-sm font-medium text-brand">
-                        {Number(p.sellingPrice).toLocaleString('ar-IQ')} د.ع
-                      </span>
-                    ) : (
+                    {p.tiers.length === 0 && (
                       <span className="text-xs text-body-subtle">السعر حسب الكمية</span>
                     )}
-                    <Link href="/contact" className="text-xs text-brand hover:underline">
+                    <Link href="/contact" className="ms-auto text-xs text-brand hover:underline">
                       اطلب عرض سعر
                     </Link>
                   </div>

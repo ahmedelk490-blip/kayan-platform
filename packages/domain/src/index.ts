@@ -17,3 +17,4 @@ export * from './operations.ts';
 export * from './purchasing.ts';
 export * from './invoicing.ts';
 export * from './reporting.ts';
+export * from './pricing.ts';

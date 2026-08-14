@@ -79,6 +79,7 @@ model Tenant {
   invoices           Invoice[]
   payments           Payment[]
   documentSequences  DocumentSequence[]
+  priceTiers PriceTier[]
 }
 
 model Company {
@@ -395,6 +396,7 @@ model Product {
   variants          ProductVariant[]
   images            ProductImage[]
   materials         ProductMaterial[]
+  priceTiers        PriceTier[]
   printingOptions   ProductPrintingOption[]
   embroideryOptions ProductEmbroideryOption[]
   suppliers         SupplierProduct[]
@@ -437,6 +439,7 @@ model ProductVariant {
   color              Color?              @relation(fields: [colorId], references: [id])
   size               Size?               @relation(fields: [sizeId], references: [id])
   images             ProductImage[]
+  priceTiers         PriceTier[]
   stock              Stock[]
   stockMovements     StockMovement[]
   quotationLines     QuotationLine[]
@@ -1901,4 +1904,45 @@ model SupplyTransaction {
   @@index([supplyId, txDate])
   @@index([tenantId, type])
   @@index([productionOrderId])
+}
+
+/// شريحة سعر — سعر البيع حسب الخدمة والكمية.
+///
+/// أسعار كيان ليست رقماً واحداً لكل منتج: القطعة نفسها لها سعر مع التطريز
+/// وسعر آخر مع طباعة DTF، ولكلٍّ سعر جملة وسعر للكميات الصغيرة. النموذج
+/// القديم يحمل sellingPrice واحداً، وهو ما جعل نصف أسعار الإدارة غير قابل
+/// للإدخال أصلاً.
+///
+/// كل شريحة قابلة للتعديل من الشاشة. لا سعر مكتوب في الكود.
+model PriceTier {
+  id       String @id @default(cuid())
+  tenantId String
+
+  productId String
+  /// اختياري: شريحة تخصّ متغيّراً بعينه، أو المنتج كله حين تكون فارغة.
+  variantId String?
+
+  /// PRINTING | EMBROIDERY | DTF | NONE
+  service String
+
+  /// نطاق الكمية. maxQty فارغة تعني بلا حد أعلى.
+  minQty Int  @default(1)
+  maxQty Int?
+
+  price    Decimal @db.Decimal(19, 4)
+  currency String  @default("IQD")
+
+  isActive Boolean @default(true)
+  notes    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  /// لا شريحتان بنفس المفتاح: منتج × متغيّر × خدمة × حد أدنى.
+  @@unique([productId, variantId, service, minQty])
+  @@index([tenantId, productId])
 }

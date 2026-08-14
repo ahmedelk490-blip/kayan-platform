@@ -38,6 +38,8 @@ export interface PublicProduct {
   sizes: string[];
   materials: string[];
   variantCount: number;
+  /** شرائح السعر النشطة — الخدمة والكمية والسعر. */
+  tiers: { service: string; minQty: number; maxQty: number | null; price: string; currency: string }[];
 }
 
 /**
@@ -71,6 +73,11 @@ export async function publicProducts(): Promise<PublicProduct[]> {
         },
       },
       materials: { select: { material: { select: { nameAr: true } } } },
+      priceTiers: {
+        where: { isActive: true },
+        orderBy: [{ service: 'asc' }, { minQty: 'asc' }],
+        select: { service: true, minQty: true, maxQty: true, price: true, currency: true },
+      },
     },
   });
 
@@ -88,5 +95,12 @@ export async function publicProducts(): Promise<PublicProduct[]> {
     sizes: [...new Set(p.variants.map((v) => v.size?.code).filter(Boolean))] as string[],
     materials: [...new Set(p.materials.map((m) => m.material.nameAr))],
     variantCount: p.variants.length,
+    tiers: p.priceTiers.map((t) => ({
+      service: t.service,
+      minQty: t.minQty,
+      maxQty: t.maxQty,
+      price: t.price.toString(),
+      currency: t.currency,
+    })),
   }));
 }
