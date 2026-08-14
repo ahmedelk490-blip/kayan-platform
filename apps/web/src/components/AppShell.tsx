@@ -1,7 +1,7 @@
 import { Logo } from '@erp/brand/logo';
 import { can, type PermissionKey } from '@erp/domain';
 import type { SessionUser } from '@/lib/auth';
-import { logoutAction } from '@/app/login/actions';
+import { logoutAction } from '@/app/(erp)/login/actions';
 import { SidebarNav, MobileNav } from '@/components/NavLinks';
 
 /**

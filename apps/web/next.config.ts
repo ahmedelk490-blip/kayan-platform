@@ -1,24 +1,22 @@
 import type { NextConfig } from 'next';
 
 /**
- * Where the ERP is mounted.
+ * منصّة كيان — تطبيق واحد يخدم الطبقة العامة والنظام.
  *
- * The marketing site and the ERP share one domain, and two Next.js apps
- * cannot both serve `/_next/static/...` — same prefix, different bundles,
- * and whichever nginx routes second gets a page with the other app's
- * JavaScript. A basePath moves the ERP's assets to `/erp/_next/...`, which
- * is what makes the two coexist at all.
+ * There is no basePath any more, and there should not be one. It existed to
+ * let two separate Next apps share a hostname without fighting over
+ * `/_next/static/...`. One app has one asset namespace, so the problem it
+ * solved no longer exists — and the ERP is meant to answer on `/dashboard`,
+ * not `/erp/dashboard`.
  *
- * Set from the environment so development stays at the root, where every
- * earlier phase was built and verified, and only the deployment mounts it.
+ * The two design systems stay apart through route groups with separate root
+ * layouts: `(site)` loads site.css, `(erp)` loads erp.css, and no page ever
+ * loads both.
  */
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
-
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  ...(basePath ? { basePath } : {}),
   // Workspace packages ship TypeScript source, not build output.
-  transpilePackages: ['@erp/brand', '@erp/domain', '@erp/utils'],
+  transpilePackages: ['@erp/brand', '@erp/domain', '@erp/utils', '@erp/motion', '@erp/ui-market'],
   serverExternalPackages: ['@node-rs/argon2', '@prisma/client'],
 };
 

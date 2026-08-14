@@ -26,27 +26,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'dist-hostinger');
 
-/** What each bundle contains. Nothing is guessed at pack time. */
+/** ما تحويه حزمة النشر. لا شيء يُخمَّن وقت التحزيم. */
 const TARGETS = {
-  marketing: {
-    appDir: 'apps/marketing',
-    packages: ['brand', 'motion', 'ui-market', 'utils'],
-    files: [
-      'src',
-      'public',
-      'next.config.ts',
-      'postcss.config.mjs',
-      'tsconfig.json',
-      'next-env.d.ts',
-      'package.json',
-    ],
-    // Files that must NOT travel: the interim lead store holds real
-    // submissions, and shipping it back up would republish them.
-    exclude: ['.leads'],
-  },
-  erp: {
+  platform: {
     appDir: 'apps/web',
-    packages: ['brand', 'domain', 'utils'],
+    packages: ['brand', 'domain', 'utils', 'motion', 'ui-market'],
     files: [
       'src',
       'public',
@@ -58,178 +42,86 @@ const TARGETS = {
     ],
     exclude: [],
     extra: [
-      // The ERP is nothing without its schema and migration history.
+      // المنصّة لا شيء بلا مخططها وتاريخ هجراتها.
       { from: 'prisma', to: 'prisma' },
-      // The verification suites travel too. Tenant isolation is the one
-      // claim that must be re-proven on the machine that will actually
-      // hold customer data — asserting it from a laptop proves nothing
-      // about the server's roles and policies.
+      // مجموعات التحقّق تسافر معها. عزل المستأجرين هو الادّعاء الذي
+      // يجب إثباته على الجهاز الذي سيحمل بيانات العملاء فعلاً.
       { from: 'scripts', to: 'scripts', only: /^verify-.*\.mjs$/ },
     ],
   },
 };
 
-/** Environment templates. Values are never filled in — only explained. */
+/** قالب البيئة. القيم تُشرح ولا تُملأ. */
 const ENV = {
-  marketing: `# ── متغيّرات البيئة للموقع التسويقي ──────────────────────
-# اضبطها من hPanel: Websites → Node.js → Environment Variables
-# لا ترفع هذا الملف بقيم حقيقية إلى أي مستودع.
+  platform: `# ── متغيّرات منصّة كيان ─────────────────────────────────
+# منصّة واحدة: الطبقة العامة والنظام في تطبيق واحد على نطاق واحد.
 
-# النطاق الأساسي. يغذّي metadataBase والروابط الأساسية (canonical)
-# وخريطة الموقع وrobots.txt — أربعة مواضع يجب ألا تختلف أبداً.
-# هذه هي القيمة الافتراضية في الكود أصلاً؛ اضبطها هنا فقط إن غيّرت النطاق.
 NEXT_PUBLIC_SITE_URL=https://kayan-uniform.com
 
-# شاشة دخول النظام — مسار على نفس النطاق.
-#
-# زرّ "دخول النظام" في القائمة يشير إلى /login، وnginx يحوّله إلى
-# /erp/login. هذا المتغيّر يخصّ صفحة /login الاحتياطية وحدها، التي
-# تظهر فقط عند تشغيل الموقع بلا nginx.
-#
-# ⚠ لا تضبطه قبل أن يعمل النظام فعلاً: الصفحة تعرض "قيد التجهيز"
-#   عند غيابه، وهذا أفضل من زرّ يقود إلى عنوان لا يستجيب.
-NEXT_PUBLIC_ERP_URL=/erp/login
+# رقم واتساب بصيغة دولية بلا رموز. بدونه لا يظهر الزر إطلاقاً.
+NEXT_PUBLIC_WHATSAPP=
 
-# ── مكان حفظ طلبات عروض الأسعار ─────────────────────────
-# ⚠ يجب أن يكون خارج مجلد النشر.
-#
-# هوستنجر ينشر كل إصدار في مجلد جديد (hbuilds/versions/<uuid>/)،
-# فالمسار النسبي يتحرّك مع كل نشر وتبقى الطلبات القديمة يتيمة في
-# المجلد السابق — أي أن عميلاً طلب عرض سعر قبل آخر تحديث لن يراه
-# أحد. حدث هذا فعلاً على الخادم الحيّ ورُصد.
-#
-# اتركه فارغاً في التطوير المحلي فقط.
-LEADS_DIR=/home/USERNAME/kayan-leads
-`,
-  erp: `# ── متغيّرات البيئة لنظام ERP ───────────────────────────
-# ⚠ هذا النظام يتطلب PostgreSQL 17. لا يعمل على MySQL:
-#   عزل المستأجرين مبني على Row-Level Security، وهي غير موجودة
-#   في MySQL أصلاً. استضافة Business/Cloud لا توفّر PostgreSQL.
+# ── قاعدة البيانات ──────────────────────────────────────
+# ⚠ PostgreSQL 17 إجباراً. العزل مبني على Row-Level Security،
+#   وهي غير موجودة في MariaDB إطلاقاً.
 
-# ── مكان تركيب النظام على النطاق ────────────────────────
-# ⚠ يُقرأ وقت **البناء** لا وقت التشغيل — Next يدمجه في الحزمة.
-#   لذلك يجب أن يكون موجوداً في هذا الملف قبل npm run build،
-#   وأي تغيير له يستلزم إعادة بناء لا إعادة تشغيل.
-#
-# يجب أن يطابق مسار location في إعداد nginx بالضبط. بدونه
-# سيطلب التطبيق أصوله من /_next وسيتنازع مع الموقع التسويقي.
-NEXT_PUBLIC_BASE_PATH=/erp
+# اتصال التطبيق. لا يملك BYPASSRLS عمداً.
+DATABASE_URL=postgresql://kayan_app:PASSWORD@HOST:5432/kayan_erp?schema=public
 
-# اتصال التطبيق. هذا المستخدم لا يملك BYPASSRLS عمداً.
-DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/kayan_erp?schema=public
+# الهجرات والصيانة (مالك المخطط).
+DIRECT_DATABASE_URL=postgresql://kayan_owner:PASSWORD@HOST:5432/kayan_erp?schema=public
+MAINTENANCE_DATABASE_URL=postgresql://kayan_owner:PASSWORD@HOST:5432/kayan_erp?schema=public
 
-# اتصال الهجرات والصيانة (مالك المخطط).
-DIRECT_DATABASE_URL=postgresql://OWNER:PASSWORD@HOST:5432/kayan_erp?schema=public
-MAINTENANCE_DATABASE_URL=postgresql://OWNER:PASSWORD@HOST:5432/kayan_erp?schema=public
-
-# اتصال المصادقة وحده. هذا المستخدم يحمل BYPASSRLS لأنه يقرأ
-# جداول الهوية قبل معرفة المستأجر.
-# ⚠ مخاطرة قائمة: هذا الدور ممنوح DML على كل الجداول ويجب تضييقه
-#   إلى جداول الهوية فقط قبل التشغيل الحقيقي.
+# المصادقة وحدها. يحمل BYPASSRLS لأنه يقرأ الهوية قبل معرفة المستأجر.
+# ⚠ ممنوح DML على كل الجداول ويجب تضييقه قبل التشغيل الحقيقي.
 AUTH_DATABASE_URL=postgresql://kayan_auth:PASSWORD@HOST:5432/kayan_erp?schema=public
+
+# ── طلبات عروض الأسعار ──────────────────────────────────
+# ⚠ خارج مجلد النشر إجباراً. مسار نسبي يتحرّك مع كل نشر فتضيع
+#   الطلبات القديمة — رُصد حيّاً على الخادم.
+LEADS_DIR=/home/USERNAME/kayan-leads
 `,
 };
 
 const README = {
-  marketing: `# نشر الموقع التسويقي على هوستنجر
+  platform: `# نشر منصّة كيان
 
-## قبل الرفع
-خطة **Business** أو **Cloud**. الخطط المشتركة (Premium / Single) لا تدعم
-Node.js، والموقع يحتاجه: نموذج طلب عرض السعر مسار خادم حقيقي
-(\`/api/leads\`)، ولو صُدِّر الموقع كملفات ثابتة سيتوقف النموذج عن العمل —
-وهو مسار التحويل الوحيد في الموقع.
+## منصّة واحدة، نطاق واحد
+تطبيق Next واحد يخدم الطبقة العامة والنظام. الطبقتان تفصلهما مجموعتا
+مسارات بتخطيطَي جذر منفصلين، فكل واحدة تحمّل نظام تصميمها وحده.
+مُتحقَّق منه: --color-brand يساوي #c46481 على / و#5c2535 على /sales.
+
+| العنوان | الطبقة |
+|---|---|
+| / و /contact و /legal | عامة |
+| /login | المصادقة — نقطة الدخول الوحيدة |
+| /dashboard /sales /admin /portal | النظام |
+
+## ⚠ المتطلّب الحاكم
+**PostgreSQL 17.** الاستضافة المشتركة لا توفّرها — مقيس: المنفذ 5432
+مغلق، و/opt/alt/postgresql11 مكتبة عميل PHP لا خادم، والمتاح MariaDB.
+وMariaDB لا تملك Row-Level Security، و55 جدولاً هنا تعتمد عليها.
+النقل إليها حذف لطبقة العزل لا ترحيل لها. يحتاج VPS.
 
 ## الخطوات
-1. hPanel → **Websites** → \`kayan-uniform.com\` → **Node.js**.
-2. اضغط **Create application**، واختر إصدار Node **20** أو أحدث.
-3. ارفع \`kayan-marketing.zip\` عبر خيار رفع ملف مضغوط.
-4. من **Environment Variables** أضِف المتغيّرات الموجودة في \`.env.example\`.
-5. هوستنجر يشغّل \`npm install\` ثم \`npm run build\` تلقائياً، ثم \`npm start\`.
+1. أنشئ قاعدة kayan_erp والأدوار الثلاثة.
+2. انسخ .env.example إلى .env واملأه. لا تترك كلمة مرور نموذجية.
+3. npm install — على لينكس، فالملفات الثنائية تُختار هناك.
+4. npx prisma migrate deploy — 8 هجرات بما فيها سياسات RLS.
+5. npm run build ثم npm start.
 
-## توزيع النطاق
-| العنوان | التطبيق | الاستضافة |
-|---|---|---|
-| \`kayan-uniform.com\` | الموقع التسويقي | Business / Cloud |
-| \`erp.kayan-uniform.com\` | نظام ERP | **VPS** (يحتاج PostgreSQL) |
+## التحقّق بعد النشر
+node --experimental-strip-types --env-file=.env scripts/verify-rls.mjs
 
-النطاقان يشتركان في النطاق الأساسي، وزرّ الدخول في \`/login\` يشير من الأول
-إلى الثاني عبر \`NEXT_PUBLIC_ERP_URL\`. النطاق الفرعي يُوجَّه بسجل A إلى
-عنوان الـ VPS، بينما يبقى النطاق الأساسي على الاستضافة المشتركة — تقسيم
-عادي تماماً ولا يتطلب نقل الموقع.
+20 تأكيداً تهاجم العزل بالقراءة عبر المفتاح الأساسي ومحاولة التزوير
+وتسرّب الإعدادات بين الاتصالات المجمّعة. يجب أن تمرّ على الخادم الذي
+سيحمل بيانات العملاء — إثباتها من جهاز آخر لا يقول شيئاً عنه.
 
-**لا تضبط \`NEXT_PUBLIC_ERP_URL\` قبل أن يعمل النظام.** صفحة \`/login\` تعرض
-"قيد التجهيز" عند غيابه بدل زرّ عام يقود إلى عنوان لا يستجيب.
-
-جلسات النظام مرتبطة بالنطاق الفرعي وحده (\`httpOnly\` و\`secure\` و\`sameSite=lax\`).
-لا توجد كوكيز مشتركة بين الموقع والنظام، وهذا مقصود: الموقع التسويقي عام
-ولا يجب أن يلمس جلسة موظف.
-
-## الروابط والصور
-كل الروابط الداخلية نسبية، وكل الصور محلية داخل \`public/\` — 33 صورة منتج
-تحقّقتُ من وجودها جميعاً على القرص. لا شيء يشير إلى Google Drive أو أي
-مصدر خارجي، فالصور تعمل فور الرفع دون أي ضبط إضافي.
-
-يولّد البناء \`/sitemap.xml\` و\`/robots.txt\` من نفس قائمة المسارات التي
-تولّد الروابط الأساسية، فلا يمكن أن تشير صفحة إلى رابط أساسي تغفله خريطة
-الموقع. صفحة \`/login\` مستثناة من الفهرسة عمداً.
-
-## لماذا لا يحتوي الملف على node_modules
-ثلاث حزم تحتوي ملفات ثنائية خاصة بنظام التشغيل — \`sharp\` ومحرّك SWC
-الخاص بـ Next. هذا الملف بُني على Windows والخادم يعمل بـ Linux. لو
-رُفعت ملفات Windows لثبّت التطبيق بنجاح ثم انهار عند أول طلب صورة.
-هوستنجر يشغّل npm على Linux، وهو المكان الوحيد الذي تُختار فيه
-الملفات الصحيحة.
-
-## تم التحقق منه
-ثُبِّتت هذه الحزمة وبُنِيت فعلاً خارج المونوريبو قبل التسليم: \`npm install\`
-ثم \`npm run build\` نجحا، و9 صفحات تولّدت بما فيها \`/api/leads\`.
-
-## ⚠ نقطة تحتاج قراراً قبل استقبال طلبات حقيقية
-طلبات عروض الأسعار تُحفظ في ملف \`.leads/leads.jsonl\` **غير مشفّر** داخل
-مجلد التطبيق. هذا حلّ مؤقت موثّق منذ المرحلة 3، وليس مسار الإنتاج: كان
-المفترض أن تدخل الطلبات إلى CRM في النظام. قبل الإعلان عن الموقع، إمّا
-توصيله بالنظام أو إضافة إشعار بريدي — وإلا فقد يمرّ طلب عميل دون أن
-يراه أحد.
-`,
-  erp: `# نشر نظام ERP
-
-## ⚠ اقرأ هذا أولاً — النظام لا يعمل على خطة Business أو Cloud
-
-النظام يتطلب **PostgreSQL 17**، وهوستنجر لا توفّر PostgreSQL على خطط
-الاستضافة المشتركة والسحابية — على **VPS فقط**. المتاح على Business
-و Cloud هو MySQL.
-
-وهذا ليس اختلاف نكهة قواعد بيانات يمكن تجاوزه بتغيير الموصّل:
-
-- **عزل المستأجرين مبني بالكامل على Row-Level Security**، وهي ميزة
-  غير موجودة في MySQL إطلاقاً. 55 جدولاً عليها سياسات \`FORCE\` تعتمد
-  على \`app.tenant_id\`، وهناك 20 تأكيداً تُثبت العزل بالهجوم عليه.
-  النقل إلى MySQL يعني حذف هذه الطبقة، لا ترحيلها.
-- ثلاثة أدوار قاعدة بيانات منفصلة، أحدها \`BYPASSRLS\`.
-- أعمدة \`NUMERIC(19,4)\` للمبالغ والكميات.
-
-## المسارات المتاحة
-1. **Hostinger VPS** — تثبيت PostgreSQL 17 عليه. النظام يعمل كما بُني
-   دون أي تعديل. هذا الخيار الموصى به.
-2. **تطبيق Node على Business + قاعدة PostgreSQL مُدارة خارجية**
-   (Neon أو Supabase أو Railway). قد ينجح، لكنه **غير مُتحقَّق منه**:
-   يعتمد على سماح الاستضافة المشتركة باتصال صادر على المنفذ 5432،
-   ولا أستطيع التأكد من ذلك دون تجربته على حسابك.
-
-## بعد توفير PostgreSQL
-1. أنشئ قاعدة \`kayan_erp\` والأدوار الثلاثة.
-2. اضبط المتغيّرات من \`.env.example\`.
-3. \`npx prisma migrate deploy\` — يطبّق 8 هجرات بما فيها سياسات RLS.
-4. \`node --experimental-strip-types prisma/seed.mjs\` للأدوار والصلاحيات.
-5. \`npm run build\` ثم \`npm start\`.
-
-## ⚠ قبل أي تشغيل حقيقي
-- **غيّر كلمات المرور.** ملف \`.env\` في التطوير يحمل كلمات ظاهرة،
-  وحسابات البذرة كلها بكلمة واحدة معروفة.
-- **ضيّق دور \`kayan_auth\`** — يحمل \`BYPASSRLS\` مع صلاحيات DML على كل
-  الجداول، والمفترض أن يقتصر على جداول الهوية.
-- **لا يوجد نسخ احتياطي مجدول.** لا شيء يحمي البيانات اليوم.
-- **لا يوجد CI.** الـ387 تأكيداً تُشغَّل يدوياً.
+## ⚠ قبل التشغيل الحقيقي
+- غيّر كل كلمات المرور. حسابات البذرة كلها بكلمة واحدة معروفة.
+- ضيّق دور kayan_auth — يحمل BYPASSRLS مع DML على كل الجداول.
+- لا يوجد نسخ احتياطي مجدول.
+- لا يوجد CI — 387 تأكيداً تُشغَّل يدوياً.
 `,
 };
 

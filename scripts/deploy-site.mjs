@@ -70,11 +70,40 @@ const step = (msg) => console.log(`\n▸ ${msg}`);
 
 const withDeps = process.argv.includes('--deps');
 
+// ── 0. البوّابات قبل أي شيء يلمس الخادم ─────────────────────
+//
+// تُشغَّل على المستودع لا على الحزمة المُجهَّزة: الحزمة نسخة، والخطأ يجب أن
+// يُمسك في المصدر حيث يُصلَح.
+step('lint');
+run('npm', ['run', 'lint'], { cwd: ROOT });
+console.log('  نظيف');
+
+step('typecheck');
+run('npm', ['run', 'typecheck'], { cwd: ROOT });
+console.log('  نظيف');
+
+if (!process.argv.includes('--skip-tests')) {
+  step('الاختبارات');
+  // مجموعات التحقّق تحتاج قاعدة بيانات. غيابها يوقف النشر بدل أن يمرّ
+  // بصمت — نشرٌ بلا اختبار ليس نشراً مُتحقَّقاً منه.
+  const suites = [
+    'verify-rls', 'verify-login', 'verify-decimal', 'verify-phase14',
+    'verify-print', 'verify-dashboard', 'verify-reports',
+  ];
+  for (const s of suites) {
+    const out = run('node', [
+      '--experimental-strip-types', '--env-file=.env', `scripts/${s}.mjs`,
+    ], { cwd: ROOT });
+    const last = out.trim().split('\n').pop();
+    console.log(`  ${s.padEnd(18)} ${last}`);
+  }
+}
+
 // ── 1. البناء محلياً ────────────────────────────────────────
 step('تجهيز الحزمة');
-run('node', [path.join(ROOT, 'scripts', 'package-hostinger.mjs'), 'marketing'], { cwd: ROOT });
+run('node', [path.join(ROOT, 'scripts', 'package-hostinger.mjs'), 'platform'], { cwd: ROOT });
 
-const stage = path.join(ROOT, 'dist-hostinger', 'kayan-marketing');
+const stage = path.join(ROOT, 'dist-hostinger', 'kayan-platform');
 step('البناء');
 run('npm', ['install', '--no-audit', '--no-fund'], { cwd: stage });
 run('npm', ['run', 'build'], {
