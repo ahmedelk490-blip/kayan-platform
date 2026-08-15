@@ -262,7 +262,7 @@ export function Hero({ slides }: { slides: HeroSlide[] }) {
             transition={{ duration: 0.75, ease: EASE.outExpo, delay: 0.66 }}
             className="mt-2 text-sm text-body-subtle"
           >
-            خامات ممتازة | ستايلات عصرية | تطريز وطباعة
+            خامات مضمونة | موديلات حديثة | تطريز وطباعة بمعملنا
           </motion.p>
         </div>
 
