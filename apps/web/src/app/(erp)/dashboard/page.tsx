@@ -84,6 +84,7 @@ export default async function ManagerDashboard() {
     costSnapshots,
     recentRows,
     recentAudits,
+    supplyRows,
   ] = await Promise.all([
     prisma.product.count({ where: { tenantId, isDeleted: false } }),
     prisma.productVariant.count({ where: { isDeleted: false, product: { tenantId } } }),
@@ -155,6 +156,17 @@ export default async function ManagerDashboard() {
       take: 6,
       include: { user: { select: { nameAr: true, name: true } } },
     }),
+
+    // المستلزمات — الأحبار والرولات والخيوط.
+    //
+    // المخزون أعلاه يتابع المنتجات المصنَّعة. أما ما يُصنَع به فكان خارج
+    // نظر المدير تماماً: رول يوشك أن ينفد يوقف خط الطباعة كله، ولم يكن
+    // في اللوحة ما ينبّه إليه قبل أن يقف.
+    prisma.supply.findMany({
+      where: { tenantId, isDeleted: false },
+      select: { id: true, code: true, nameAr: true, unit: true, onHand: true, minStock: true },
+      orderBy: { nameAr: 'asc' },
+    }),
   ]);
 
   // ── Sales ────────────────────────────────────────────────
@@ -180,6 +192,21 @@ export default async function ManagerDashboard() {
   const lowStock = stockRows.filter(
     (r) => dec(r.minStock).gt(0) && available(r.onHand, r.reserved).lt(dec(r.minStock)),
   );
+  // ── المستلزمات المقاربة على النفاذ ───────────────────────
+  //
+  // `lte` لا `lt`: الرصيد المساوي للحد الأدنى **هو** نقطة إعادة الطلب، لا
+  // ما دونها. `lt` تصمت عند الحد بالضبط وتنبّه بعد تجاوزه — أي بعد فوات
+  // الغرض من الحد.
+  const lowSupplies = supplyRows.filter(
+    (s) => dec(s.minStock).gt(0) && dec(s.onHand).lte(dec(s.minStock)),
+  );
+  // نفد فعلاً — أشد من "قارب".
+  //
+  // يُحسب من `lowSupplies` لا من كل المستلزمات: صنف رصيده صفر وحدّه صفر
+  // ليس نافداً بل غير مُتابَع أصلاً. حسابه من الكل جعل عدد "النافد" أكبر
+  // من عدد "المنبَّه عليه"، فظهر الفرق سالباً على الشاشة.
+  const emptySupplies = lowSupplies.filter((s) => dec(s.onHand).lte(dec(0)));
+
   // Stock we hold but cannot value, because nobody entered a cost.
   const unpriced = stockRows.filter(
     (r) =>
@@ -328,6 +355,59 @@ export default async function ManagerDashboard() {
                   )}
                 </ul>
               )}
+
+              {/* ── المستلزمات: ما يُصنَع به لا ما يُصنَع ──────────
+                  رول أو حبر يوشك على النفاذ يوقف خط الطباعة كله، وكان
+                  خارج نظر المدير تماماً. */}
+              <div className="mt-5 border-t border-line pt-4">
+                <div className="mb-3 flex items-baseline justify-between gap-2">
+                  <p className="text-xs font-medium text-txt-2">المستلزمات — أحبار ورولات وخيوط</p>
+                  <Link href="/supplies" className="text-[0.7rem] text-brand hover:underline">
+                    الكل
+                  </Link>
+                </div>
+
+                {supplyRows.length === 0 ? (
+                  <p className="text-[0.7rem] text-txt-4">
+                    لا توجد مستلزمات مسجّلة. أضِفها ليتنبّه النظام قبل نفادها.
+                  </p>
+                ) : lowSupplies.length === 0 ? (
+                  <p className="text-[0.7rem] text-ok">
+                    كل المستلزمات فوق حدّها الأدنى — {supplyRows.length} صنفاً.
+                  </p>
+                ) : (
+                  <>
+                    <p className="mb-2.5 rounded-lg border border-bad bg-bad-soft px-3 py-2 text-[0.7rem] leading-[1.8] text-bad">
+                      {emptySupplies.length > 0
+                        ? `${emptySupplies.length} صنفاً نفد بالكامل و${lowSupplies.length - emptySupplies.length} قارب على النفاذ.`
+                        : `${lowSupplies.length} صنفاً قارب على النفاذ.`}{' '}
+                      أعِد الطلب قبل توقّف الإنتاج.
+                    </p>
+                    <ul className="space-y-1.5">
+                      {lowSupplies.slice(0, 5).map((s) => {
+                        const empty = dec(s.onHand).lte(dec(0));
+                        return (
+                          <li key={s.id} className="flex justify-between gap-3 text-xs">
+                            <span className="text-txt-2">
+                              {s.nameAr}
+                              {empty && <span className="ms-1.5 text-[0.65rem] text-bad">نفد</span>}
+                            </span>
+                            <span className="tnum shrink-0 text-bad">
+                              {formatQty(s.onHand)} / {formatQty(s.minStock)}
+                              {s.unit && <span className="ms-1 text-txt-4">{s.unit}</span>}
+                            </span>
+                          </li>
+                        );
+                      })}
+                      {lowSupplies.length > 5 && (
+                        <li className="text-[0.7rem] text-txt-4">
+                          و{lowSupplies.length - 5} صنفاً آخر…
+                        </li>
+                      )}
+                    </ul>
+                  </>
+                )}
+              </div>
             </Panel>
           )}
 

@@ -129,7 +129,9 @@ export default async function SuppliesPage({
         empty={supplies.length === 0}
       >
         {supplies.map((s) => {
-          const low = dec(s.onHand).lt(dec(s.minStock)) && dec(s.minStock).gt(0);
+          // lte لا lt: الرصيد المساوي للحد الأدنى هو نقطة إعادة الطلب نفسها.
+          // lt تصمت عند الحد بالضبط وتنبّه بعد تجاوزه — بعد فوات غرضه.
+          const low = dec(s.onHand).lte(dec(s.minStock)) && dec(s.minStock).gt(0);
           return (
             <tr key={s.id} className="hover:bg-card-2">
               <td dir="ltr" className="tnum px-4 py-3 text-start font-medium text-txt">
