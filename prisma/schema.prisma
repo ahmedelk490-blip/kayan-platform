@@ -645,6 +645,9 @@ model StockMovement {
   @@unique([salesOrderLineId, type])
   @@unique([productionOrderId, type])
   @@unique([goodsReceiptLineId, type])
+  /// خصم واحد لكل أمر إنتاج ومستلزم. القيد على القاعدة لا في التطبيق:
+  /// طلبان متزامنان يمرّان على الفحص معاً ولا يمرّان على القيد.
+  @@unique([productionOrderId, supplyId, type])
   @@index([tenantId, occurredAt])
   @@index([variantId, occurredAt])
   @@index([warehouseId])
