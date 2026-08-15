@@ -119,3 +119,26 @@ async function queryProducts(): Promise<PublicProduct[]> {
     })),
   }));
 }
+
+/**
+ * رقم واتساب الموقع — من إعدادات الشركة.
+ *
+ * يعدّله المدير من شاشة الإعدادات فيظهر فوراً بلا نشر. فارغ يعني لا زر:
+ * رقم مخترع أسوأ من غيابه، وزر يفتح محادثة مع لا أحد أسوأ منهما.
+ */
+export async function siteWhatsApp(): Promise<string | null> {
+  setCurrentTenant(PUBLIC_TENANT);
+  try {
+    const company = await prisma.company.findFirst({
+      where: { tenantId: PUBLIC_TENANT },
+      select: { whatsapp: true },
+    });
+    // يُجرَّد من المسافات و+ والأقواس: wa.me يقبل الأرقام وحدها.
+    const digits = (company?.whatsapp ?? '').replace(/\D/g, '');
+    return digits.length >= 8 ? digits : null;
+  } catch (error) {
+    // قاعدة البيانات غير متاحة: لا زر، ولا صفحة خطأ.
+    console.error('[site] تعذّر قراءة رقم الواتساب', error);
+    return null;
+  }
+}

@@ -188,14 +188,14 @@ export const QUOTE_SERVICES = [
  * حين يكون فارغاً لا يظهر الزر إطلاقاً — لا زر معطّل ولا رابط لا يفتح شيئاً.
  * يُضبط بصيغة دولية بلا رموز: 9647XXXXXXXXX
  */
-export const WHATSAPP_NUMBER = (process.env.NEXT_PUBLIC_WHATSAPP ?? '').replace(/[^\d]/g, '');
 
 /** الرسالة المبدئية في محادثة الواتساب — يعدّلها العميل قبل الإرسال. */
 export const WHATSAPP_MESSAGE = 'السلام عليكم، أرغب بالاستفسار عن أسعار الزي الموحد.';
 
-export function whatsappHref(): string | null {
-  if (!WHATSAPP_NUMBER) return null;
-  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`;
+/** رابط المحادثة من رقم مخزَّن. فارغ يعني لا زر. */
+export function whatsappHref(number: string | null): string | null {
+  if (!number) return null;
+  return `https://wa.me/${number}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`;
 }
 
 export const FOOTER_GROUPS = [

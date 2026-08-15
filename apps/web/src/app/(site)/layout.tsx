@@ -7,6 +7,7 @@ import { Navigation } from '@/components/site/Navigation';
 import { SiteFooter } from '@/components/site/SiteFooter';
 import { WhatsAppButton } from '@/components/site/WhatsAppButton';
 import { SITE_URL, whatsappHref } from '@/site';
+import { siteWhatsApp } from '@/lib/catalog';
 import './site.css';
 
 const spaceGrotesk = Space_Grotesk({
@@ -64,7 +65,9 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const whatsapp = await siteWhatsApp();
+
   return (
     <html
       lang="ar"
@@ -114,7 +117,7 @@ document.documentElement.setAttribute('data-theme', stored || system);
           <SiteFooter />
           {/* يُحسب على الخادم فيصل للعميل رابطاً جاهزاً أو لا شيء —
               ولا يصل الرقم إلى الحزمة حين لا يكون مضبوطاً. */}
-          <WhatsAppButton href={whatsappHref()} />
+          <WhatsAppButton href={whatsappHref(whatsapp)} />
         </SmoothScroller>
       </body>
     </html>

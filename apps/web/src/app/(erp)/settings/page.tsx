@@ -42,6 +42,7 @@ export default async function SettingsPage() {
               invoicePrefix: company.invoicePrefix,
               taxNumber: company.taxNumber,
               commercialRegister: company.commercialRegister,
+              whatsapp: company.whatsapp,
               paymentTerms: company.paymentTerms,
             }}
           />

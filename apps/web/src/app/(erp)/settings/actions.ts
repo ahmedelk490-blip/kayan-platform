@@ -53,6 +53,7 @@ const SettingsSchema = z.object({
     .regex(/^[A-Z0-9]+$/, 'بادئة الفاتورة بحروف لاتينية كبيرة وأرقام فقط.'),
   taxNumber: z.string().trim().max(40).optional().or(z.literal('')),
   commercialRegister: z.string().trim().max(40).optional().or(z.literal('')),
+  whatsapp: z.string().trim().max(24).optional().or(z.literal('')),
   paymentTerms: z.string().trim().max(400).optional().or(z.literal('')),
 });
 
@@ -77,6 +78,7 @@ export async function updateCompanySettings(
     invoicePrefix: String(formData.get('invoicePrefix') ?? '').toUpperCase(),
     taxNumber: String(formData.get('taxNumber') ?? ''),
     commercialRegister: String(formData.get('commercialRegister') ?? ''),
+    whatsapp: String(formData.get('whatsapp') ?? ''),
     paymentTerms: String(formData.get('paymentTerms') ?? ''),
   });
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
@@ -120,6 +122,8 @@ export async function updateCompanySettings(
       // Empty means "not supplied", not an empty string on a tax document.
       taxNumber: parsed.data.taxNumber || null,
       commercialRegister: parsed.data.commercialRegister || null,
+      // فارغ يعني NULL: الموقع يفحص الغياب ليقرّر إخفاء الزر، وسلسلة فارغة تُقرأ حضوراً.
+      whatsapp: parsed.data.whatsapp || null,
       paymentTerms: parsed.data.paymentTerms || null,
     },
   });

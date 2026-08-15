@@ -118,6 +118,14 @@ model Company {
   taxNumber          String?
   commercialRegister String?
 
+  /// رقم واتساب الموقع العام — بصيغة دولية بلا رموز: 9647XXXXXXXXX
+  ///
+  /// كان متغيّر بيئة، فتغييره كان يستلزم نشراً. صار هنا ليعدّله المدير من
+  /// الشاشة ويظهر فوراً — رقم التواصل بيان عمل لا إعداد بنية تحتية.
+  ///
+  /// فارغ يعني لا زر إطلاقاً. رقم مخترع أسوأ من غيابه.
+  whatsapp   String?
+
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
@@ -645,9 +653,6 @@ model StockMovement {
   @@unique([salesOrderLineId, type])
   @@unique([productionOrderId, type])
   @@unique([goodsReceiptLineId, type])
-  /// خصم واحد لكل أمر إنتاج ومستلزم. القيد على القاعدة لا في التطبيق:
-  /// طلبان متزامنان يمرّان على الفحص معاً ولا يمرّان على القيد.
-  @@unique([productionOrderId, supplyId, type])
   @@index([tenantId, occurredAt])
   @@index([variantId, occurredAt])
   @@index([warehouseId])
@@ -1903,6 +1908,9 @@ model SupplyTransaction {
   goodsReceiptLine GoodsReceiptLine? @relation(fields: [goodsReceiptLineId], references: [id])
 
   @@unique([goodsReceiptLineId, type])
+  /// خصم واحد لكل أمر إنتاج ومستلزم. القيد على القاعدة لا في التطبيق:
+  /// طلبان متزامنان يمرّان على الفحص معاً ولا يمرّان على القيد.
+  @@unique([productionOrderId, supplyId, type])
   @@index([tenantId, txDate])
   @@index([supplyId, txDate])
   @@index([tenantId, type])

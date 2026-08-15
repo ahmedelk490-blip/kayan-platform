@@ -28,6 +28,7 @@ export function SettingsForm({
     invoicePrefix: string;
     taxNumber: string | null;
     commercialRegister: string | null;
+    whatsapp: string | null;
     paymentTerms: string | null;
   };
   issuedInvoices: number;
@@ -132,6 +133,14 @@ export function SettingsForm({
             dir="ltr"
             defaultValue={company.commercialRegister}
             errors={state.fieldErrors}
+          />
+          <Field
+            name="whatsapp"
+            label="رقم واتساب الموقع"
+            dir="ltr"
+            defaultValue={company.whatsapp}
+            errors={state.fieldErrors}
+            hint="بصيغة دولية: 9647XXXXXXXXX. اتركه فارغاً ليختفي الزر من الموقع."
           />
         </div>
       </section>
