@@ -49,7 +49,17 @@ export default async function RequestsPage() {
 
   return (
     <AppShell user={user} title="طلبات العملاء">
-      <ModuleHeader title={`طلبات العملاء — ${inquiries.length}`} />
+      <ModuleHeader
+        title={`طلبات العملاء — ${inquiries.length}`}
+        action={
+          inquiries.length > 0 ? (
+            // رابط عادي لا زر: التصدير تنزيل ملف، والمتصفح يتولّاه.
+            <a href="/requests/export" className="erp-btn-ghost" download>
+              تصدير Excel
+            </a>
+          ) : null
+        }
+      />
 
       <p className="mb-5 rounded-lg border border-line bg-card-2 px-4 py-3 text-xs leading-[1.9] text-txt-3">
         كل طلب هنا وصل من نموذج «اطلب عرض سعر» في الموقع، وصار عميلاً في النظام
