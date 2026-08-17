@@ -80,6 +80,7 @@ model Tenant {
   payments           Payment[]
   documentSequences  DocumentSequence[]
   priceTiers PriceTier[]
+  siteContent SiteContent[]
 }
 
 model Company {
@@ -1956,4 +1957,36 @@ model PriceTier {
   /// لا شريحتان بنفس المفتاح: منتج × متغيّر × خدمة × حد أدنى.
   @@unique([productId, variantId, service, minQty])
   @@index([tenantId, productId])
+}
+
+/// نص من نصوص الموقع العام — يحرّره المدير من النظام.
+///
+/// النصوص كانت في site.ts، فتغيير كلمة يحتاج نشراً. صارت هنا ليعدّلها
+/// المدير ويظهر التغيير فوراً — نص تسويقي بيان عمل لا كود.
+///
+/// المفتاح ثابت في الكود والقيمة في قاعدة البيانات. فمفتاح مفقود أو قاعدة
+/// غير متاحة تعني عرض النص المكتوب في الكود لا فراغاً: الصفحة لا تفرغ أبداً.
+model SiteContent {
+  id       String @id @default(cuid())
+  tenantId String
+
+  /// مفتاح ثابت مثل service.printing.body
+  key String
+
+  /// النص كما يظهر على الموقع.
+  valueAr String
+
+  /// للتجميع في شاشة التحرير: hero | services | why | about
+  group String
+
+  /// وصف قصير يشرح للمدير أين يظهر هذا النص.
+  label String
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, group])
 }

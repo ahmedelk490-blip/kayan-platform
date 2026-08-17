@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { SectionShell } from '@erp/ui-market';
 import { PageHero } from '@/components/site/PageHero';
 import { SERVICES, WHY_KAYAN } from '@/site';
+import { siteContent } from '@/lib/content';
 
 export const metadata: Metadata = {
   title: 'الطباعة والتطريز',
@@ -20,7 +21,12 @@ export const metadata: Metadata = {
  * لا أرقام أداء ولا نسب هنا. الادّعاءات المقيسة تحتاج قياساً، وما لم
  * يُقَس لا يُكتب.
  */
-export default function ServicesPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function ServicesPage() {
+  // النصوص من قاعدة البيانات، والمفاتيح ثابتة. تعديل المدير يظهر فوراً.
+  const t = await siteContent();
+
   return (
     <>
       <PageHero
@@ -36,8 +42,8 @@ export default function ServicesPage() {
               key={s.id}
               className="rounded-2xl border border-edge-strong bg-panel/70 p-6"
             >
-              <h2 className="text-base font-medium text-body">{s.name}</h2>
-              <p className="mt-3 text-sm leading-[1.9] text-body-muted">{s.body}</p>
+              <h2 className="text-base font-medium text-body">{t(`service.${s.id}.name`)}</h2>
+              <p className="mt-3 text-sm leading-[1.9] text-body-muted">{t(`service.${s.id}.body`)}</p>
               {'points' in s && Array.isArray(s.points) && (
                 <ul className="mt-4 space-y-2">
                   {s.points.map((p: string) => (
@@ -59,9 +65,9 @@ export default function ServicesPage() {
         <h2 className="mb-8 text-2xl text-body">ليش كيان</h2>
         <div className="grid gap-5 sm:grid-cols-2">
           {WHY_KAYAN.map((w) => (
-            <div key={w.title} className="rounded-2xl border border-edge bg-panel/50 p-5">
-              <h3 className="text-sm font-medium text-body">{w.title}</h3>
-              <p className="mt-2 text-sm leading-[1.9] text-body-muted">{w.body}</p>
+            <div key={w.id} className="rounded-2xl border border-edge bg-panel/50 p-5">
+              <h3 className="text-sm font-medium text-body">{t(`why.${w.id}.title`)}</h3>
+              <p className="mt-2 text-sm leading-[1.9] text-body-muted">{t(`why.${w.id}.body`)}</p>
             </div>
           ))}
         </div>

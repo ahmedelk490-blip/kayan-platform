@@ -47,6 +47,7 @@ const NAV: NavItem[] = [
   { href: '/damage', label: 'الهالك والجزاءات', permission: 'damage.view', built: true },
   { href: '/reports', label: 'التقارير', permission: 'reports.view', built: true },
   { href: '/users', label: 'حسابات الفريق', permission: 'users.manage', built: true },
+  { href: '/content', label: 'نصوص الموقع', permission: 'settings.manage', built: true },
   { href: '/settings', label: 'الإعدادات المالية', permission: 'settings.manage', built: true },
 ];
 

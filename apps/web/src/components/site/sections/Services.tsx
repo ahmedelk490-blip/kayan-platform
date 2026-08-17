@@ -11,7 +11,7 @@ import { SERVICES } from '@/site';
  * ألواح تدخل من جهة البداية — حركة مختلفة عن شبكة المنتجات فوقها، حتى لا
  * يقرأ القسمان كأنهما قسم واحد طويل.
  */
-export function Services() {
+export function Services({ t }: { t: (key: string) => string }) {
   return (
     <SectionShell size="tall">
       <div id="services" className="mx-auto w-full max-w-[1400px]">
@@ -65,7 +65,7 @@ export function Services() {
                 transition={{ duration: 0.6, ease: EASE.outExpo, delay: index * 0.09 + 0.2 }}
                 className="mt-4 text-xl text-body"
               >
-                {service.name}
+                {t(`service.${service.id}.name`)}
               </motion.h3>
 
               <motion.p
@@ -75,7 +75,7 @@ export function Services() {
                 transition={{ duration: 0.6, ease: EASE.outExpo, delay: index * 0.09 + 0.28 }}
                 className="mt-3 max-w-[46ch] text-sm leading-[1.9] text-body-muted"
               >
-                {service.body}
+                {t(`service.${service.id}.body`)}
               </motion.p>
               {/* خط يمتد عند المرور — حركة صغيرة تكفي */}
               <span className="absolute bottom-0 start-0 h-px w-0 bg-brand-fill transition-all duration-500 ease-out group-hover:w-full" />

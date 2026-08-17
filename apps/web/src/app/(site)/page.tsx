@@ -1,5 +1,6 @@
 import { Hero } from '@/components/site/sections/Hero';
 import { publicProducts } from '@/lib/catalog';
+import { siteContent } from '@/lib/content';
 import { Products } from '@/components/site/sections/Products';
 import { Services } from '@/components/site/sections/Services';
 import { WhyKayan } from '@/components/site/sections/WhyKayan';
@@ -22,6 +23,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
   const products = await publicProducts();
+  const t = await siteContent();
 
   // الشرائح من نفس المنتجات: ما له صورة فقط. التدرّج اللوني يُشتق من
   // الترتيب — قيمة بصرية لا يملكها العمل ولا تُخزَّن.
@@ -41,8 +43,8 @@ export default async function HomePage() {
           خارج النطاق، أي انهيار الصفحة كلها. فلا يُركَّب بلا شرائح. */}
       {slides.length > 0 && <Hero slides={slides} />}
       <Products products={products} />
-      <Services />
-      <WhyKayan />
+      <Services t={t} />
+      <WhyKayan t={t} />
       <QuoteForm />
     </>
   );

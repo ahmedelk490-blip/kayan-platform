@@ -11,7 +11,7 @@ import { WHY_KAYAN } from '@/site';
  * قائمة تُرسم خطوطها أفقياً سطراً بعد سطر — إيقاع مختلف عن البطاقات، وأقرب
  * لقراءة قائمة أسباب.
  */
-export function WhyKayan() {
+export function WhyKayan({ t }: { t: (key: string) => string }) {
   return (
     <SectionShell size="tall">
       <div id="why" className="mx-auto w-full max-w-[1400px]">
@@ -65,7 +65,7 @@ export function WhyKayan() {
                 transition={{ duration: 0.7, ease: EASE.outQuart, delay: 0.12 }}
                 className="text-lg text-body"
               >
-                {item.title}
+                {t(`why.${item.id}.title`)}
               </motion.h3>
               <motion.p
                 initial={{ opacity: 0 }}
@@ -74,7 +74,7 @@ export function WhyKayan() {
                 transition={{ duration: 0.7, ease: EASE.outQuart, delay: 0.2 }}
                 className="max-w-[54ch] text-sm leading-[1.9] text-body-muted"
               >
-                {item.body}
+                {t(`why.${item.id}.body`)}
               </motion.p>
             </motion.li>
           ))}
