@@ -36,21 +36,34 @@ export async function allocateInvoiceNumber(
 
   // Upsert-then-lock: the row must exist before it can be locked, and the
   // first invoice of a year would otherwise find nothing to lock.
+  //
+  // MySQL spells the upsert differently from PostgreSQL, and the difference
+  // is not only syntax. `ON DUPLICATE KEY UPDATE id = id` rather than
+  // `INSERT IGNORE`: IGNORE downgrades every error on the statement to a
+  // warning — a broken foreign key, a truncated value — and this row decides
+  // invoice numbers. Only the duplicate should be tolerated here.
+  //
+  // Identifiers are backquoted; MySQL reads "double quotes" as a string
+  // literal unless ANSI_QUOTES is set, and the hosting's mode is not ours to
+  // assume.
   await tx.$executeRaw`
-    INSERT INTO "DocumentSequence" ("id", "tenantId", "kind", "year", "lastNumber", "updatedAt")
+    INSERT INTO \`DocumentSequence\` (\`id\`, \`tenantId\`, \`kind\`, \`year\`, \`lastNumber\`, \`updatedAt\`)
     VALUES (${`seq_${tenantId}_INVOICE_${year}`}, ${tenantId}, 'INVOICE', ${year}, 0, NOW())
-    ON CONFLICT ("tenantId", "kind", "year") DO NOTHING`;
+    ON DUPLICATE KEY UPDATE \`id\` = \`id\``;
 
+  // FOR UPDATE carries across unchanged: InnoDB locks the row for the rest
+  // of the transaction, so the second caller waits here rather than reading
+  // the same number.
   const rows = await tx.$queryRaw<{ lastNumber: number }[]>`
-    SELECT "lastNumber" FROM "DocumentSequence"
-     WHERE "tenantId" = ${tenantId} AND "kind" = 'INVOICE' AND "year" = ${year}
+    SELECT \`lastNumber\` FROM \`DocumentSequence\`
+     WHERE \`tenantId\` = ${tenantId} AND \`kind\` = 'INVOICE' AND \`year\` = ${year}
      FOR UPDATE`;
 
   const next = (rows[0]?.lastNumber ?? 0) + 1;
 
   await tx.$executeRaw`
-    UPDATE "DocumentSequence" SET "lastNumber" = ${next}, "updatedAt" = NOW()
-     WHERE "tenantId" = ${tenantId} AND "kind" = 'INVOICE' AND "year" = ${year}`;
+    UPDATE \`DocumentSequence\` SET \`lastNumber\` = ${next}, \`updatedAt\` = NOW()
+     WHERE \`tenantId\` = ${tenantId} AND \`kind\` = 'INVOICE' AND \`year\` = ${year}`;
 
   return `${prefix}-${year}-${String(next).padStart(4, '0')}`;
 }

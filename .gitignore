@@ -17,3 +17,4 @@ data/
 
 # Deployment bundles — rebuildable from scripts/package-hostinger.mjs
 dist-hostinger/
+.env.mysql

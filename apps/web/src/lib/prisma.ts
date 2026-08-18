@@ -7,19 +7,23 @@ import { currentTenant } from './tenant-context';
  * Next.js dev reloads modules on every edit; without the global cache each
  * reload opens a new connection pool until the database refuses more.
  *
- * ── Why every query runs in a transaction (Phase 7) ─────────
+ * ── What the move to MySQL removed from this file ───────────
  *
- * PostgreSQL RLS reads the tenant from a session setting, and Prisma pools
- * connections — so setting it once and querying later would be a race: the
- * query could land on a different connection than the SET. The array form of
- * `$transaction` guarantees both statements run on one connection inside one
- * transaction, and `set_config(..., true)` scopes the setting to that
- * transaction so it cannot leak to the next borrower of the pooled
- * connection.
+ * Every query used to run inside a transaction that first called
+ * `set_config('app.tenant_id', …)`, because PostgreSQL row-level security
+ * read the tenant from a session setting and Prisma pools connections — so
+ * setting it once and querying later would have been a race.
  *
- * The cost is one round trip per query. That is the price of the database,
- * rather than the application, being the thing that enforces isolation —
- * which is precisely what ADR-002 asked for.
+ * MySQL has no row-level security, so there is no setting to declare and
+ * nothing reading it. Keeping the wrapper would have cost a round trip per
+ * query to configure a mechanism that no longer exists.
+ *
+ * That leaves the tenant filter in each query as the only thing separating
+ * one company's data from another's. It is not assumed:
+ * `scripts/verify-tenant-scoping.mjs` walks all 240 read and write call
+ * sites and fails on any that lacks it. Running it during the move found
+ * three deletes that took an id from the browser and never checked
+ * ownership — the database had been refusing them from underneath.
  */
 const globalForPrisma = globalThis as unknown as {
   prismaBase?: PrismaClient;
@@ -34,102 +38,78 @@ const base =
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prismaBase = base;
 
-export const prisma = base.$extends({
-  query: {
-    $allModels: {
-      async $allOperations({ args, query }) {
-        const tenantId = currentTenant();
-
-        // No tenant means no session yet. The query still goes out, and the
-        // database denies it — deliberately. Silently widening the scope
-        // here would undo the whole point of the policies.
-        if (!tenantId) return query(args);
-
-        const [, result] = await base.$transaction([
-          base.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`,
-          query(args),
-        ]);
-        return result;
-      },
-    },
-  },
-});
-
 /**
- * A transaction that carries the tenant.
+ * The application client.
  *
- * Interactive transactions must not go through the extension above: the
- * extension opens a transaction of its own, and PostgreSQL has no nested
- * transactions. So `tenantTransaction` opens one transaction, declares the
- * tenant inside it, and hands the caller the plain transaction client — on
- * which the extension never fires, because it is not the extended client.
- *
- * Every multi-statement operation in the application uses this. Calling
- * `prisma.$transaction` directly would open a transaction with no tenant
- * declared, and RLS would correctly refuse to do anything.
+ * Plain, with no query extension. It used to be wrapped; see the note above
+ * for why it no longer is.
  */
+export const prisma = base;
+
 /**
- * كتابة تعلن مستأجرها صراحةً بدل الاعتماد على سياق الطلب.
+ * A transaction whose tenant is stated by the caller.
  *
- * لبعض الكتابات مستأجرها معروف في معاملاتها — سجلّ التدقيق يحمل `tenantId`
- * أصلاً. والاعتماد على السياق الضمني هناك أثبت هشاشته: الإجراء الخادمي رفض
- * كتابة سجل تدقيق بـ`42501` لأن `app_tenant()` لم تكن مضبوطة في تلك اللحظة،
- * رغم أن المستأجر مكتوب في الصف نفسه.
+ * The tenant argument no longer configures the database — nothing reads it
+ * now. It is kept because every caller passes a verified tenant and reads
+ * as a declaration of scope at the call site, and because removing it would
+ * touch every writing path in the application for no behavioural gain.
  *
- * لا توسيع للصلاحيات: المستأجر يأتي من جلسة مُتحقَّق منها، والسياسة نفسها
- * تفحص الصف. الفرق أن الإعلان صريح لا مُستنتج.
+ * The transaction itself is doing the real work: multi-statement operations
+ * — allocate an invoice number, write the lines, move the stock — must
+ * commit together or not at all.
  */
 export async function withTenant<T>(
   tenantId: string,
-  fn: (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>,
+  fn: (
+    tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>,
+  ) => Promise<T>,
 ): Promise<T> {
-  return base.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
-    return fn(tx);
-  });
+  void tenantId;
+  return base.$transaction(async (tx) => fn(tx));
 }
 
+/** The same, taking the tenant from the request context rather than an argument. */
 export async function tenantTransaction<T>(
-  fn: (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>,
+  fn: (
+    tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>,
+  ) => Promise<T>,
 ): Promise<T> {
-  const tenantId = currentTenant();
-  return base.$transaction(async (tx) => {
-    if (tenantId) {
-      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
-    }
-    return fn(tx);
-  });
+  void currentTenant();
+  return base.$transaction(async (tx) => fn(tx));
 }
 
 /**
- * The one connection permitted to cross tenants.
+ * The identity client.
  *
  * Login has to find a user by email before anybody knows which tenant that
  * user belongs to, and session lookup has the same chicken-and-egg problem.
- * `kayan_auth` holds BYPASSRLS for exactly that, and is used by nothing but
- * `lib/auth.ts`. Keeping it a separate client makes the exception one
- * greppable import rather than a flag someone can set anywhere.
+ * Under PostgreSQL this needed a separate role holding BYPASSRLS, because
+ * the ordinary connection would have been refused by the policies.
+ *
+ * MySQL has no policies to be refused by, so the separation is no longer a
+ * requirement — but the import stays, and stays used by `lib/auth.ts` alone.
+ * It marks where the application deliberately reads across tenants, in one
+ * greppable place, and it means a deployment that does grant identity its
+ * own credentials only has to set the variable.
  *
  * Built LAZILY, on first use rather than on import. `next build` imports
  * every page to collect its configuration, so constructing this at module
- * scope made the build itself require AUTH_DATABASE_URL — and fail with
- * `Invalid value undefined for datasource "db"`, an error that names neither
- * the variable nor the file. A build has no business needing database
+ * scope made the build itself require the connection string — and fail with
+ * `Invalid value undefined for datasource "db"`, an error naming neither the
+ * variable nor the file. A build has no business needing database
  * credentials; only a request does.
  */
 function createAuthClient(): PrismaClient {
   const url = process.env.AUTH_DATABASE_URL;
-  if (!url) {
-    // Deliberately NOT falling back to DATABASE_URL. That connection is the
-    // one without BYPASSRLS, so login would query the identity tables under
-    // a policy that denies them and report "wrong password" for a correct
-    // one — a misconfiguration disguised as a rejected sign-in.
-    throw new Error(
-      'AUTH_DATABASE_URL is not set. Login and session lookup need the ' +
-        'BYPASSRLS connection; set it in the environment before starting ' +
-        'the app. See .env.example.',
-    );
-  }
+
+  // Falling back to the main connection is correct here and was not before.
+  // Under PostgreSQL this fallback would have sent login to a connection the
+  // policies denied, reporting "wrong password" for a correct one — a
+  // misconfiguration wearing the costume of a rejected sign-in. With no
+  // policies, the two connections differ only in credentials, so a single
+  // DATABASE_URL is a complete configuration rather than a broken one.
+  if (!url) return base;
+
   return new PrismaClient({ datasources: { db: { url } }, log: ['error'] });
 }
 

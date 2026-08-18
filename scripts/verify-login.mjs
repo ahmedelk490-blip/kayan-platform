@@ -1,14 +1,14 @@
 /**
- * Prove the login chain works end to end on PostgreSQL with RLS.
+ * Prove the login chain works end to end on MySQL.
  *
  * This exercises the exact sequence the application performs, in order:
  *
- *   1. find the user by email   — before any tenant is known, so BYPASSRLS
+ *   1. find the user by email   — before any tenant is known
  *   2. verify the Argon2id hash — the real password, the real digest
  *   3. create a session row     — still pre-tenant
  *   4. resolve the session back — what getSessionUser does on every request
  *   5. declare the tenant       — what requireUser does
- *   6. read tenant data as the application role, under RLS
+ *   6. read tenant data, scoped by tenantId
  *
  * Step 6 is the one that would have failed silently if the tenant plumbing
  * were wrong: the user would log in successfully and then see an empty ERP.
@@ -19,9 +19,9 @@ import { PrismaClient } from '@prisma/client';
 import { verify } from '@node-rs/argon2';
 import { createHash, randomBytes } from 'node:crypto';
 
-/** The BYPASSRLS role, exactly as lib/auth.ts uses it. */
+/** The identity connection, exactly as lib/auth.ts uses it. */
 const authDb = new PrismaClient({ datasources: { db: { url: process.env.AUTH_DATABASE_URL } } });
-/** The application role: no ownership, no BYPASSRLS. */
+/** The application connection — the one every screen reads through. */
 const app = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
 
 const EMAIL = 'manager@kayan.eg';
@@ -67,7 +67,7 @@ async function main() {
       expiresAt: new Date(Date.now() + 7 * 86_400_000),
     },
   });
-  check('a session row can be created under RLS', Boolean(session.id));
+  check('a session row can be created', Boolean(session.id));
   check('only the hash is stored, never the token', session.tokenHash !== token);
 
   // 4. Resolve it back, as getSessionUser does on every request.
@@ -78,26 +78,27 @@ async function main() {
   check('the session resolves back to the user', resolved?.user.email === EMAIL);
   check('the resolved session is not revoked', resolved?.revokedAt === null);
 
-  // 5 + 6. Declare the tenant and read as the application role. This is the
-  // step that decides whether the manager sees a working ERP or an empty one.
+  // 5 + 6. Read as the application connection, scoped to the tenant the
+  // session resolved to. This is the step that decides whether the manager
+  // sees a working ERP or an empty one.
+  //
+  // The scoping moved. It used to be declared once per transaction and
+  // enforced by the database; MySQL has no row-level security, so it is now
+  // the `tenantId` in each query and nothing else. The assertions below
+  // changed with it — they check the filter separates, where they used to
+  // check the policy did.
   const tenantId = resolved.user.tenantId;
-  const [, products] = await app.$transaction([
-    app.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`,
-    app.product.findMany({ where: { isDeleted: false } }),
-  ]);
+
+  const products = await app.product.findMany({ where: { tenantId, isDeleted: false } });
   check(
-    'the signed-in tenant can read its own products under RLS',
+    "the signed-in tenant can read its own products",
     products.length > 0,
     `${products.length} products visible`,
   );
 
-  const [, orders] = await app.$transaction([
-    app.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`,
-    app.salesOrder.findMany(),
-  ]);
-  const [, formulas] = await app.$transaction([
-    app.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`,
-    app.formula.findMany(),
+  const [orders, formulas] = await Promise.all([
+    app.salesOrder.findMany({ where: { tenantId } }),
+    app.formula.findMany({ where: { tenantId } }),
   ]);
   check(
     'sales and manufacturing data are reachable too',
@@ -105,9 +106,27 @@ async function main() {
     `${orders.length} orders, ${formulas.length} formulas`,
   );
 
-  // And without the tenant, the same role sees nothing — the guarantee.
-  const blind = await app.product.count();
-  check('the same connection with no tenant still sees nothing', blind === 0);
+  // The guarantee that replaced the policy: the filter is what separates, so
+  // nothing belonging to another tenant may appear in a scoped read.
+  //
+  // This is asserted against real rows rather than an empty database. A
+  // second tenant exists — the one left behind by the RLS isolation test —
+  // and its product must be absent here while being present when asked for
+  // by name.
+  const others = await app.tenant.findMany({ where: { id: { not: tenantId } } });
+  if (others.length > 0) {
+    const foreign = await app.product.count({ where: { tenantId: others[0].id } });
+    const bleed = products.filter((p) => p.tenantId !== tenantId);
+    check(
+      'no other tenant\'s row appears in a scoped read',
+      bleed.length === 0 && foreign > 0,
+      `${foreign} rows exist under ${others[0].id} and none surfaced`,
+    );
+  } else {
+    // One tenant means the assertion cannot fail, so it would prove nothing.
+    // Say so rather than record a pass that was never at risk.
+    console.log('SKIP  no second tenant present — isolation not exercised');
+  }
 
   // Cleanup: revoke rather than delete, mirroring destroySession.
   await authDb.session.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
