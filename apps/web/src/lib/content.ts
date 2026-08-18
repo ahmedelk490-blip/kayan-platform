@@ -125,3 +125,25 @@ export async function siteContent(): Promise<Content> {
 
   return (key: string) => stored.get(key) ?? defaults.get(key) ?? key;
 }
+
+/** نصوص جاهزة، مفتاحاً بقيمته. */
+export type ContentMap = Record<string, string>;
+
+/**
+ * نفس النصوص، كائناً عادياً لا دالة.
+ *
+ * أقسام الموقع مكوّنات عميل — تتحرّك عند التمرير، فلا بدّ لها من ذلك. والدالة
+ * لا تعبر الحدّ إلى مكوّن عميل: React يرفض تمريرها ويرمي «Functions cannot be
+ * passed directly to Client Components»، فتسقط الصفحة الرئيسية بـ500 بلا أي
+ * علاقة بقاعدة البيانات. هذا ما كان يحدث فعلاً.
+ *
+ * فيُحَل النص هنا في الخادم ويُعبَر به كبيانات. وكل مفتاح معرَّف يُحسب سلفاً،
+ * فالفهرسة تجد قيمتها دائماً ولا يظهر `undefined` مكان نص.
+ *
+ * تُبنى من `siteContent` نفسها لا بجانبها: مصدر واحد للقيم، فلا تتباعد
+ * القراءتان مع الوقت.
+ */
+export async function siteText(): Promise<ContentMap> {
+  const t = await siteContent();
+  return Object.fromEntries(contentDefaults().map((d) => [d.key, t(d.key)]));
+}

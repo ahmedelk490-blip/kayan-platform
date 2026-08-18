@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import type { NextConfig } from 'next';
 
 /**
@@ -18,6 +19,31 @@ const nextConfig: NextConfig = {
   // Workspace packages ship TypeScript source, not build output.
   transpilePackages: ['@erp/brand', '@erp/domain', '@erp/utils', '@erp/motion', '@erp/ui-market'],
   serverExternalPackages: ['@node-rs/argon2', '@prisma/client'],
+
+  /**
+   * Standalone output — a self-contained server, not a folder of chunks.
+   *
+   * Hostinger's Next.js pipeline builds the repo, then looks for a server it
+   * can run. The default build leaves only `.next`, which needs the whole
+   * `node_modules` tree beside it; the pipeline refused it with "no standalone
+   * server or static output". This emits `.next/standalone` carrying
+   * `server.js` and exactly the dependencies the traced code actually loads.
+   *
+   * The plain `.next` output is still written alongside it, so deploying over
+   * SSH keeps working unchanged.
+   */
+  output: 'standalone',
+
+  /**
+   * Trace from the monorepo root, not from `apps/web`.
+   *
+   * This app imports five workspace packages that live outside its own
+   * directory, and npm hoists their dependencies to the root `node_modules`.
+   * Tracing from `apps/web` stops at that boundary and silently omits both —
+   * the build succeeds and the server dies on the first request with a module
+   * it cannot find. That failure looks like a hosting problem and is not one.
+   */
+  outputFileTracingRoot: fileURLToPath(new URL('../..', import.meta.url)),
 };
 
 export default nextConfig;

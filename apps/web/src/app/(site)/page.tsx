@@ -1,6 +1,6 @@
 import { Hero } from '@/components/site/sections/Hero';
 import { publicProducts } from '@/lib/catalog';
-import { siteContent } from '@/lib/content';
+import { siteText } from '@/lib/content';
 import { Products } from '@/components/site/sections/Products';
 import { Services } from '@/components/site/sections/Services';
 import { WhyKayan } from '@/components/site/sections/WhyKayan';
@@ -23,7 +23,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
   const products = await publicProducts();
-  const t = await siteContent();
+  const t = await siteText();
 
   // الشرائح من نفس المنتجات: ما له صورة فقط. التدرّج اللوني يُشتق من
   // الترتيب — قيمة بصرية لا يملكها العمل ولا تُخزَّن.
