@@ -91,26 +91,36 @@ export async function createCatalogItem(
 export async function deleteCatalogItem(kind: Kind, id: string): Promise<void> {
   const user = await requirePermission('catalog.manage');
   const data = { isDeleted: true, deletedAt: new Date() };
-  const where = { id };
+
+  // المعرّف يصل من المتصفّح، فالشرط يحمل المستأجر معه.
+  //
+  // كان العزل في قاعدة البيانات يرفض الصفّ غير المملوك، فبدا التعديل
+  // بالمعرّف وحده كافياً. وهو لم يكن كافياً قطّ — كان محروساً من تحت.
+  // بزوال ذلك الحارس يصير هذا السطر هو الحارس.
+  //
+  // updateMany لا update: الثاني يرمي حين لا يجد، والأول يعدّل صفراً من
+  // الصفوف بهدوء. وهو الصحيح هنا — من يرسل معرّف غيره لا يستحقّ رسالة
+  // خطأ تخبره أن الصفّ موجود.
+  const where = { id, tenantId: user.tenantId };
 
   switch (kind) {
     case 'categories':
-      await prisma.category.update({ where, data });
+      await prisma.category.updateMany({ where, data });
       break;
     case 'colors':
-      await prisma.color.update({ where, data });
+      await prisma.color.updateMany({ where, data });
       break;
     case 'sizes':
-      await prisma.size.update({ where, data });
+      await prisma.size.updateMany({ where, data });
       break;
     case 'materials':
-      await prisma.material.update({ where, data });
+      await prisma.material.updateMany({ where, data });
       break;
     case 'printing':
-      await prisma.printingOption.update({ where, data });
+      await prisma.printingOption.updateMany({ where, data });
       break;
     case 'embroidery':
-      await prisma.embroideryOption.update({ where, data });
+      await prisma.embroideryOption.updateMany({ where, data });
       break;
   }
 

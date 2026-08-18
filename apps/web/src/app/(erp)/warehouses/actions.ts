@@ -56,8 +56,10 @@ export async function createWarehouse(_prev: FormState, formData: FormData): Pro
 
 export async function deleteWarehouse(id: string): Promise<void> {
   const user = await requirePermission('inventory.write');
-  await prisma.warehouse.update({
-    where: { id },
+  // المعرّف يصل من المتصفّح. بلا شرط المستأجر يمسح صاحب الصلاحية مخزن أي
+  // شركة بمعرفة رقمه — كان عزل قاعدة البيانات يمنعه، ولم يعد.
+  await prisma.warehouse.updateMany({
+    where: { id, tenantId: user.tenantId },
     data: { isDeleted: true, deletedAt: new Date() },
   });
   await audit({

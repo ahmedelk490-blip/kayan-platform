@@ -285,8 +285,10 @@ export async function deleteVariant(productId: string, variantId: string): Promi
   // history points at it. Soft-delete instead.
   const movements = await prisma.stockMovement.count({ where: { variantId } });
 
-  await prisma.productVariant.update({
-    where: { id: variantId },
+  // ProductVariant لا يحمل tenantId — ملكيّته عبر منتجه. الشرط يمرّ من
+  // هناك، وبدونه يمسح صاحب الصلاحية متغيّر أي شركة بمعرفة رقمه.
+  await prisma.productVariant.updateMany({
+    where: { id: variantId, product: { tenantId: user.tenantId } },
     data: { isDeleted: true, deletedAt: new Date(), isActive: false },
   });
 
