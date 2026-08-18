@@ -1,6 +1,6 @@
 // KAYAN ERP — database schema
 //
-// PostgreSQL (Phase 7). ADR-002 is now satisfied: the approved architecture
+// MySQL. See the datasource block below for what moved and what it cost.
 // was always PostgreSQL with Row-Level Security, and development ran on
 // SQLite only because neither PostgreSQL nor Docker was installable here.
 // Both deviations recorded in earlier phases are closed:
@@ -33,13 +33,45 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  // Migrations and introspection run as the schema owner. The application's
-  // own connection (url) is a role with neither ownership nor BYPASSRLS, so
-  // it cannot escape the policies.
-  directUrl = env("DIRECT_DATABASE_URL")
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
+
+// ═══════════════════════════════════════════════════════════
+// Why MySQL, and what moved with it
+// ═══════════════════════════════════════════════════════════
+//
+// The hosting this runs on offers MySQL and nothing else. PostgreSQL would
+// need a second service or a VPS, and the decision was to stay on one bill.
+//
+// What that costs, stated plainly:
+//
+//   - ROW-LEVEL SECURITY IS GONE. MySQL has no equivalent. Tenant isolation
+//     now rests entirely on every query carrying its tenant — which
+//     scripts/verify-tenant-scoping.mjs measures across all 240 call sites,
+//     reads and writes. Moving found three deletes that took an id from the
+//     browser and never checked ownership; the database had been refusing
+//     them from underneath. One tenant exists, so nothing was exploitable.
+//
+//   - NULLS NOT DISTINCT IS GONE. PriceTier leaned on it: a price for a
+//     whole product leaves variantId null, and both engines treat null as
+//     distinct from null, so two tiers for the same quantity would both be
+//     accepted and the price would depend on row order. A generated column
+//     folds null to a sentinel so the unique index bites. This is the one
+//     constraint in the schema that needed it — scripts/audit-null-uniques.mjs
+//     checked the other forty.
+//
+// What did not change:
+//
+//   - MONEY AND QUANTITY ARE STILL EXACT. NUMERIC(19,4) and DECIMAL(19,4)
+//     are the same fixed-point type; Prisma still returns Prisma.Decimal and
+//     no arithmetic moved.
+//
+//   - No arrays, no JSON columns, no engine-specific types anywhere in the
+//     sixty models, which is why the schema itself crosses unchanged.
+//
+// Charset must be utf8mb4. MySQL's "utf8" is three bytes and silently
+// truncates anything above the BMP; the whole product catalogue is Arabic.
 
 // ═══════════════════════════════════════════════════════════
 // Platform
