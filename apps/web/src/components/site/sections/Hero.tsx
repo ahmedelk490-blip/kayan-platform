@@ -43,6 +43,11 @@ export interface HeroSlide {
   name: string;
   note: string;
   tint: string;
+  /**
+   * صورة مرفوعة من النظام تُقدَّم خاماً من قاعدة البيانات، فلا تمرّ على
+   * محسّن Next. الصور الثابتة (المشتقّة من المنتجات) تبقى false فتُحسَّن.
+   */
+  raw?: boolean;
 }
 
 const WORDS = ['كل', 'علامة', 'ناجحة', 'تبدأ', 'بكيان'];
@@ -274,7 +279,7 @@ export function Hero({ slides }: { slides: HeroSlide[] }) {
           aria-label="منتجات كيان"
           tabIndex={0}
           onKeyDown={onKeyDown}
-          className="relative mt-10 h-[300px] outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-4 sm:h-[360px] lg:mt-12 lg:h-[420px]"
+          className="relative mt-10 h-[400px] outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-4 sm:h-[480px] lg:mt-12 lg:h-[580px]"
           style={{ perspective: 1400 }}
         >
           <motion.div
@@ -315,7 +320,7 @@ export function Hero({ slides }: { slides: HeroSlide[] }) {
                   }}
                   transition={SWITCH}
                   style={{ zIndex: 30 - depth, pointerEvents: hidden ? 'none' : 'auto' }}
-                  className="absolute inset-x-[12%] inset-y-0 mx-auto overflow-hidden rounded-[24px] bg-panel shadow-[0_30px_80px_-34px_rgba(30,11,17,0.5)] ring-1 ring-black/5 sm:inset-x-[18%]"
+                  className="absolute inset-x-[5%] inset-y-0 mx-auto overflow-hidden rounded-[24px] bg-panel shadow-[0_30px_80px_-34px_rgba(30,11,17,0.5)] ring-1 ring-black/5 sm:inset-x-[14%]"
                 >
                   {/* النقر على منتج جانبي يجعله المركز */}
                   {!isCentre && !hidden && (
@@ -331,8 +336,15 @@ export function Hero({ slides }: { slides: HeroSlide[] }) {
                     src={slide.src}
                     alt={slide.name}
                     fill
-                    sizes="(max-width: 640px) 76vw, (max-width: 1024px) 60vw, 44vw"
-                    className="select-none object-cover"
+                    sizes="(max-width: 640px) 90vw, (max-width: 1024px) 72vw, 52vw"
+                    // object-contain لا cover: المنتج كامل يبان — لا رأس
+                    // مقصوص ولا حاشية مبتورة. الحاشية حول الصورة هي لون
+                    // اللوحة، فتبدو إطاراً مقصوداً لا فراغاً.
+                    className="select-none object-contain"
+                    // صور الهيرو المرفوعة من النظام تُقدَّم من مسار قاعدة
+                    // البيانات وقد عولجت بـ sharp عند الرفع، فلا يعيد محسّن
+                    // Next معالجتها. صور المنتجات الثابتة تُحسَّن كالعادة.
+                    unoptimized={slide.raw}
                     // All six are preloaded: six small WebPs, and a carousel
                     // that stalls on first arrow press is worse than the cost.
                     priority

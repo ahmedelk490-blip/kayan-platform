@@ -113,6 +113,7 @@ model Tenant {
   documentSequences  DocumentSequence[]
   priceTiers PriceTier[]
   siteContent SiteContent[]
+  heroSlides HeroSlide[]
 }
 
 model Company {
@@ -2021,4 +2022,46 @@ model SiteContent {
 
   @@unique([tenantId, key])
   @@index([tenantId, group])
+}
+
+/// شرائح الواجهة (Hero slider) على الصفحة الرئيسية.
+///
+/// الصورة نفسها بايتات في القاعدة، لا مسار على القرص. القرص يُمسح مع كل
+/// نشر على الاستضافة المشتركة، فصورة مرفوعة هناك تضيع أول تحديث؛ وبايتات
+/// في القاعدة تنجو من النشر وتُنقل مع النسخ الاحتياطي.
+///
+/// تُقدَّم عبر مسار /hero/img/<id>، ويُحسَّن حجمها بـ sharp عند الرفع فلا
+/// يعيد محسّن Next معالجتها.
+model HeroSlide {
+  id       String @id @default(cuid())
+  tenantId String
+
+  /// اسم يظهر أسفل الشريحة.
+  title String
+
+  /// سطر ثانٍ اختياري تحت الاسم.
+  subtitle String @default("")
+
+  /// بايتات الصورة — LONGBLOB على MySQL. مُعالَجة webp عند الرفع.
+  image Bytes
+
+  /// نوع المحتوى للمسار الذي يقدّمها.
+  mimeType String @default("image/webp")
+
+  /// أبعاد الصورة المعالَجة — تفيد نسبة العرض ولا تُعاد قراءتها من البايتات.
+  width  Int @default(0)
+  height Int @default(0)
+
+  /// الترتيب على الواجهة، الأصغر أولاً.
+  sortOrder Int @default(0)
+
+  /// شريحة معطّلة تبقى محفوظة ولا تظهر — كإيقاف منتج لا حذفه.
+  isActive Boolean @default(true)
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, sortOrder])
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -37,7 +38,14 @@ export default async function ContentPage() {
 
   return (
     <AppShell user={user} title="نصوص الموقع">
-      <ModuleHeader title={`نصوص الموقع — ${rows.length} نصاً`} />
+      <ModuleHeader
+        title={`نصوص الموقع — ${rows.length} نصاً`}
+        action={
+          <Link href="/content/hero" className="erp-btn-ghost">
+            صور الواجهة (سلايدر)
+          </Link>
+        }
+      />
       <div className="max-w-4xl">
         <ContentForm action={saveContent} rows={rows} />
       </div>
