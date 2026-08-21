@@ -278,6 +278,74 @@ export async function createVariant(
   return {};
 }
 
+/**
+ * إضافة عدة ألوان للمنتج دفعة واحدة.
+ *
+ * إنشاء متغيّر لكل لون على حدة متعب، والمالك يريد أن «يضيف اللون فيسمعه
+ * المنتج». هذا يأخذ الألوان المختارة ويصنع متغيّراً لكل لون بلا مقاس —
+ * فيظهر اللون فوراً على المنتج وصفحته العامة وفي اختيار سطر الأمر
+ * والفاتورة. الألوان الموجودة سلفاً تُتخطّى بلا خطأ.
+ *
+ * الكود يُشتقّ من كود المنتج واللون فيبقى مقروءاً وفريداً.
+ */
+export async function addColorsToProduct(
+  productId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requirePermission('products.write');
+
+  const product = await prisma.product.findFirst({
+    where: { id: productId, tenantId: user.tenantId, isDeleted: false },
+    select: { sku: true },
+  });
+  if (!product) return { error: 'المنتج غير موجود.' };
+
+  const colorIds = formData.getAll('colorIds').map(String).filter(Boolean);
+  if (colorIds.length === 0) return { error: 'اختر لوناً واحداً على الأقل.' };
+
+  // الألوان الموجودة سلفاً كمتغيّرات بلا مقاس — لا تُكرَّر.
+  const existing = await prisma.productVariant.findMany({
+    where: { productId, sizeId: null, colorId: { in: colorIds } },
+    select: { colorId: true },
+  });
+  const have = new Set(existing.map((v) => v.colorId));
+
+  const colors = await prisma.color.findMany({
+    where: { tenantId: user.tenantId, id: { in: colorIds }, isDeleted: false },
+    select: { id: true, nameAr: true, nameEn: true },
+  });
+
+  let added = 0;
+  for (const color of colors) {
+    if (have.has(color.id)) continue;
+    // كود فريد: كود المنتج + رمز اللون (إنجليزي إن وُجد وإلا مقطع المعرّف).
+    const suffix = (color.nameEn || color.id.slice(-4)).replace(/\s+/g, '-').toUpperCase();
+    let sku = `${product.sku}-${suffix}`;
+    // في النادر أن يتصادم الكود، يُلحق بمقطع من معرّف اللون.
+    if (await prisma.productVariant.findUnique({ where: { sku } })) {
+      sku = `${sku}-${color.id.slice(-3)}`;
+    }
+    await prisma.productVariant.create({
+      data: { productId, sku, colorId: color.id, sizeId: null },
+    });
+    added += 1;
+  }
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'variant.create',
+    entityType: 'Product',
+    entityId: productId,
+    detail: `${added} لون`,
+  });
+
+  revalidatePath(`/catalog/products/${productId}`);
+  revalidatePath('/');
+  return { ok: added > 0 ? `أُضيف ${added} لون. ظاهر على المنتج وصفحته الآن.` : 'كل الألوان المختارة موجودة سلفاً.' };
+}
+
 export async function deleteVariant(productId: string, variantId: string): Promise<void> {
   const user = await requirePermission('products.write');
 

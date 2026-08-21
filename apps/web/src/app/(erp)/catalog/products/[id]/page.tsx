@@ -8,9 +8,10 @@ import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import { ProductForm } from '../ProductForm';
-import { updateProduct, deleteProduct, deleteVariant, addPriceTier, deletePriceTier } from '../actions';
+import { updateProduct, deleteProduct, deleteVariant, addPriceTier, deletePriceTier, addColorsToProduct } from '../actions';
 import { loadProductOptions } from '../options';
 import { VariantForm } from './VariantForm';
+import { AddColorsForm } from './AddColorsForm';
 import { PriceTierForm } from './PriceTierForm';
 
 export const metadata: Metadata = { title: 'بيانات المنتج' };
@@ -48,6 +49,13 @@ export default async function ProductDetailPage({
   if (!product) notFound();
 
   const options = await loadProductOptions(user.tenantId);
+
+  // الألوان بكودها اللوني لشبكة العيّنات — options.colors تحمل الاسم فقط.
+  const colorSwatches = await prisma.color.findMany({
+    where: { tenantId: user.tenantId, isDeleted: false },
+    orderBy: { sortOrder: 'asc' },
+    select: { id: true, nameAr: true, hex: true },
+  });
   const canWrite = can(user.role, 'products.write');
 
   // Phase 6. Read-only here on purpose: a formula is assigned from the
@@ -224,7 +232,21 @@ export default async function ProductDetailPage({
 
           {canWrite && (
             <section className="erp-card p-6">
-              <h3 className="mb-4 text-sm font-semibold text-brand">إضافة متغيّر</h3>
+              <h3 className="mb-1 text-sm font-semibold text-brand">إضافة ألوان بسرعة</h3>
+              <p className="mb-4 text-[0.7rem] leading-[1.9] text-txt-4">
+                اختر الألوان المتوفّرة لهذا المنتج — تُضاف دفعة واحدة وتظهر على المنتج
+                وصفحته وفي اختيار الأمر والفاتورة.
+              </p>
+              <AddColorsForm
+                action={addColorsToProduct.bind(null, product.id)}
+                colors={colorSwatches}
+              />
+            </section>
+          )}
+
+          {canWrite && (
+            <section className="erp-card p-6">
+              <h3 className="mb-4 text-sm font-semibold text-brand">إضافة متغيّر (لون + مقاس)</h3>
               <VariantForm productId={product.id} colors={options.colors} sizes={options.sizes} />
             </section>
           )}
