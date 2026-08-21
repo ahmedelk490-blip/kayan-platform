@@ -3,6 +3,7 @@ import { can, available, dec, formatQty, type Numeric } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
+import { SegmentedTabs } from '@/components/SegmentedTabs';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import { MovementModal } from './MovementModal';
 import { reverseMovement } from './actions';
@@ -146,10 +147,16 @@ export default async function InventoryPage() {
       {/* The movement form used to sit in a side column here. It is now the
           modal above — the tables get the full width, which matters for a
           ledger the operator actually reads. */}
-      <div className="grid gap-6">
-        <div className="space-y-6">
-          <section>
-            <h3 className="mb-3 text-sm font-semibold text-brand">الأرصدة</h3>
+      {/* تبويبات داخلية: المخزون كله من فوق بلا تمرير طويل — أرصدة المنتجات،
+          والخامات، وسجل الحركات، كلٌّ بضغطة. */}
+      <SegmentedTabs
+        tabs={[
+          {
+            key: 'balances',
+            label: 'أرصدة المنتجات',
+            badge: lowStock.length,
+            content: (
+              <section>
             <Table
               headers={['المنتج / المتغيّر', 'المخزن', 'الموقع', 'الرصيد', 'محجوز', 'المتاح', 'تالف', 'الحد الأدنى']}
               empty={stock.length === 0}
@@ -181,10 +188,14 @@ export default async function InventoryPage() {
                 );
               })}
             </Table>
-          </section>
-
-          <section>
-            <h3 className="mb-3 text-sm font-semibold text-brand">سجل الحركات</h3>
+              </section>
+            ),
+          },
+          {
+            key: 'movements',
+            label: 'سجل حركات المنتجات',
+            content: (
+              <section>
             <Table
               headers={['التاريخ', 'المتغيّر', 'النوع', 'الكمية', 'المخزن', 'المرجع', 'المستخدم', '']}
               empty={movements.length === 0}
@@ -220,13 +231,20 @@ export default async function InventoryPage() {
             <p className="mt-2 text-[0.7rem] text-txt-4">
               الحركات لا تُحذف نهائياً — التصحيح يتم بحركة عكسية تُشير إلى الأصلية.
             </p>
-          </section>
-
-          {/* ── الخامات والمستلزمات ── */}
-          {seeSupplies && (
-            <section>
+              </section>
+            ),
+          },
+          ...(seeSupplies
+            ? [
+                {
+                  key: 'supplies',
+                  label: 'الخامات والمستلزمات',
+                  badge: lowSupplies.length,
+                  content: (
+                    <>
+                      <section>
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-brand">الخامات والمستلزمات</h3>
+                <h3 className="text-sm font-semibold text-brand">أرصدة الخامات</h3>
                 <span className="text-[0.7rem] text-txt-4">
                   {supplies.length} صنف
                   {lowSupplies.length > 0 && (
@@ -267,11 +285,9 @@ export default async function InventoryPage() {
                 })}
               </Table>
             </section>
-          )}
 
-          {/* ── حركات الخامات (شراء / استهلاك إنتاج) ── */}
-          {seeSupplies && supplyTx.length > 0 && (
-            <section>
+          {supplyTx.length > 0 && (
+            <section className="mt-6">
               <h3 className="mb-3 text-sm font-semibold text-brand">حركات الخامات الأخيرة</h3>
               <Table
                 headers={['التاريخ', 'الخامة', 'النوع', 'الكمية', 'المرجع', 'المستخدم']}
@@ -299,9 +315,13 @@ export default async function InventoryPage() {
               </p>
             </section>
           )}
-        </div>
-
-      </div>
+                    </>
+                  ),
+                },
+              ]
+            : []),
+        ]}
+      />
     </AppShell>
   );
 }
