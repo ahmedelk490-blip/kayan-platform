@@ -6,7 +6,7 @@ import type { VariantOption } from './DocumentForm';
 
 /** Customers and sellable variants, with available-to-promise per variant. */
 export async function loadSalesOptions(tenantId: string) {
-  const [customers, variants] = await Promise.all([
+  const [customers, variants, tiers] = await Promise.all([
     prisma.customer.findMany({
       where: { tenantId, isDeleted: false },
       orderBy: { contactName: 'asc' },
@@ -19,14 +19,36 @@ export async function loadSalesOptions(tenantId: string) {
         product: { tenantId, isDeleted: false, status: 'ACTIVE' },
       },
       include: {
-        product: { select: { nameAr: true, sellingPrice: true } },
+        product: { select: { id: true, nameAr: true, sellingPrice: true } },
         color: { select: { nameAr: true } },
         size: { select: { code: true } },
         stock: { select: { onHand: true, reserved: true } },
       },
       orderBy: { sku: 'asc' },
     }),
+    // شرائح السعر النشطة — هي السعر الحقيقي حسب الخدمة والكمية. سعر المتغيّر
+    // الثابت غالباً فارغ، فالحساب بلا الشرائح يخرج صفراً.
+    prisma.priceTier.findMany({
+      where: { tenantId, isActive: true },
+      orderBy: [{ service: 'asc' }, { minQty: 'asc' }],
+      select: { productId: true, variantId: true, service: true, minQty: true, maxQty: true, price: true },
+    }),
   ]);
+
+  // شرائح كل منتج مجموعة، لتُلحق بمتغيّراته.
+  const tiersByProduct = new Map<string, VariantOption['tiers']>();
+  for (const t of tiers) {
+    const list = tiersByProduct.get(t.productId) ?? [];
+    list.push({
+      service: t.service,
+      minQty: t.minQty,
+      maxQty: t.maxQty,
+      price: dec(t.price).toNumber(),
+      variantId: t.variantId,
+      isActive: true,
+    });
+    tiersByProduct.set(t.productId, list);
+  }
 
   const variantOptions: VariantOption[] = variants.map((v) => {
     const onHand = v.stock.reduce((s, r) => s.plus(dec(r.onHand)), dec(0));
@@ -41,6 +63,11 @@ export async function loadSalesOptions(tenantId: string) {
       label: `${parts.join(' · ')} (${v.sku})`,
       price: dec(v.sellingPrice ?? v.product.sellingPrice ?? 0).toNumber(),
       available: available(onHand, reserved).toNumber(),
+      // شرائح منتج هذا المتغيّر — تلك التي بلا متغيّر (للمنتج كله) أو الخاصة
+      // بهذا المتغيّر بعينه.
+      tiers: (tiersByProduct.get(v.product.id) ?? []).filter(
+        (t) => t.variantId === null || t.variantId === v.id,
+      ),
     };
   });
 

@@ -32,6 +32,12 @@ export interface Tier {
   isActive: boolean;
 }
 
+/**
+ * أقل ما تحتاجه دوال الاختيار من الشريحة. يتيح تمرير كائن مبسّط عبر حدّ
+ * الخادم/العميل دون حمل الحقول غير المستعملة (id, currency).
+ */
+export type TierMatch = Pick<Tier, 'variantId' | 'service' | 'minQty' | 'maxQty' | 'price' | 'isActive'>;
+
 /** هل الكمية داخل نطاق الشريحة؟ */
 export function tierCovers(tier: Pick<Tier, 'minQty' | 'maxQty'>, quantity: number): boolean {
   if (quantity < tier.minQty) return false;
@@ -48,7 +54,7 @@ export function tierCovers(tier: Pick<Tier, 'minQty' | 'maxQty'>, quantity: numb
  * تُرجع null حين لا تغطّي أي شريحة. لا سعر افتراضي مخترع: سعر خاطئ على
  * عرض سعر أسوأ من غياب سعر.
  */
-export function applicableTier<T extends Tier>(
+export function applicableTier<T extends TierMatch>(
   tiers: T[],
   options: { service: string; quantity: number; variantId?: string | null },
 ): T | null {
@@ -80,7 +86,7 @@ export function applicableTier<T extends Tier>(
 }
 
 /** إجمالي سطر بشريحة. يُرجع null حين لا سعر — لا صفر. */
-export function tierLineTotal<T extends Tier>(
+export function tierLineTotal<T extends TierMatch>(
   tiers: T[],
   options: { service: string; quantity: number; variantId?: string | null },
 ): Decimal | null {

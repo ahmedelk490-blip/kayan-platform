@@ -1,19 +1,41 @@
 'use client';
 
 import { useActionState, useState } from 'react';
-import { calcLine, calcDocument, formatMoney, type Numeric } from '@erp/domain';
+import {
+  calcLine,
+  calcDocument,
+  formatMoney,
+  applicableTier,
+  PRICE_SERVICE_AR,
+  type PriceService,
+  type Numeric,
+} from '@erp/domain';
 import { Field, TextArea, Select, SubmitButton, FormError } from '@/components/crud/Form';
 import type { FormState } from './shared';
+
+/** شريحة سعر مبسّطة تعبر إلى العميل — أرقام لا Decimal. */
+export interface VariantTier {
+  service: string;
+  minQty: number;
+  maxQty: number | null;
+  price: number;
+  variantId: string | null;
+  isActive: boolean;
+}
 
 export interface VariantOption {
   value: string;
   label: string;
   price: number;
   available: number;
+  /** شرائح سعر منتج هذا المتغيّر — السعر الحقيقي حسب الخدمة والكمية. */
+  tiers: VariantTier[];
 }
 
 export interface DocLine {
   variantId: string;
+  /** الخدمة المختارة (تطريز/DTF…)، تحدّد الشريحة والسعر. */
+  service: string;
   quantity: number;
   unitPrice: number;
   discountAmount: number;
@@ -33,12 +55,20 @@ export interface DocValues {
 
 const emptyLine = (): DocLine => ({
   variantId: '',
+  service: '',
   quantity: 1,
   unitPrice: 0,
   discountAmount: 0,
   taxRate: 0,
   notes: '',
 });
+
+/** خدمات هذا المتغيّر — المميّزة من شرائحه، بترتيب ظهورها. */
+function servicesOf(v: VariantOption): string[] {
+  const seen: string[] = [];
+  for (const t of v.tiers) if (!seen.includes(t.service)) seen.push(t.service);
+  return seen;
+}
 
 /**
  * Shared editor for quotations and sales orders — identical line structure,
@@ -70,10 +100,49 @@ export function DocumentForm({
   const [docDiscount, setDocDiscount] = useState(values?.discountAmount ?? 0);
   const [docDiscountPct, setDocDiscountPct] = useState(values?.discountPercent ?? 0);
 
-  const priceOf = (id: string) => variants.find((v) => v.value === id)?.price ?? 0;
+  /**
+   * يعيد تسعير السطر من شريحة الخدمة والكمية — هذا هو الحساب الصحيح.
+   *
+   * سعر المتغيّر الثابت غالباً فارغ، والسعر الحقيقي في شرائح (خدمة، كمية).
+   * فمتى تغيّر المتغيّر أو الخدمة أو الكمية أعدنا ملء سعر الوحدة من الشريحة
+   * المطابقة. إن لم تطابق شريحة استعملنا السعر الثابت إن وُجد، وإلا تركنا ما
+   * أدخله المستخدم يدوياً — لا نخترع صفراً.
+   */
+  function reprice(line: DocLine): DocLine {
+    const v = variants.find((x) => x.value === line.variantId);
+    if (!v) return line;
+    if (line.service) {
+      const tier = applicableTier(v.tiers, {
+        service: line.service,
+        quantity: line.quantity,
+        variantId: line.variantId,
+      });
+      if (tier) return { ...line, unitPrice: tier.price };
+    }
+    if (v.tiers.length === 0 && v.price > 0) return { ...line, unitPrice: v.price };
+    return line;
+  }
 
   function update(index: number, patch: Partial<DocLine>) {
     setLines((prev) => prev.map((l, i) => (i === index ? { ...l, ...patch } : l)));
+  }
+
+  /** تعديل يُعقبه إعادة تسعير — للمتغيّر والخدمة والكمية. */
+  function updatePriced(index: number, patch: Partial<DocLine>) {
+    setLines((prev) =>
+      prev.map((l, i) => {
+        if (i !== index) return l;
+        const next = { ...l, ...patch };
+        // عند تبديل المتغيّر: اختر خدمة معقولة (أول خدمة متاحة) إن لم تعد
+        // الخدمة الحالية موجودة، حتى يبدأ التسعير فوراً.
+        if (patch.variantId !== undefined) {
+          const v = variants.find((x) => x.value === patch.variantId);
+          const services = v ? servicesOf(v) : [];
+          next.service = services.includes(next.service) ? next.service : services[0] ?? '';
+        }
+        return reprice(next);
+      }),
+    );
   }
 
   const computed = lines
@@ -120,18 +189,25 @@ export function DocumentForm({
             const t = calcLine(line);
             const variant = variants.find((v) => v.value === line.variantId);
             const short = variant && line.quantity > variant.available;
+            // هل تغطّي شريحةٌ هذه الكمية والخدمة؟ إن اختِيرت خدمة ولم تطابق
+            // شريحة فالسعر لم يُحدَّث تلقائياً — ننبّه بدل أن نخفي الخطأ.
+            const priceGap =
+              variant &&
+              line.service &&
+              !applicableTier(variant.tiers, {
+                service: line.service,
+                quantity: line.quantity,
+                variantId: line.variantId,
+              });
             return (
               <div key={index} className="rounded-lg border border-line bg-card-2 p-4">
-                <div className="grid gap-3 lg:grid-cols-[2fr_repeat(4,1fr)_auto]">
+                <div className="grid gap-3 lg:grid-cols-[1.7fr_1.1fr_repeat(4,1fr)_auto]">
                   <label className="block">
                     <span className="mb-1.5 block text-xs text-txt-2">المتغيّر</span>
                     <select
                       name="lineVariantId"
                       value={line.variantId}
-                      onChange={(e) => {
-                        const id = e.target.value;
-                        update(index, { variantId: id, unitPrice: priceOf(id) || line.unitPrice });
-                      }}
+                      onChange={(e) => updatePriced(index, { variantId: e.target.value })}
                       className="erp-input py-2.5"
                     >
                       <option value="">اختر…</option>
@@ -143,7 +219,25 @@ export function DocumentForm({
                     </select>
                   </label>
 
-                  <NumberCell label="الكمية" name="lineQuantity" value={line.quantity} onChange={(v) => update(index, { quantity: v })} />
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs text-txt-2">الخدمة</span>
+                    <select
+                      value={line.service}
+                      onChange={(e) => updatePriced(index, { service: e.target.value })}
+                      disabled={!variant || servicesOf(variant).length === 0}
+                      className="erp-input py-2.5 disabled:opacity-50"
+                    >
+                      {(!variant || servicesOf(variant).length === 0) && <option value="">—</option>}
+                      {variant &&
+                        servicesOf(variant).map((s) => (
+                          <option key={s} value={s}>
+                            {PRICE_SERVICE_AR[s as PriceService] ?? s}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+
+                  <NumberCell label="الكمية" name="lineQuantity" value={line.quantity} onChange={(v) => updatePriced(index, { quantity: v })} />
                   <NumberCell label="سعر الوحدة" name="lineUnitPrice" value={line.unitPrice} onChange={(v) => update(index, { unitPrice: v })} />
                   <NumberCell label="خصم" name="lineDiscount" value={line.discountAmount} onChange={(v) => update(index, { discountAmount: v })} />
                   <NumberCell label="ضريبة %" name="lineTaxRate" value={line.taxRate} onChange={(v) => update(index, { taxRate: v })} />
@@ -173,6 +267,13 @@ export function DocumentForm({
                     </span>
                   )}
                 </div>
+
+                {priceGap && (
+                  <p className="mt-1.5 text-[0.7rem] text-warn">
+                    لا توجد شريحة سعر لهذه الكمية ضمن خدمة{' '}
+                    {PRICE_SERVICE_AR[line.service as PriceService] ?? line.service} — راجع سعر الوحدة يدوياً.
+                  </p>
+                )}
               </div>
             );
           })}
