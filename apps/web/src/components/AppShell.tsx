@@ -3,6 +3,7 @@ import { can, type PermissionKey } from '@erp/domain';
 import type { SessionUser } from '@/lib/auth';
 import { logoutAction } from '@/app/(erp)/login/actions';
 import { SidebarNav, MobileNav } from '@/components/NavLinks';
+import { AreaTabs } from '@/components/AreaTabs';
 
 /**
  * ERP chrome — sidebar + header.
@@ -161,6 +162,15 @@ export function AppShell({
         {/* التنقل على الموبايل — الشريط الجانبي مخفي تحت lg، وبدون هذا
             لا يستطيع مستخدم الهاتف الوصول لأي صفحة. */}
         <MobileNav items={items.map((i) => ({ href: i.href, label: i.label }))} />
+
+        {/* تبويبات المنطقة الحالية — العروض والأوامر والفواتير تبويبات
+            واحدة داخل المبيعات، وكذلك بقية المجموعات. */}
+        <AreaTabs
+          groups={groups.map((g) => ({
+            title: g.title || 'الرئيسية',
+            links: g.links.map((i) => ({ href: i.href, label: i.label })),
+          }))}
+        />
 
         <main className="min-w-0 flex-1 p-5 lg:p-8">{children}</main>
       </div>
