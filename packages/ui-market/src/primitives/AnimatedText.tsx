@@ -7,54 +7,40 @@ import { cn } from '@erp/utils';
 interface AnimatedTextProps {
   text: string;
   className?: string;
-  /** Word-level is the accessible default; character-level for short display lines. */
+  /**
+   * محفوظة للتوافق مع النداءات القائمة، ولم تعد تقسّم النص. العربية خطّ
+   * متّصل: تقسيمها إلى كلمات — فضلاً عن حروف — يكسر الوصلات ويجعل العنوان
+   * يبدو مقطّعاً، وهو ما رفضه المالك صراحةً.
+   */
   by?: 'word' | 'char';
   delay?: number;
   as?: 'h1' | 'h2' | 'h3' | 'p' | 'span';
 }
 
 /**
- * Progressive reveal.
+ * كشف تدريجي للنص، كتلةً واحدة متّصلة.
  *
- * The full string stays in the accessibility tree as one label while the
- * visible fragments are hidden from it — otherwise screen readers announce
- * a headline one word at a time, which is how most implementations of this
- * effect quietly break.
+ * كان يقسّم النص إلى كلمات، كلٌّ في صندوق `overflow-hidden` يصعد على حدة.
+ * ذلك يعمل مع اللاتينية المنفصلة أصلاً، ويكسر العربية: الحروف تتّصل داخل
+ * الكلمة، فتقطيعها إلى صناديق متجاورة يُظهر العنوان مبعثراً، والقصّ يبتر
+ * أطراف الحروف الهابطة.
+ *
+ * السطر الآن يظهر كاملاً بحركة واحدة — شفافية وارتفاع خفيف — فيبقى الخطّ
+ * متّصلاً كما يُكتب. النصّ حقيقيّ في الشجرة لا وسمَ بديلاً، فالقارئ الصوتي
+ * يقرؤه مرّة واحدة سليماً.
  */
-export function AnimatedText({
-  text,
-  className,
-  by = 'word',
-  delay = 0,
-  as = 'span',
-}: AnimatedTextProps) {
+export function AnimatedText({ text, className, delay = 0, as = 'span' }: AnimatedTextProps) {
   const Tag = motion[as];
-  const parts = by === 'word' ? text.split(' ') : Array.from(text);
-  const stagger = by === 'word' ? 0.055 : 0.022;
 
   return (
     <Tag
       className={cn('inline-block', className)}
-      initial="hidden"
-      whileInView="visible"
+      initial={{ opacity: 0, y: '0.45em' }}
+      whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-12% 0px' }}
-      variants={{ visible: { transition: { staggerChildren: stagger, delayChildren: delay } } }}
-      aria-label={text}
+      transition={{ duration: 0.8, ease: EASE.outExpo, delay }}
     >
-      {parts.map((part, index) => (
-        <span key={`${part}-${index}`} className="inline-block overflow-hidden" aria-hidden="true">
-          <motion.span
-            className="inline-block"
-            variants={{
-              hidden: { y: '110%', opacity: 0 },
-              visible: { y: '0%', opacity: 1, transition: { duration: 0.85, ease: EASE.outExpo } },
-            }}
-          >
-            {part}
-            {by === 'word' && index < parts.length - 1 ? ' ' : ''}
-          </motion.span>
-        </span>
-      ))}
+      {text}
     </Tag>
   );
 }

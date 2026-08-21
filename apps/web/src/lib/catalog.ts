@@ -120,6 +120,117 @@ async function queryProducts(): Promise<PublicProduct[]> {
   }));
 }
 
+export interface PublicProductDetail {
+  id: string;
+  sku: string;
+  nameAr: string;
+  nameEn: string | null;
+  descriptionAr: string | null;
+  sellingPrice: string | null;
+  /** كل الصور، الأساسية أولاً. */
+  images: string[];
+  /** الألوان المتاحة باسمها وكودها اللوني للعيّنة. */
+  colors: { nameAr: string; hex: string | null }[];
+  sizes: string[];
+  materials: string[];
+  tiers: { service: string; minQty: number; maxQty: number | null; price: string; currency: string }[];
+}
+
+/**
+ * منتج واحد بكل تفاصيله — لصفحة المنتج العامة.
+ *
+ * يعيد null لا يرمي: معرّف لا يقابل منتجاً نشطاً (أُوقف، أو حُذف، أو لا وجود
+ * له) يعني صفحة 404، لا خطأ خادم. والصفحة تتولّى ذلك.
+ */
+export async function publicProduct(id: string): Promise<PublicProductDetail | null> {
+  setCurrentTenant(PUBLIC_TENANT);
+
+  try {
+    const p = await prisma.product.findFirst({
+      where: { id, tenantId: PUBLIC_TENANT, isDeleted: false, status: 'ACTIVE' },
+      select: {
+        id: true,
+        sku: true,
+        nameAr: true,
+        nameEn: true,
+        descriptionAr: true,
+        sellingPrice: true,
+        images: {
+          orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
+          select: { path: true },
+        },
+        variants: {
+          where: { isDeleted: false },
+          select: {
+            color: { select: { nameAr: true, hex: true, sortOrder: true } },
+            size: { select: { code: true, sortOrder: true } },
+          },
+        },
+        materials: { select: { material: { select: { nameAr: true } } } },
+        priceTiers: {
+          where: { isActive: true },
+          orderBy: [{ service: 'asc' }, { minQty: 'asc' }],
+          select: { service: true, minQty: true, maxQty: true, price: true, currency: true },
+        },
+      },
+    });
+
+    if (!p) return null;
+
+    // لون واحد لكل اسم، مرتّب كما في النظام. Map يزيل التكرار ويحفظ الكود.
+    const colorMap = new Map<string, { nameAr: string; hex: string | null; sortOrder: number }>();
+    for (const v of p.variants) {
+      if (v.color && !colorMap.has(v.color.nameAr)) {
+        colorMap.set(v.color.nameAr, { nameAr: v.color.nameAr, hex: v.color.hex, sortOrder: v.color.sortOrder });
+      }
+    }
+    const colors = [...colorMap.values()].sort((a, b) => a.sortOrder - b.sortOrder);
+
+    const sizeMap = new Map<string, number>();
+    for (const v of p.variants) {
+      if (v.size?.code && !sizeMap.has(v.size.code)) sizeMap.set(v.size.code, v.size.sortOrder);
+    }
+    const sizes = [...sizeMap.entries()].sort((a, b) => a[1] - b[1]).map(([code]) => code);
+
+    return {
+      id: p.id,
+      sku: p.sku,
+      nameAr: p.nameAr,
+      nameEn: p.nameEn,
+      descriptionAr: p.descriptionAr,
+      sellingPrice: p.sellingPrice ? p.sellingPrice.toString() : null,
+      images: p.images.map((i) => i.path),
+      colors: colors.map((c) => ({ nameAr: c.nameAr, hex: c.hex })),
+      sizes,
+      materials: [...new Set(p.materials.map((m) => m.material.nameAr))],
+      tiers: p.priceTiers.map((t) => ({
+        service: t.service,
+        minQty: t.minQty,
+        maxQty: t.maxQty,
+        price: t.price.toString(),
+        currency: t.currency,
+      })),
+    };
+  } catch (error) {
+    console.error('[catalog] تعذّر قراءة المنتج', error);
+    return null;
+  }
+}
+
+/** معرّفات كل المنتجات النشطة — لتوليد مسارات الصفحات. */
+export async function publicProductIds(): Promise<string[]> {
+  setCurrentTenant(PUBLIC_TENANT);
+  try {
+    const rows = await prisma.product.findMany({
+      where: { tenantId: PUBLIC_TENANT, isDeleted: false, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
+  } catch {
+    return [];
+  }
+}
+
 /**
  * رقم واتساب الموقع — من إعدادات الشركة.
  *

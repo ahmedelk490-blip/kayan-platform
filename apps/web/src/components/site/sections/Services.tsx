@@ -2,7 +2,8 @@
 
 import { motion } from 'motion/react';
 import { EASE } from '@erp/motion';
-import { SectionShell, AnimatedText } from '@erp/ui-market';
+import { SectionShell } from '@erp/ui-market';
+import { SectionHeading } from '@/components/site/SectionHeading';
 import { SERVICES } from '@/site';
 
 /**
@@ -15,23 +16,10 @@ export function Services({ t }: { t: Record<string, string> }) {
   return (
     <SectionShell size="tall">
       <div id="services" className="mx-auto w-full max-w-[1400px]">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-80px' }}
-          transition={{ duration: 0.8, ease: EASE.outExpo }}
-          className="mb-14 max-w-[52ch]"
-        >
-          <span className="mb-5 flex items-center gap-3 text-xs tracking-[0.16em] text-body-muted">
-            <span className="h-px w-10 bg-brand-fill" />
-            الطباعة والتطريز
-          </span>
-          <AnimatedText
-            as="h2"
-            text="شعارك على القماش، بيدنا من البداية للنهاية."
-            className="font-display text-display-3 leading-[1.2] text-body"
-          />
-        </motion.div>
+        <SectionHeading
+          eyebrow="الطباعة والتطريز"
+          title="شعارك على القماش، بيدنا من البداية للنهاية."
+        />
 
         <div className="grid gap-4 md:grid-cols-2">
           {SERVICES.map((service, index) => (

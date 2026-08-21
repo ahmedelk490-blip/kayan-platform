@@ -14,7 +14,7 @@ export function SiteFooter() {
   return (
     <footer className="border-t border-edge px-6 py-16 md:px-10 lg:px-16">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_repeat(4,1fr)] lg:gap-8">
+        <div className="grid gap-10 lg:grid-cols-[1.4fr_2.6fr] lg:gap-12">
           <div>
             <Link href="/" aria-label={`${BRAND.nameAr} — الرئيسية`} className="inline-flex">
               <Logo height={56} className="rounded-lg" />
@@ -28,27 +28,31 @@ export function SiteFooter() {
             <p className="mt-5 text-sm text-brand">{BRAND.slogan.ar}</p>
           </div>
 
-          {FOOTER_GROUPS.map((group) => (
-            <nav key={group.title} aria-label={group.title}>
-              <h2 className="text-[0.65rem] uppercase tracking-[0.18em] text-body-subtle">
-                {group.title}
-              </h2>
-              <ul className="mt-4 space-y-2.5">
-                {/* Keyed by label, not href — several links in a group point
-                    at the same section anchor. */}
-                {group.links.map((link) => (
-                  <li key={link.label}>
-                    <Link
-                      href={link.href}
-                      className="text-sm text-body-muted transition-colors duration-300 hover:text-body"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-          ))}
+          {/* عمودان على الموبايل بدل عمود واحد طويل، وأربعة على الشاشات
+              الكبيرة. المستخدم يرى روابط التذييل مرصوصة لا مكدّسة. */}
+          <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
+            {FOOTER_GROUPS.map((group) => (
+              <nav key={group.title} aria-label={group.title}>
+                <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-body-subtle">
+                  {group.title}
+                </h2>
+                <ul className="mt-4 space-y-2.5">
+                  {/* Keyed by label, not href — several links in a group point
+                      at the same section anchor. */}
+                  {group.links.map((link) => (
+                    <li key={link.label}>
+                      <Link
+                        href={link.href}
+                        className="text-sm text-body-muted transition-colors duration-300 hover:text-body"
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            ))}
+          </div>
         </div>
 
         {/* الكلمة الضخمة: بيضاء في الوضع الداكن، نبيتية في الفاتح. كانت
