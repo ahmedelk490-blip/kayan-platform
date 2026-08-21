@@ -7,7 +7,6 @@ import { EASE } from '@erp/motion';
 import { SectionShell } from '@erp/ui-market';
 import { SectionHeading } from '@/components/site/SectionHeading';
 import { ImageReveal } from '@/components/site/Parallax';
-import { PRODUCTS_WITHOUT_PHOTOS } from '@/site';
 import type { PublicProduct } from '@/lib/catalog';
 
 /**
@@ -89,18 +88,6 @@ export function Products({ products }: { products: PublicProduct[] }) {
             </motion.article>
           ))}
         </div>
-
-        <motion.p
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.8, ease: EASE.outExpo }}
-          className="mt-10 text-sm leading-[1.9] text-body-muted"
-        >
-          ونصنع كذلك{' '}
-          <span className="text-body">{PRODUCTS_WITHOUT_PHOTOS.join(' · ')}</span> — ما
-          نزّلنا صورها بعد، واللي يبي يشوف عيّنة منها نجهّزها له.
-        </motion.p>
       </div>
     </SectionShell>
   );

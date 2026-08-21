@@ -22,11 +22,16 @@ import type { FormState } from '@/lib/ops';
  */
 export function SupplyForm({
   action,
+  defaults,
+  submitLabel = 'إضافة',
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
+  /** قيم أوّلية للتعديل؛ غيابها يعني نموذج إضافة جديد. */
+  defaults?: { nameAr: string; kind: SupplyKind; category: string; unit: string; minStock: number };
+  submitLabel?: string;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
-  const [kind, setKind] = useState<SupplyKind>('PRINTING');
+  const [kind, setKind] = useState<SupplyKind>(defaults?.kind ?? 'PRINTING');
 
   return (
     <form action={formAction} className="space-y-4">
@@ -57,19 +62,21 @@ export function SupplyForm({
           name="category"
           label="الفئة"
           required
+          // القيمة الأوّلية تُطبَّق فقط حين تخصّ نوع هذا المستلزم.
+          defaultValue={defaults && defaults.kind === kind ? defaults.category : undefined}
           options={SUPPLY_CATEGORIES[kind].map((c) => ({
             value: c,
             label: SUPPLY_CATEGORY_AR[c] ?? c,
           }))}
           errors={state.fieldErrors}
         />
-        <Field name="nameAr" label="الاسم" required errors={state.fieldErrors} />
-        <Field name="unit" label="الوحدة" placeholder="رول · زجاجة · بكرة" errors={state.fieldErrors} />
-        <Field name="minStock" label="حد أدنى" type="number" dir="ltr" defaultValue="0" errors={state.fieldErrors} />
+        <Field name="nameAr" label="الاسم" required defaultValue={defaults?.nameAr} errors={state.fieldErrors} />
+        <Field name="unit" label="الوحدة" placeholder="رول · زجاجة · بكرة" defaultValue={defaults?.unit} errors={state.fieldErrors} />
+        <Field name="minStock" label="حد أدنى" type="number" dir="ltr" defaultValue={String(defaults?.minStock ?? 0)} errors={state.fieldErrors} />
       </div>
 
       <div className="flex items-center gap-3">
-        <SubmitButton label="إضافة" />
+        <SubmitButton label={submitLabel} />
         {state.ok && <span className="text-xs text-ok">{state.ok}</span>}
       </div>
     </form>

@@ -8,10 +8,22 @@ import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import { ProductForm } from '../ProductForm';
-import { updateProduct, deleteProduct, deleteVariant, addPriceTier, deletePriceTier, addColorsToProduct } from '../actions';
+import {
+  updateProduct,
+  deleteProduct,
+  deleteVariant,
+  addPriceTier,
+  deletePriceTier,
+  addColorsToProduct,
+  uploadProductImage,
+  deleteProductImage,
+  setPrimaryImage,
+  moveProductImage,
+} from '../actions';
 import { loadProductOptions } from '../options';
 import { VariantForm } from './VariantForm';
 import { AddColorsForm } from './AddColorsForm';
+import { ProductImages } from './ProductImages';
 import { PriceTierForm } from './PriceTierForm';
 
 export const metadata: Metadata = { title: 'بيانات المنتج' };
@@ -102,14 +114,26 @@ export default async function ProductDetailPage({
         <span dir="ltr" className="tnum">{product.sku}</span> · {product.category.nameAr}
       </p>
 
-      {product.images.length > 0 && (
-        <ul className="mb-6 flex flex-wrap gap-3">
-          {product.images.slice(0, 8).map((img) => (
-            <li key={img.id} className="relative h-24 w-20 overflow-hidden rounded-md border border-line">
-              <Image src={img.path} alt={product.nameAr} fill sizes="80px" className="object-cover" />
-            </li>
-          ))}
-        </ul>
+      {canWrite && (
+        <section className="erp-card mb-6 p-6">
+          <h3 className="mb-1 text-sm font-semibold text-brand">صور المنتج</h3>
+          <p className="mb-4 text-[0.7rem] leading-[1.9] text-txt-4">
+            ارفع صور المنتج واحذفها ورتّبها وعيّن الأساسية — تظهر على المنتج وصفحته
+            والكتالوج فوراً. الأساسية هي التي تُعرض في البطاقات.
+          </p>
+          <ProductImages
+            images={product.images.map((img) => ({
+              id: img.id,
+              src: img.path,
+              isPrimary: img.isPrimary,
+              isUploaded: img.path.startsWith('/product-img/'),
+            }))}
+            upload={uploadProductImage.bind(null, product.id)}
+            remove={deleteProductImage.bind(null, product.id)}
+            setPrimary={setPrimaryImage.bind(null, product.id)}
+            move={moveProductImage.bind(null, product.id)}
+          />
+        </section>
       )}
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_1fr]">

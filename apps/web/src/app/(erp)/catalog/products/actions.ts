@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
+import sharp from 'sharp';
 import { isPriceService } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
@@ -456,4 +457,174 @@ export async function deletePriceTier(productId: string, tierId: string) {
     entityId: tierId,
   });
   revalidatePath(`/catalog/products/${productId}`);
+}
+
+// ═══════════════════════════════════════════════════════════
+// صور المنتج — رفع وحذف وترتيب من النظام
+// ═══════════════════════════════════════════════════════════
+//
+// الصور القديمة ملفات على القرص. المرفوعة من هنا تعيش بايتاتها في القاعدة
+// وتُقدَّم من /product-img/<id>، فتنجو من النشر الذي يمسح القرص. كل صورة
+// تُعالَج بـ sharp (webp، بحجم معقول) فتُوحَّد وتُخفَّف ويُعزل الملف الخبيث.
+
+const MAX_IMAGE_UPLOAD = 8 * 1024 * 1024; // 8MB
+const IMAGE_ACCEPTED = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
+
+/** يعالج ملف صورة إلى webp مع أبعاده، أو يعيد رسالة خطأ نصية. */
+async function processProductImage(
+  file: unknown,
+): Promise<{ bytes: Uint8Array<ArrayBuffer>; width: number; height: number } | { error: string }> {
+  if (!(file instanceof File) || file.size === 0) return { error: 'اختر صورة.' };
+  if (file.size > MAX_IMAGE_UPLOAD) return { error: 'الصورة أكبر من 8 ميجابايت.' };
+  if (file.type && !IMAGE_ACCEPTED.has(file.type)) return { error: 'الصيغة غير مدعومة. استخدم JPG أو PNG أو WebP.' };
+  try {
+    const input = Buffer.from(await file.arrayBuffer());
+    const { data, info } = await sharp(input, { failOn: 'error' })
+      .rotate()
+      .resize({ width: 1200, height: 1500, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 86 })
+      .toBuffer({ resolveWithObject: true });
+    const bytes = new Uint8Array(data.byteLength);
+    bytes.set(data);
+    return { bytes, width: info.width, height: info.height };
+  } catch {
+    return { error: 'تعذّرت قراءة الملف كصورة سليمة.' };
+  }
+}
+
+export async function uploadProductImage(
+  productId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requirePermission('products.write');
+
+  const product = await prisma.product.findFirst({
+    where: { id: productId, tenantId: user.tenantId, isDeleted: false },
+    select: { id: true, _count: { select: { images: true } } },
+  });
+  if (!product) return { error: 'المنتج غير موجود.' };
+
+  const img = await processProductImage(formData.get('image'));
+  if ('error' in img) return { fieldErrors: { image: img.error } };
+
+  const last = await prisma.productImage.findFirst({
+    where: { productId },
+    orderBy: { sortOrder: 'desc' },
+    select: { sortOrder: true },
+  });
+
+  // أول صورة للمنتج تصير الأساسية تلقائياً.
+  const isPrimary = product._count.images === 0;
+
+  const created = await prisma.productImage.create({
+    data: {
+      productId,
+      // المسار يشير إلى مسار البايتات؛ يُحدَّث بالمعرّف بعد الإنشاء.
+      path: 'pending',
+      data: img.bytes,
+      mimeType: 'image/webp',
+      width: img.width,
+      height: img.height,
+      bytes: img.bytes.byteLength,
+      isPrimary,
+      sortOrder: (last?.sortOrder ?? 0) + 1,
+    },
+    select: { id: true },
+  });
+  await prisma.productImage.update({
+    where: { id: created.id },
+    data: { path: `/product-img/${created.id}` },
+  });
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'product.update',
+    entityType: 'ProductImage',
+    entityId: created.id,
+    detail: 'رفع صورة',
+  });
+
+  revalidatePath(`/catalog/products/${productId}`);
+  revalidatePath('/');
+  return { ok: 'أُضيفت الصورة. ظاهرة على المنتج الآن.' };
+}
+
+export async function deleteProductImage(productId: string, imageId: string): Promise<void> {
+  const user = await requirePermission('products.write');
+
+  const image = await prisma.productImage.findFirst({
+    where: { id: imageId, product: { tenantId: user.tenantId } },
+    select: { id: true, isPrimary: true },
+  });
+  if (!image) return;
+
+  await prisma.productImage.deleteMany({
+    where: { id: imageId, product: { tenantId: user.tenantId } },
+  });
+
+  // إن كانت الأساسية، تصير أقدم صورة باقية هي الأساسية — فلا يبقى المنتج
+  // بلا صورة أساسية.
+  if (image.isPrimary) {
+    const next = await prisma.productImage.findFirst({
+      where: { productId },
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true },
+    });
+    if (next) await prisma.productImage.update({ where: { id: next.id }, data: { isPrimary: true } });
+  }
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'product.update',
+    entityType: 'ProductImage',
+    entityId: imageId,
+    detail: 'حذف صورة',
+  });
+
+  revalidatePath(`/catalog/products/${productId}`);
+  revalidatePath('/');
+}
+
+export async function setPrimaryImage(productId: string, imageId: string): Promise<void> {
+  const user = await requirePermission('products.write');
+
+  const owned = await prisma.productImage.findFirst({
+    where: { id: imageId, product: { id: productId, tenantId: user.tenantId } },
+    select: { id: true },
+  });
+  if (!owned) return;
+
+  // أساسية واحدة فقط: تُصفَّر البقية ثم تُرفع هذه، في معاملة.
+  await prisma.$transaction([
+    prisma.productImage.updateMany({ where: { productId }, data: { isPrimary: false } }),
+    prisma.productImage.update({ where: { id: imageId }, data: { isPrimary: true } }),
+  ]);
+
+  revalidatePath(`/catalog/products/${productId}`);
+  revalidatePath('/');
+}
+
+export async function moveProductImage(productId: string, imageId: string, dir: 'up' | 'down'): Promise<void> {
+  const user = await requirePermission('products.write');
+
+  const images = await prisma.productImage.findMany({
+    where: { product: { id: productId, tenantId: user.tenantId } },
+    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+    select: { id: true },
+  });
+  const i = images.findIndex((x) => x.id === imageId);
+  if (i === -1) return;
+  const j = dir === 'up' ? i - 1 : i + 1;
+  if (j < 0 || j >= images.length) return;
+
+  await prisma.$transaction([
+    prisma.productImage.update({ where: { id: images[i].id }, data: { sortOrder: j } }),
+    prisma.productImage.update({ where: { id: images[j].id }, data: { sortOrder: i } }),
+  ]);
+
+  revalidatePath(`/catalog/products/${productId}`);
+  revalidatePath('/');
 }

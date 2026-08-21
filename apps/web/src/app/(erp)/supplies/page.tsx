@@ -9,6 +9,7 @@ import {
   SUPPLY_KIND_AR,
   SUPPLY_CATEGORY_AR,
   SUPPLY_TX_TYPE_AR,
+  type SupplyKind,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
@@ -17,7 +18,8 @@ import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import type { SearchParams } from '@/lib/query';
 import { monthRange, dateInput } from '@/lib/ops';
 import { SupplyForm, TransactionForm } from './SupplyForms';
-import { createSupply, recordSupplyTransaction } from './actions';
+import { createSupply, recordSupplyTransaction, updateSupply, deleteSupply } from './actions';
+import { SupplyEditModal } from './SupplyEditModal';
 
 export const metadata: Metadata = { title: 'المستلزمات' };
 
@@ -125,7 +127,7 @@ export default async function SuppliesPage({
       </div>
 
       <Table
-        headers={['الكود', 'الاسم', 'النوع', 'الفئة', 'الرصيد', 'الوحدة', 'آخر سعر', 'الحد الأدنى']}
+        headers={['الكود', 'الاسم', 'النوع', 'الفئة', 'الرصيد', 'الوحدة', 'آخر سعر', 'الحد الأدنى', ...(canWrite ? [''] : [])]}
         empty={supplies.length === 0}
       >
         {supplies.map((s) => {
@@ -156,6 +158,27 @@ export default async function SuppliesPage({
                 {s.lastUnitCost === null ? '—' : formatMoney(s.lastUnitCost)}
               </td>
               <td className="tnum px-4 py-3 text-txt-4">{formatQty(s.minStock)}</td>
+              {canWrite && (
+                <td className="px-4 py-3 text-end">
+                  <div className="flex items-center justify-end gap-3">
+                    <SupplyEditModal
+                      action={updateSupply.bind(null, s.id)}
+                      defaults={{
+                        nameAr: s.nameAr,
+                        kind: s.kind as SupplyKind,
+                        category: s.category,
+                        unit: s.unit ?? '',
+                        minStock: Number(s.minStock),
+                      }}
+                    />
+                    <form action={deleteSupply.bind(null, s.id)}>
+                      <button type="submit" className="text-xs text-bad hover:underline">
+                        حذف
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              )}
             </tr>
           );
         })}

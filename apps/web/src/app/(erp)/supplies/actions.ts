@@ -72,6 +72,88 @@ export async function createSupply(_prev: FormState, formData: FormData): Promis
   return { ok: `تم إنشاء ${supply.code}.` };
 }
 
+/**
+ * تعديل مستلزم: الاسم والوحدة والحد الأدنى وفئته.
+ *
+ * النوع والفئة يبقيان قابلين للتعديل مع نفس قيد الزوج — لكن الرصيد لا
+ * يُعدَّل من هنا: الرصيد حصيلة حركات، يُغيَّر بحركة شراء أو استهلاك أو تسوية
+ * لا بتحرير حقل، وإلا انفصل عن سجلّه.
+ */
+export async function updateSupply(
+  supplyId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requirePermission('supplies.write');
+
+  const parsed = SupplySchema.safeParse({
+    nameAr: String(formData.get('nameAr') ?? ''),
+    kind: String(formData.get('kind') ?? ''),
+    category: String(formData.get('category') ?? ''),
+    unit: String(formData.get('unit') ?? ''),
+    minStock: String(formData.get('minStock') ?? '0'),
+  });
+  if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
+
+  const updated = await prisma.supply.updateMany({
+    where: { id: supplyId, tenantId: user.tenantId, isDeleted: false },
+    data: {
+      nameAr: parsed.data.nameAr,
+      kind: parsed.data.kind,
+      category: parsed.data.category,
+      unit: parsed.data.unit || null,
+      minStock: parsed.data.minStock ?? 0,
+    },
+  });
+  if (updated.count === 0) return { error: 'المستلزم غير موجود.' };
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'supply.update',
+    entityType: 'Supply',
+    entityId: supplyId,
+    detail: parsed.data.nameAr,
+  });
+
+  revalidatePath('/supplies');
+  revalidatePath('/inventory');
+  return { ok: 'حُفظ التعديل.' };
+}
+
+/**
+ * حذف مستلزم — حذف ناعم.
+ *
+ * المستلزم قد تشير إليه حركات شراء واستهلاك؛ حذفه الفعليّ يفقد تاريخه.
+ * يُخفى بـ isDeleted فيختفي من الشاشات ويبقى سجلّه سليماً.
+ */
+export async function deleteSupply(supplyId: string): Promise<void> {
+  const user = await requirePermission('supplies.write');
+
+  const supply = await prisma.supply.findFirst({
+    where: { id: supplyId, tenantId: user.tenantId, isDeleted: false },
+    select: { code: true, nameAr: true },
+  });
+  if (!supply) return;
+
+  await prisma.supply.updateMany({
+    where: { id: supplyId, tenantId: user.tenantId },
+    data: { isDeleted: true, deletedAt: new Date() },
+  });
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'supply.delete',
+    entityType: 'Supply',
+    entityId: supplyId,
+    detail: `${supply.code} ${supply.nameAr}`,
+  });
+
+  revalidatePath('/supplies');
+  revalidatePath('/inventory');
+}
+
 const TxSchema = z.object({
   supplyId: z.string().min(1, 'اختر المستلزم.'),
   type: z.string().refine(isSupplyTxType, 'نوع حركة غير معروف.'),
