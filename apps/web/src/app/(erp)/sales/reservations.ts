@@ -181,4 +181,80 @@ export async function releaseForOrder(
   return { created, skipped };
 }
 
+/**
+ * صرف المخزون فعلياً عند تسليم الأمر.
+ *
+ * الحجز يرفع `reserved` ولا يمسّ `onHand` — البضاعة ما زالت موجودة. التسليم
+ * يخرجها فعلاً: يُنقص `onHand` بالكمية، ويُنقص `reserved` بها أيضاً لأن
+ * الحجز تحوّل إلى خروج حقيقي. المحصّلة على المتاح (onHand − reserved) صفر،
+ * لكن الرصيد الفعلي ينخفض — وهو ما كان ناقصاً: المخزن «يسمع» الأمر ويتخصّم.
+ *
+ * IDEMPOTENT كأخواتها: القيد الفريد (salesOrderLineId, ISSUE) يمنع صرفاً
+ * مزدوجاً، والدالة تتخطّى ما صُرف سلفاً فلا تصل للقيد في الحالة الشائعة.
+ *
+ * يُسمح بأن يهبط onHand تحت الصفر: التسليم واقعة حدثت فعلاً، ورصيد سالب
+ * يكشف بيعاً بأكثر من الموجود بدل أن يخفيه بمنع الحركة.
+ */
+export async function issueForOrder(
+  tx: Tx,
+  order: OrderForReservation,
+  userId: string | null,
+): Promise<ReservationResult> {
+  let created = 0;
+  let skipped = 0;
+
+  for (const line of order.lines) {
+    const already = await tx.stockMovement.findFirst({
+      where: { salesOrderLineId: line.id, type: 'ISSUE' },
+    });
+    if (already) {
+      skipped += 1;
+      continue;
+    }
+
+    // مخزن الصرف هو مخزن الحجز. لا حجز يعني أمراً لم يُؤكَّد — لا يُصرف منه.
+    const reserve = await tx.stockMovement.findFirst({
+      where: { salesOrderLineId: line.id, type: 'RESERVE' },
+    });
+    const warehouseId = reserve?.warehouseId;
+    if (!warehouseId) {
+      skipped += 1;
+      continue;
+    }
+
+    await tx.stockMovement.create({
+      data: {
+        tenantId: order.tenantId,
+        productId: line.productId,
+        variantId: line.variantId,
+        warehouseId,
+        type: 'ISSUE',
+        quantity: line.quantity.negated(),
+        reference: order.id,
+        reason: 'صرف مخزون — تسليم أمر بيع',
+        userId,
+        salesOrderId: order.id,
+        salesOrderLineId: line.id,
+      },
+    });
+
+    const stock = await tx.stock.findFirst({
+      where: { variantId: line.variantId, warehouseId, locationId: null },
+    });
+    if (stock) {
+      await tx.stock.update({
+        where: { id: stock.id },
+        data: {
+          onHand: { increment: line.quantity.negated() },
+          reserved: { increment: line.quantity.negated() },
+        },
+      });
+    }
+
+    created += 1;
+  }
+
+  return { created, skipped };
+}
+
 export { defaultWarehouseId };

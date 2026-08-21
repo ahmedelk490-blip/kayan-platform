@@ -17,7 +17,7 @@ import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 import { nextDocumentNumber, timeline, readLines, decimal, type FormState } from '../shared';
-import { reserveForOrder, releaseForOrder, defaultWarehouseId } from '../reservations';
+import { reserveForOrder, releaseForOrder, issueForOrder, defaultWarehouseId } from '../reservations';
 
 const HeaderSchema = z.object({
   customerId: z.string().min(1, 'العميل مطلوب.'),
@@ -234,11 +234,37 @@ export async function changeOrderStatus(id: string, next: string): Promise<void>
 
   const order = await prisma.salesOrder.findFirst({
     where: { id, tenantId: user.tenantId, isDeleted: false },
+    include: {
+      lines: { select: { id: true, productId: true, variantId: true, quantity: true } },
+    },
   });
   if (!order || !isOrderStatus(order.status)) return;
   if (!canTransition(ORDER_TRANSITIONS, order.status as OrderStatus, next)) return;
 
-  await prisma.salesOrder.update({ where: { id }, data: { status: next } });
+  if (next === 'DELIVERED') {
+    // التسليم يصرف المخزون فعلياً: يُنقص الرصيد ويحرّر الحجز، في نفس
+    // المعاملة التي تغيّر الحالة — فلا حالة «مُسلَّم» بلا خصم، ولا خصم بلا
+    // حالة. الأسطر بلا متغيّر (خدمة بحتة) لا تُصرف.
+    await tenantTransaction(async (tx) => {
+      await issueForOrder(
+        tx,
+        {
+          id: order.id,
+          tenantId: order.tenantId,
+          lines: order.lines.filter((l) => l.variantId) as {
+            id: string;
+            productId: string;
+            variantId: string;
+            quantity: (typeof order.lines)[number]['quantity'];
+          }[],
+        },
+        user.id,
+      );
+      await tx.salesOrder.update({ where: { id }, data: { status: next } });
+    });
+  } else {
+    await prisma.salesOrder.update({ where: { id }, data: { status: next } });
+  }
 
   await timeline({
     customerId: order.customerId,

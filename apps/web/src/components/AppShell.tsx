@@ -22,34 +22,66 @@ interface NavItem {
    * and greyed rather than being made to look ready.
    */
   built: boolean;
+  /** عنوان المجموعة التي يظهر تحتها؛ فارغ يعني أعلى الشريط بلا عنوان. */
+  group: string;
 }
 
+/**
+ * التنقّل مجمّعاً بدل قائمة مسطّحة طويلة.
+ *
+ * كانت ثلاثة وعشرين رابطاً في عمود واحد، لا يعرف المدير أين يبدأ. صارت
+ * مجموعات قليلة معنونة: المبيعات معاً، المخزون والتصنيع معاً، وهكذا. لا
+ * صفحة حُذفت — تغيّر ترتيبها وعنوانها فوق كلٍّ، فتُقرأ اللوحة بلمحة.
+ *
+ * «المخازن» أُزيل بطلب المالك: عناوين المخازن تفصيل لا يحتاجه، والمخزون
+ * نفسه في شاشة المخزون.
+ *
+ * ترتيب المجموعات هو ترتيب ظهورها؛ عنصر بلا group يظهر أعلى بلا عنوان.
+ */
 const NAV: NavItem[] = [
-  { href: '/dashboard', label: 'لوحة المدير', permission: 'dashboard.view', built: true },
-  { href: '/sales', label: 'لوحة المبيعات', permission: 'sales.view', built: true },
-  { href: '/sales/quotations', label: 'عروض الأسعار', permission: 'sales.documents', built: true },
-  { href: '/sales/orders', label: 'أوامر البيع', permission: 'sales.documents', built: true },
-  { href: '/catalog/products', label: 'المنتجات', permission: 'products.read', built: true },
-  { href: '/catalog/categories', label: 'التصنيفات والقوائم', permission: 'products.read', built: true },
-  { href: '/inventory', label: 'المخزون', permission: 'inventory.read', built: true },
-  { href: '/warehouses', label: 'المخازن', permission: 'inventory.read', built: true },
-  { href: '/requests', label: 'طلبات العملاء', permission: 'customers.read', built: true },
-  { href: '/customers', label: 'العملاء', permission: 'customers.read', built: true },
-  { href: '/suppliers', label: 'الموردون', permission: 'suppliers.read', built: true },
-  { href: '/purchasing', label: 'المشتريات', permission: 'purchasing.view', built: true },
-  { href: '/invoices', label: 'الفواتير والتحصيل', permission: 'invoices.view', built: true },
-  { href: '/portal', label: 'بوابة العميل', permission: 'portal.view', built: true },
-  { href: '/admin', label: 'الإدارة', permission: 'admin.view', built: true },
-  { href: '/manufacturing', label: 'التصنيع', permission: 'manufacturing.view', built: true },
-  { href: '/formulas', label: 'المعادلات والتكلفة', permission: 'formula.view', built: true },
-  { href: '/supplies', label: 'المستلزمات', permission: 'supplies.view', built: true },
-  { href: '/expenses', label: 'المصروفات الثانوية', permission: 'expenses.view', built: true },
-  { href: '/damage', label: 'الهالك والجزاءات', permission: 'damage.view', built: true },
-  { href: '/reports', label: 'التقارير', permission: 'reports.view', built: true },
-  { href: '/users', label: 'حسابات الفريق', permission: 'users.manage', built: true },
-  { href: '/content', label: 'نصوص الموقع', permission: 'settings.manage', built: true },
-  { href: '/content/hero', label: 'صور الواجهة', permission: 'settings.manage', built: true },
-  { href: '/settings', label: 'الإعدادات المالية', permission: 'settings.manage', built: true },
+  { href: '/dashboard', label: 'لوحة المدير', permission: 'dashboard.view', built: true, group: '' },
+
+  { href: '/sales', label: 'لوحة المبيعات', permission: 'sales.view', built: true, group: 'المبيعات' },
+  { href: '/sales/quotations', label: 'عروض الأسعار', permission: 'sales.documents', built: true, group: 'المبيعات' },
+  { href: '/sales/orders', label: 'أوامر البيع', permission: 'sales.documents', built: true, group: 'المبيعات' },
+  { href: '/requests', label: 'طلبات الموقع', permission: 'customers.read', built: true, group: 'المبيعات' },
+  { href: '/invoices', label: 'الفواتير والتحصيل', permission: 'invoices.view', built: true, group: 'المبيعات' },
+
+  { href: '/inventory', label: 'المخزون', permission: 'inventory.read', built: true, group: 'المخزون والتصنيع' },
+  { href: '/manufacturing', label: 'التصنيع', permission: 'manufacturing.view', built: true, group: 'المخزون والتصنيع' },
+  { href: '/supplies', label: 'المستلزمات', permission: 'supplies.view', built: true, group: 'المخزون والتصنيع' },
+  { href: '/formulas', label: 'المعادلات والتكلفة', permission: 'formula.view', built: true, group: 'المخزون والتصنيع' },
+  { href: '/damage', label: 'الهالك والجزاءات', permission: 'damage.view', built: true, group: 'المخزون والتصنيع' },
+
+  { href: '/purchasing', label: 'المشتريات', permission: 'purchasing.view', built: true, group: 'المشتريات' },
+  { href: '/suppliers', label: 'الموردون', permission: 'suppliers.read', built: true, group: 'المشتريات' },
+  { href: '/expenses', label: 'المصروفات الثانوية', permission: 'expenses.view', built: true, group: 'المشتريات' },
+
+  { href: '/catalog/products', label: 'المنتجات', permission: 'products.read', built: true, group: 'المنتجات' },
+  { href: '/catalog/categories', label: 'التصنيفات والقوائم', permission: 'products.read', built: true, group: 'المنتجات' },
+
+  { href: '/customers', label: 'العملاء', permission: 'customers.read', built: true, group: 'العملاء' },
+  { href: '/portal', label: 'بوابة العميل', permission: 'portal.view', built: true, group: 'العملاء' },
+
+  { href: '/reports', label: 'التقارير', permission: 'reports.view', built: true, group: 'التقارير' },
+
+  { href: '/users', label: 'حسابات الفريق', permission: 'users.manage', built: true, group: 'الإدارة' },
+  { href: '/content', label: 'نصوص الموقع', permission: 'settings.manage', built: true, group: 'الإدارة' },
+  { href: '/content/hero', label: 'صور الواجهة', permission: 'settings.manage', built: true, group: 'الإدارة' },
+  { href: '/settings', label: 'الإعدادات المالية', permission: 'settings.manage', built: true, group: 'الإدارة' },
+  { href: '/admin', label: 'إدارة النظام', permission: 'admin.view', built: true, group: 'الإدارة' },
+];
+
+/** ترتيب ظهور المجموعات في الشريط. */
+const GROUP_ORDER = [
+  '',
+  'المبيعات',
+  'المخزون والتصنيع',
+  'المشتريات',
+  'المنتجات',
+  'العملاء',
+  'التقارير',
+  'الإدارة',
 ];
 
 export function AppShell({
@@ -65,6 +97,13 @@ export function AppShell({
   const items = permitted.filter((item) => item.built);
   const pending = permitted.filter((item) => !item.built);
 
+  // المجموعات بترتيبها، وكلٌّ بما يخصّه من روابط مسموحة. المجموعة الفارغة
+  // من روابط (كل عناصرها ممنوعة عن هذا الدور) لا تُعرض.
+  const groups = GROUP_ORDER.map((title) => ({
+    title,
+    links: items.filter((i) => i.group === title),
+  })).filter((g) => g.links.length > 0);
+
   return (
     <div className="flex min-h-screen">
       <aside className="hidden w-60 shrink-0 border-e border-line bg-card lg:block">
@@ -73,8 +112,17 @@ export function AppShell({
           <span className="text-sm text-txt">نظام كيان</span>
         </div>
 
-        <nav className="p-3">
-          <SidebarNav items={items.map((i) => ({ href: i.href, label: i.label }))} />
+        <nav className="space-y-5 p-3">
+          {groups.map((g) => (
+            <div key={g.title || 'top'}>
+              {g.title && (
+                <p className="mb-1.5 px-4 text-[0.68rem] font-semibold uppercase tracking-wide text-txt-4">
+                  {g.title}
+                </p>
+              )}
+              <SidebarNav items={g.links.map((i) => ({ href: i.href, label: i.label }))} />
+            </div>
+          ))}
 
           {pending.length > 0 && (
             <div className="mt-6 border-t border-line pt-4">
