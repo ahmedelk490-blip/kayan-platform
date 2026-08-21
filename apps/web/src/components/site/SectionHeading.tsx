@@ -27,7 +27,9 @@ export function SectionHeading({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-80px' }}
       transition={{ duration: 0.8, ease: EASE.outExpo }}
-      className="mb-12 max-w-[56ch] md:mb-16"
+      // في المنتصف: العنوان يتوسّط القسم فيقرأ كعنوان رئيسي، لا سطراً في
+      // الجنب. عمود متمركز بعرض محدود ليبقى السطر مقروءاً.
+      className="mx-auto mb-14 flex max-w-[52ch] flex-col items-center text-center md:mb-20"
     >
       {/* السطر التعريفي شارة بخلفية خفيفة بلون العلامة، سميكة وواضحة، بلا
           تباعد حروف يقطّع العربية. */}
@@ -36,16 +38,16 @@ export function SectionHeading({
         {eyebrow}
       </span>
 
-      {/* العنوان ضخم جداً: يقرأ كعنوان رئيسي مهيمن على الموبايل والكمبيوتر.
-          وزن أثقل وتباعد أسطر مضغوط ليبدو كتلة واحدة قوية. */}
+      {/* العنوان ضخم جداً ومتمركز: يهيمن على القسم على الموبايل والكمبيوتر.
+          وزن ثقيل وتباعد أسطر مضغوط ليبدو كتلة واحدة قوية. */}
       <AnimatedText
         as="h2"
         text={title}
-        className="font-display text-[clamp(2.6rem,6.5vw,4.75rem)] font-bold leading-[1.08] tracking-[-0.01em] text-body"
+        className="font-display text-[clamp(2.7rem,7vw,5rem)] font-bold leading-[1.05] tracking-[-0.01em] text-body"
       />
 
       {lead && (
-        <p className="mt-7 text-lg leading-[2] text-body-muted md:text-xl">{lead}</p>
+        <p className="mt-7 max-w-[46ch] text-lg leading-[2] text-body-muted md:text-xl">{lead}</p>
       )}
     </motion.div>
   );

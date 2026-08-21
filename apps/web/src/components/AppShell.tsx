@@ -2,8 +2,9 @@ import { Logo } from '@erp/brand/logo';
 import { can, type PermissionKey } from '@erp/domain';
 import type { SessionUser } from '@/lib/auth';
 import { logoutAction } from '@/app/(erp)/login/actions';
-import { SidebarNav, MobileNav } from '@/components/NavLinks';
+import { MobileNav } from '@/components/NavLinks';
 import { AreaTabs } from '@/components/AreaTabs';
+import { GroupNav } from '@/components/GroupNav';
 
 /**
  * ERP chrome — sidebar + header.
@@ -31,7 +32,7 @@ interface NavItem {
  * التنقّل مجمّعاً بدل قائمة مسطّحة طويلة.
  *
  * كانت ثلاثة وعشرين رابطاً في عمود واحد، لا يعرف المدير أين يبدأ. صارت
- * مجموعات قليلة معنونة: المبيعات معاً، المخزون والتصنيع معاً، وهكذا. لا
+ * مجموعات قليلة معنونة: المبيعات معاً، المخزون معاً، وهكذا. لا
  * صفحة حُذفت — تغيّر ترتيبها وعنوانها فوق كلٍّ، فتُقرأ اللوحة بلمحة.
  *
  * «المخازن» أُزيل بطلب المالك: عناوين المخازن تفصيل لا يحتاجه، والمخزون
@@ -48,11 +49,11 @@ const NAV: NavItem[] = [
   { href: '/requests', label: 'طلبات الموقع', permission: 'customers.read', built: true, group: 'المبيعات' },
   { href: '/invoices', label: 'الفواتير والتحصيل', permission: 'invoices.view', built: true, group: 'المبيعات' },
 
-  { href: '/inventory', label: 'المخزون', permission: 'inventory.read', built: true, group: 'المخزون والتصنيع' },
-  { href: '/manufacturing', label: 'التصنيع', permission: 'manufacturing.view', built: true, group: 'المخزون والتصنيع' },
-  { href: '/supplies', label: 'المستلزمات', permission: 'supplies.view', built: true, group: 'المخزون والتصنيع' },
-  { href: '/formulas', label: 'المعادلات والتكلفة', permission: 'formula.view', built: true, group: 'المخزون والتصنيع' },
-  { href: '/damage', label: 'الهالك والجزاءات', permission: 'damage.view', built: true, group: 'المخزون والتصنيع' },
+  { href: '/inventory', label: 'المخزون', permission: 'inventory.read', built: true, group: 'المخزون' },
+  { href: '/manufacturing', label: 'التصنيع', permission: 'manufacturing.view', built: true, group: 'المخزون' },
+  { href: '/supplies', label: 'المستلزمات', permission: 'supplies.view', built: true, group: 'المخزون' },
+  { href: '/formulas', label: 'المعادلات والتكلفة', permission: 'formula.view', built: true, group: 'المخزون' },
+  { href: '/damage', label: 'الهالك والجزاءات', permission: 'damage.view', built: true, group: 'المخزون' },
 
   { href: '/purchasing', label: 'المشتريات', permission: 'purchasing.view', built: true, group: 'المشتريات' },
   { href: '/suppliers', label: 'الموردون', permission: 'suppliers.read', built: true, group: 'المشتريات' },
@@ -77,7 +78,7 @@ const NAV: NavItem[] = [
 const GROUP_ORDER = [
   '',
   'المبيعات',
-  'المخزون والتصنيع',
+  'المخزون',
   'المشتريات',
   'المنتجات',
   'العملاء',
@@ -113,17 +114,16 @@ export function AppShell({
           <span className="text-sm text-txt">نظام كيان</span>
         </div>
 
-        <nav className="space-y-5 p-3">
-          {groups.map((g) => (
-            <div key={g.title || 'top'}>
-              {g.title && (
-                <p className="mb-1.5 px-4 text-[0.68rem] font-semibold uppercase tracking-wide text-txt-4">
-                  {g.title}
-                </p>
-              )}
-              <SidebarNav items={g.links.map((i) => ({ href: i.href, label: i.label }))} />
-            </div>
-          ))}
+        <nav className="p-3">
+          {/* عنصر واحد لكل مجموعة، يفتح لوحتها. التنقّل بين صفحات المجموعة
+              من التبويبات أعلى المحتوى، لا من الشريط الجانبي. */}
+          <GroupNav
+            groups={groups.map((g) => ({
+              title: g.title || g.links[0].label,
+              primary: g.links[0].href,
+              hrefs: g.links.map((i) => i.href),
+            }))}
+          />
 
           {pending.length > 0 && (
             <div className="mt-6 border-t border-line pt-4">
@@ -159,9 +159,11 @@ export function AppShell({
           </div>
         </header>
 
-        {/* التنقل على الموبايل — الشريط الجانبي مخفي تحت lg، وبدون هذا
-            لا يستطيع مستخدم الهاتف الوصول لأي صفحة. */}
-        <MobileNav items={items.map((i) => ({ href: i.href, label: i.label }))} />
+        {/* التنقل على الموبايل — عنصر لكل مجموعة، والتبويبات أسفله تتنقّل
+            داخلها. الشريط الجانبي مخفي تحت lg. */}
+        <MobileNav
+          items={groups.map((g) => ({ href: g.links[0].href, label: g.title || g.links[0].label }))}
+        />
 
         {/* تبويبات المنطقة الحالية — العروض والأوامر والفواتير تبويبات
             واحدة داخل المبيعات، وكذلك بقية المجموعات. */}
