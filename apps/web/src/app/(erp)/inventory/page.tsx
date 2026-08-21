@@ -26,7 +26,9 @@ export default async function InventoryPage() {
   const user = await requirePermission('inventory.read');
   const canWrite = can(user.role, 'inventory.write');
 
-  const [stock, variants, warehouses, locations, movements] = await Promise.all([
+  const seeSupplies = can(user.role, 'supplies.view');
+
+  const [stock, variants, warehouses, locations, movements, supplies, supplyTx] = await Promise.all([
     prisma.stock.findMany({
       where: { variant: { product: { tenantId: user.tenantId } } },
       include: {
@@ -62,7 +64,41 @@ export default async function InventoryPage() {
         reversedBy: { select: { id: true } },
       },
     }),
+
+    // الخامات والمستلزمات — الرولات والأحبار والخيوط. المخزون لا يكتمل
+    // بالمنتجات وحدها: رولٌ يوشك على النفاد يوقف خط الإنتاج، ولم يكن يظهر
+    // هنا. الآن المنتج والخامة في شاشة واحدة.
+    seeSupplies
+      ? prisma.supply.findMany({
+          where: { tenantId: user.tenantId, isDeleted: false },
+          orderBy: [{ kind: 'asc' }, { nameAr: 'asc' }],
+        })
+      : [],
+    seeSupplies
+      ? prisma.supplyTransaction.findMany({
+          where: { tenantId: user.tenantId },
+          orderBy: { txDate: 'desc' },
+          take: 20,
+          include: {
+            supply: { select: { nameAr: true, unit: true } },
+            user: { select: { nameAr: true, name: true } },
+          },
+        })
+      : [],
   ]);
+
+  // ملخّص الخامات: كم صنفاً، وكم تحت الحد، وكم نفد.
+  const lowSupplies = supplies.filter(
+    (s) => dec(s.minStock).gt(0) && dec(s.onHand).lte(dec(s.minStock)),
+  );
+  const emptySupplies = lowSupplies.filter((s) => dec(s.onHand).lte(dec(0)));
+
+  const SUPPLY_TX_AR: Record<string, string> = {
+    PURCHASE: 'شراء',
+    RECEIPT: 'استلام',
+    CONSUME: 'استهلاك إنتاج',
+    ADJUSTMENT: 'تسوية',
+  };
 
   // Decimal arithmetic — `+` on Decimal would stringify and concatenate.
   const totals = stock.reduce(
@@ -95,10 +131,16 @@ export default async function InventoryPage() {
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Metric label="إجمالي المتاح" value={totals.onHand} />
-        <Metric label="محجوز" value={totals.reserved} />
-        <Metric label="تالف" value={totals.damaged} />
-        <Metric label="تحت الحد الأدنى" value={lowStock.length} tone={lowStock.length > 0 ? 'bad' : 'muted'} />
+        <Metric label="رصيد المنتجات" value={totals.onHand} />
+        <Metric label="محجوز للبيع" value={totals.reserved} />
+        <Metric label="منتجات تحت الحد" value={lowStock.length} tone={lowStock.length > 0 ? 'bad' : 'muted'} />
+        {seeSupplies && (
+          <Metric
+            label="خامات قاربت على النفاد"
+            value={lowSupplies.length}
+            tone={lowSupplies.length > 0 ? 'bad' : 'muted'}
+          />
+        )}
       </div>
 
       {/* The movement form used to sit in a side column here. It is now the
@@ -179,6 +221,84 @@ export default async function InventoryPage() {
               الحركات لا تُحذف نهائياً — التصحيح يتم بحركة عكسية تُشير إلى الأصلية.
             </p>
           </section>
+
+          {/* ── الخامات والمستلزمات ── */}
+          {seeSupplies && (
+            <section>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-brand">الخامات والمستلزمات</h3>
+                <span className="text-[0.7rem] text-txt-4">
+                  {supplies.length} صنف
+                  {lowSupplies.length > 0 && (
+                    <span className="text-bad"> · {lowSupplies.length} قارب على النفاد</span>
+                  )}
+                  {emptySupplies.length > 0 && (
+                    <span className="text-bad"> · {emptySupplies.length} نفد</span>
+                  )}
+                </span>
+              </div>
+              <Table
+                headers={['الخامة', 'النوع', 'الوحدة', 'الرصيد', 'الحد الأدنى', 'الحالة']}
+                empty={supplies.length === 0}
+              >
+                {supplies.map((s) => {
+                  const empty = dec(s.onHand).lte(dec(0));
+                  const low = dec(s.minStock).gt(0) && dec(s.onHand).lte(dec(s.minStock));
+                  return (
+                    <tr key={s.id} className="hover:bg-card-2">
+                      <td className="px-4 py-3 text-txt">{s.nameAr}</td>
+                      <td className="px-4 py-3 text-txt-3">{s.kind}</td>
+                      <td className="px-4 py-3 text-txt-3">{s.unit ?? '—'}</td>
+                      <td className={`tnum px-4 py-3 font-medium ${empty ? 'text-bad' : 'text-txt-2'}`}>
+                        {formatQty(s.onHand)}
+                      </td>
+                      <td className="tnum px-4 py-3 text-txt-3">{formatQty(s.minStock)}</td>
+                      <td className="px-4 py-3">
+                        {empty ? (
+                          <Badge tone="bad">نفد</Badge>
+                        ) : low ? (
+                          <Badge tone="bad">قارب على النفاد</Badge>
+                        ) : (
+                          <Badge tone="ok">متوفّر</Badge>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </Table>
+            </section>
+          )}
+
+          {/* ── حركات الخامات (شراء / استهلاك إنتاج) ── */}
+          {seeSupplies && supplyTx.length > 0 && (
+            <section>
+              <h3 className="mb-3 text-sm font-semibold text-brand">حركات الخامات الأخيرة</h3>
+              <Table
+                headers={['التاريخ', 'الخامة', 'النوع', 'الكمية', 'المرجع', 'المستخدم']}
+                empty={supplyTx.length === 0}
+              >
+                {supplyTx.map((t) => (
+                  <tr key={t.id} className="hover:bg-card-2">
+                    <td className="tnum px-4 py-3 text-txt-3">{t.txDate.toLocaleDateString('ar-EG')}</td>
+                    <td className="px-4 py-3 text-txt-2">{t.supply.nameAr}</td>
+                    <td className="px-4 py-3 text-txt-2">{SUPPLY_TX_AR[t.type] ?? t.type}</td>
+                    <td className={`tnum px-4 py-3 font-medium ${dec(t.quantity).isNegative() ? 'text-bad' : 'text-ok'}`}>
+                      {dec(t.quantity).gt(0) ? `+${formatQty(t.quantity)}` : formatQty(t.quantity)}
+                      {t.supply.unit ? ` ${t.supply.unit}` : ''}
+                    </td>
+                    <td className="px-4 py-3 text-txt-3">
+                      {t.productionOrderId ? 'أمر إنتاج' : t.goodsReceiptLineId ? 'استلام شراء' : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-txt-3">{t.user?.nameAr ?? t.user?.name ?? '—'}</td>
+                  </tr>
+                ))}
+              </Table>
+              <p className="mt-2 text-[0.7rem] leading-[1.8] text-txt-4">
+                الاستهلاك يُخصم تلقائياً عند تنفيذ أمر الإنتاج، والشراء يُضاف عند الاستلام —
+                فالخامة والمنتج يتحرّكان معاً بلا إدخال يدوي.
+              </p>
+            </section>
+          )}
         </div>
 
       </div>
