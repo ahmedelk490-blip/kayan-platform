@@ -10,17 +10,63 @@ export interface ActivityItem {
   at: string;
 }
 
-/** ترجمة أكواد التدقيق إلى عربية مقروءة. */
+/**
+ * ترجمة أكواد التدقيق إلى عربية مقروءة.
+ *
+ * كل فعل مهمّ في النظام يُسجَّل، وهذه الخريطة تجعله يُقرأ: أمر يُؤكَّد، فاتورة
+ * تُصدَر، مشتريات تُستلَم، مخزون يُصرَف. بلا ترجمة يظهر الكود الخام
+ * (order.confirm) فيبدو النظام أصمّ — واللوحة هنا لتُسمع كل ذلك.
+ */
 const ACTION_AR: Record<string, string> = {
-  'auth.login.success': 'تسجيل دخول ناجح',
+  'auth.login.success': 'تسجيل دخول',
   'auth.login.failed': 'محاولة دخول فاشلة',
   'products.import': 'استيراد منتجات',
+  'product.create': 'منتج جديد',
+  'product.update': 'تعديل منتج',
+  'catalog.create': 'إضافة للتصنيفات',
+  'quotation.create': 'عرض سعر جديد',
+  'quotation.update': 'تعديل عرض سعر',
+  'quotation.status': 'تغيّر حالة عرض سعر',
+  'quotation.convert': 'تحويل عرض إلى أمر بيع',
+  'quotation.duplicate': 'نسخ عرض سعر',
+  'order.create': 'أمر بيع جديد',
+  'order.confirm': 'تأكيد أمر بيع — حجز مخزون',
+  'order.status': 'تغيّر حالة أمر بيع',
+  'order.cancel': 'إلغاء أمر بيع',
+  'invoice.create': 'فاتورة جديدة',
+  'invoice.issue': 'إصدار فاتورة',
+  'invoice.void': 'إلغاء فاتورة',
+  'payment.record': 'تحصيل دفعة',
+  'payment.reverse': 'عكس دفعة',
+  'purchase.create': 'أمر شراء جديد',
+  'purchase.receive': 'استلام مشتريات — إضافة للمخزون',
+  'purchase.status': 'تغيّر حالة أمر شراء',
+  'production.create': 'أمر إنتاج جديد',
+  'production.status': 'تغيّر حالة إنتاج',
+  'production.update': 'تعديل أمر إنتاج',
+  'stock.levels': 'تعديل رصيد المخزون',
+  'customer.create': 'عميل جديد',
+  'customer.update': 'تعديل عميل',
+  'damage.create': 'تسجيل هالك',
+  'expense.create': 'مصروف جديد',
+  'formula.publish': 'نشر معادلة تكلفة',
+  'cost.calculate': 'حساب تكلفة',
+  'settings.update': 'تعديل الإعدادات',
+  'site-content.save': 'تعديل نصوص الموقع',
+  'hero-slide.create': 'إضافة صورة واجهة',
 };
 
+/** لون النقطة: أخضر لِما يدخل قيمة، أحمر لِما يُلغى أو يفشل، نبيتي للباقي. */
 const ACTION_TONE: Record<string, string> = {
-  'auth.login.success': 'bg-ok',
   'auth.login.failed': 'bg-bad',
-  'products.import': 'bg-brand',
+  'order.cancel': 'bg-bad',
+  'invoice.void': 'bg-bad',
+  'payment.reverse': 'bg-bad',
+  'order.confirm': 'bg-ok',
+  'invoice.issue': 'bg-ok',
+  'payment.record': 'bg-ok',
+  'purchase.receive': 'bg-ok',
+  'order.create': 'bg-ok',
 };
 
 export function ActivityFeed({ items }: { items: ActivityItem[] }) {

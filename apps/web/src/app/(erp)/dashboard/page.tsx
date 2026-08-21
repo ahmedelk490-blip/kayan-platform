@@ -23,6 +23,7 @@ import { StatCard } from '@/components/dashboard/StatCard';
 import { SectionTitle, Panel } from '@/components/dashboard/Section';
 import { Breakdown, Metric } from '@/components/dashboard/Breakdown';
 import { RecentProducts, type RecentProduct } from '@/components/dashboard/RecentProducts';
+import { Donut } from '@/components/dashboard/Donut';
 import { QuickActions, type QuickAction } from '@/components/dashboard/QuickActions';
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 import {
@@ -82,6 +83,8 @@ export default async function ManagerDashboard() {
     stockRows,
     invoiceRows,
     costSnapshots,
+    purchaseAgg,
+    expenseAgg,
     recentRows,
     recentAudits,
     supplyRows,
@@ -139,6 +142,23 @@ export default async function ManagerDashboard() {
         })
       : [],
     seeCost ? prisma.costCalculation.count({ where: { tenantId } }) : 0,
+
+    // الصادر: المشتريات المؤكَّدة والمصروفات. تُجلب مع المال لأنها الطرف
+    // الآخر منه — «الوارد والصادر» لا يكتمل بالوارد وحده.
+    seeMoney
+      ? prisma.purchaseOrder.aggregate({
+          where: { tenantId, isDeleted: false, status: { notIn: ['DRAFT', 'CANCELLED'] } },
+          _sum: { total: true },
+          _count: { _all: true },
+        })
+      : null,
+    seeMoney
+      ? prisma.secondaryExpense.aggregate({
+          where: { tenantId, status: { not: 'REJECTED' } },
+          _sum: { amount: true },
+          _count: { _all: true },
+        })
+      : null,
 
     prisma.product.findMany({
       where: { tenantId, isDeleted: false },
@@ -222,6 +242,18 @@ export default async function ManagerDashboard() {
     .filter((i) => RECEIVABLE_STATUSES.includes(i.status as never))
     .reduce((s, i) => s.plus(balance(i.total, i.paidAmount)), dec(0));
 
+  // ── الوارد والصادر ───────────────────────────────────────
+  //
+  // الوارد فلوسٌ دخلت فعلاً — المحصَّل من الفواتير، لا المفوتر. الصادر ما
+  // خرج على المشتريات والمصروفات. الصافي فرقهما: موجب يعني دخلاً، سالب
+  // يعني إنفاقاً يفوق التحصيل. لا تقدير ولا توقّع — أرقام حدثت.
+  const moneyIn = collected;
+  const purchasesOut = dec(purchaseAgg?._sum.total ?? 0);
+  const expensesOut = dec(expenseAgg?._sum.amount ?? 0);
+  const moneyOut = purchasesOut.plus(expensesOut);
+  const net = moneyIn.minus(moneyOut);
+  const flowMax = Math.max(Number(moneyIn), Number(moneyOut), 1);
+
   const recent: RecentProduct[] = recentRows.map((row) => ({
     id: row.id,
     sku: row.sku,
@@ -266,6 +298,68 @@ export default async function ManagerDashboard() {
             )}
           </div>
         </section>
+
+        {/* ── الوارد والصادر + مؤشّرات دائرية ── */}
+        {seeMoney && (
+          <section>
+            <SectionTitle note="فلوسٌ دخلت وخرجت فعلاً — لا تقدير">الوارد والصادر</SectionTitle>
+            <div className="grid gap-4 lg:grid-cols-[1.3fr_2fr]">
+              {/* الوارد مقابل الصادر والصافي */}
+              <div className="erp-card p-6">
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div>
+                    <p className="text-[0.7rem] text-txt-3">الوارد (محصَّل)</p>
+                    <p className="mt-1 text-sm font-semibold text-ok">{formatMoney(moneyIn)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[0.7rem] text-txt-3">الصادر</p>
+                    <p className="mt-1 text-sm font-semibold text-bad">{formatMoney(moneyOut)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[0.7rem] text-txt-3">الصافي</p>
+                    <p className={`mt-1 text-sm font-semibold ${dec(net).gte(0) ? 'text-ok' : 'text-bad'}`}>
+                      {formatMoney(net)}
+                    </p>
+                  </div>
+                </div>
+                {/* شريطان يقارنان الوارد بالصادر بصرياً */}
+                <div className="mt-5 space-y-3">
+                  <FlowBar label="الوارد" value={Number(moneyIn)} max={flowMax} tone="ok" text={formatMoney(moneyIn)} />
+                  <FlowBar label="الصادر" value={Number(moneyOut)} max={flowMax} tone="bad" text={formatMoney(moneyOut)} />
+                </div>
+                <p className="mt-4 text-[0.7rem] leading-[1.8] text-txt-4">
+                  الصادر = المشتريات ({formatMoney(purchasesOut)}) + المصروفات ({formatMoney(expensesOut)}).
+                </p>
+              </div>
+
+              {/* مؤشّرات دائرية */}
+              <div className="erp-card grid grid-cols-2 items-center gap-4 p-6 sm:grid-cols-3">
+                <Donut
+                  label="نسبة التحصيل"
+                  value={Number(collected)}
+                  max={Number(invoiced) || 1}
+                  sub={`${formatMoney(collected)} من ${formatMoney(invoiced)}`}
+                  tone="ok"
+                />
+                <Donut
+                  label="الأوامر المسلَّمة"
+                  value={(orderBy.get('DELIVERED')?._count._all ?? 0) + (orderBy.get('COMPLETED')?._count._all ?? 0)}
+                  max={orderTotal || 1}
+                  center={`${(orderBy.get('DELIVERED')?._count._all ?? 0) + (orderBy.get('COMPLETED')?._count._all ?? 0)}/${orderTotal}`}
+                  sub="مُسلَّم ومكتمل"
+                  tone="brand"
+                />
+                <Donut
+                  label="المتاح من الرصيد"
+                  value={Number(dec(onHand).minus(reserved))}
+                  max={Number(onHand) || 1}
+                  sub={`محجوز ${formatQty(reserved)}`}
+                  tone={dec(reserved).gt(0) ? 'warn' : 'brand'}
+                />
+              </div>
+            </div>
+          </section>
+        )}
 
         <div className="grid gap-5 lg:grid-cols-2">
           {seeSales && (
@@ -481,5 +575,39 @@ export default async function ManagerDashboard() {
         </div>
       </div>
     </AppShell>
+  );
+}
+
+/**
+ * شريط أفقي يقارن قيمة بحدّ أعلى.
+ *
+ * طوله المرئي = القيمة ÷ الأكبر بين الوارد والصادر، فالشريطان يُقرآن معاً:
+ * الأطول هو الأكبر. حدٌّ صفر يعطي شريطاً فارغاً لا NaN.
+ */
+function FlowBar({
+  label,
+  value,
+  max,
+  tone,
+  text,
+}: {
+  label: string;
+  value: number;
+  max: number;
+  tone: 'ok' | 'bad';
+  text: string;
+}) {
+  const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
+  const color = tone === 'ok' ? 'var(--color-ok)' : 'var(--color-bad)';
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-[0.7rem]">
+        <span className="text-txt-3">{label}</span>
+        <span className="tnum text-txt-2">{text}</span>
+      </div>
+      <div className="h-2.5 overflow-hidden rounded-full bg-card-2">
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+      </div>
+    </div>
   );
 }
