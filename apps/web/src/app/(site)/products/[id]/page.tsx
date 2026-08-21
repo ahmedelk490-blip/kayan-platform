@@ -2,11 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
-import { publicProduct, siteWhatsApp } from '@/lib/catalog';
+import { publicProduct, publicColors, siteWhatsApp } from '@/lib/catalog';
 
 export const dynamic = 'force-dynamic';
 
-/** أسماء الخدمات بالعربية لجدول الأسعار. */
 const SERVICE_AR: Record<string, string> = {
   EMBROIDERY: 'تطريز',
   DTF: 'طباعة DTF',
@@ -15,21 +14,15 @@ const SERVICE_AR: Record<string, string> = {
 };
 
 /**
- * وصف يُكتب من اسم المنتج وخاماته حين لا يكون له وصف مخزَّن.
- *
- * لا نخترع ميزات: نذكر ما نعرفه فعلاً — الاسم، الخامات، الألوان، المقاسات،
- * وأن التطريز والطباعة داخل المصنع. جملة صادقة خير من فقرة منمّقة مخترعة.
+ * وصف يُكتب من اسم المنتج وخاماته حين لا يكون له وصف مخزَّن. لا نخترع
+ * ميزات: نذكر ما نعرفه فعلاً.
  */
 function composeDescription(p: {
   nameAr: string;
   materials: string[];
-  colors: { nameAr: string }[];
-  sizes: string[];
 }): string {
-  const parts: string[] = [`${p.nameAr} من إنتاج مصنع كيان.`];
+  const parts = [`${p.nameAr} من إنتاج مصنع كيان.`];
   if (p.materials.length) parts.push(`مصنوع من ${p.materials.join('، ')}.`);
-  if (p.colors.length) parts.push(`متوفّر بألوان: ${p.colors.map((c) => c.nameAr).join('، ')}.`);
-  if (p.sizes.length) parts.push(`مقاسات: ${p.sizes.join('، ')}.`);
   parts.push('التطريز والطباعة داخل المصنع، فالموعد الذي نعطيك إياه موعد نلتزم به.');
   return parts.join(' ');
 }
@@ -53,47 +46,56 @@ export async function generateMetadata({
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [product, whatsapp] = await Promise.all([publicProduct(id), siteWhatsApp()]);
+  const [product, palette, whatsapp] = await Promise.all([
+    publicProduct(id),
+    publicColors(),
+    siteWhatsApp(),
+  ]);
   if (!product) notFound();
 
   const description = product.descriptionAr ?? composeDescription(product);
   const cover = product.images[0] ?? null;
-  const gallery = product.images.slice(1);
-  const raw = cover?.startsWith('/products/'); // صور المنتجات ثابتة ومحسّنة
+  const gallery = product.images.slice(1, 5);
+
+  // ألوان المنتج إن وُجدت، وإلا باقة المصنع القياسية — فالعميل يرى المتاح
+  // دائماً، ويتحكّم المدير بالباقة من شاشة الألوان.
+  const colors = product.colors.length > 0 ? product.colors : palette;
+  const colorsAreGeneral = product.colors.length === 0;
 
   const waHref = whatsapp
     ? `https://wa.me/${whatsapp}?text=${encodeURIComponent(`مرحبا، مهتم بـ${product.nameAr}. ممكن تفاصيل وسعر؟`)}`
     : null;
 
   return (
-    <article className="px-6 pb-24 pt-28 md:px-10 md:pt-32 lg:px-16">
-      <div className="mx-auto w-full max-w-[1200px]">
+    <article className="relative overflow-hidden pb-24 pt-28 md:pt-32">
+      {/* توهّج خلفي خفيف بلون العلامة — عمق بلا صورة ثقيلة */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[60vh] bg-[radial-gradient(60%_60%_at_50%_0%,rgba(92,35,52,0.16),transparent)]"
+      />
+
+      <div className="mx-auto w-full max-w-[1200px] px-6 md:px-10 lg:px-16">
         {/* مسار العودة */}
         <nav className="mb-8 flex items-center gap-2 text-sm text-body-muted">
-          <Link href="/" className="transition-colors hover:text-brand">
-            الرئيسية
-          </Link>
+          <Link href="/" className="transition-colors hover:text-brand">الرئيسية</Link>
           <span aria-hidden>/</span>
-          <Link href="/#products" className="transition-colors hover:text-brand">
-            المنتجات
-          </Link>
+          <Link href="/#products" className="transition-colors hover:text-brand">المنتجات</Link>
           <span aria-hidden>/</span>
           <span className="text-body">{product.nameAr}</span>
         </nav>
 
-        <div className="grid gap-10 lg:grid-cols-2 lg:gap-14">
-          {/* ── الصورة ── */}
+        <div className="grid gap-10 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
+          {/* ── الصورة الكبيرة ── */}
           <div>
-            <div className="relative aspect-[3/4] overflow-hidden rounded-3xl border border-edge-strong bg-panel">
+            <div className="relative aspect-[4/5] overflow-hidden rounded-[28px] bg-panel-2 shadow-[0_40px_90px_-50px_rgba(0,0,0,0.6)]">
               {cover ? (
                 <Image
                   src={cover}
                   alt={product.nameAr}
                   fill
-                  sizes="(max-width: 1024px) 100vw, 50vw"
-                  className="object-contain"
+                  sizes="(max-width: 1024px) 100vw, 55vw"
+                  className="object-cover"
                   priority
-                  unoptimized={!raw}
                 />
               ) : (
                 <div className="grid h-full place-items-center text-body-subtle">لا صورة</div>
@@ -103,40 +105,55 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             {gallery.length > 0 && (
               <div className="mt-4 grid grid-cols-4 gap-3">
                 {gallery.map((src, i) => (
-                  <div
-                    key={i}
-                    className="relative aspect-square overflow-hidden rounded-xl border border-edge bg-panel"
-                  >
-                    <Image src={src} alt={`${product.nameAr} — صورة ${i + 2}`} fill sizes="120px" className="object-contain" />
+                  <div key={i} className="relative aspect-square overflow-hidden rounded-2xl border border-edge bg-panel-2">
+                    <Image src={src} alt={`${product.nameAr} — ${i + 2}`} fill sizes="140px" className="object-cover" />
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* ── التفاصيل ── */}
-          <div>
-            <span className="text-sm font-semibold text-brand">
-              {product.materials.join(' · ') || product.sku}
+          {/* ── العرض ── */}
+          <div className="lg:pt-4">
+            <span className="inline-flex items-center gap-2.5 rounded-full bg-brand-fill/10 px-4 py-1.5 text-sm font-semibold text-brand">
+              <span className="h-2 w-2 rounded-full bg-brand-fill" />
+              منتجات كيان
             </span>
-            <h1 className="mt-3 font-display text-display-3 font-semibold leading-[1.15] text-body">
+
+            <h1 className="mt-5 font-display text-[clamp(2.2rem,5vw,3.6rem)] font-bold leading-[1.12] text-body">
               {product.nameAr}
             </h1>
-            <p className="mt-5 text-lg leading-[1.95] text-body-muted">{description}</p>
+
+            {product.materials.length > 0 && (
+              <div className="mt-5 flex flex-wrap gap-2">
+                {product.materials.map((m) => (
+                  <span key={m} className="rounded-full border border-edge-strong px-3.5 py-1.5 text-xs text-body-muted">
+                    {m}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <p className="mt-6 text-lg leading-[2] text-body-muted">{description}</p>
 
             {/* الألوان */}
-            {product.colors.length > 0 && (
-              <div className="mt-8">
-                <h2 className="mb-3 text-sm font-semibold text-body">الألوان المتوفّرة</h2>
-                <ul className="flex flex-wrap gap-3">
-                  {product.colors.map((c) => (
-                    <li key={c.nameAr} className="flex items-center gap-2 rounded-full border border-edge-strong bg-panel/60 py-1.5 pe-4 ps-1.5">
+            {colors.length > 0 && (
+              <div className="mt-9">
+                <h2 className="mb-4 text-base font-semibold text-body">
+                  الألوان المتوفّرة
+                  {colorsAreGeneral && (
+                    <span className="ms-2 text-xs font-normal text-body-subtle">— ألوان المصنع القياسية، وأي لون آخر حسب الطلب</span>
+                  )}
+                </h2>
+                <ul className="flex flex-wrap gap-4">
+                  {colors.map((c) => (
+                    <li key={c.nameAr} className="flex flex-col items-center gap-2">
                       <span
                         aria-hidden
-                        className="h-6 w-6 rounded-full border border-black/10 shadow-inner"
+                        className="h-11 w-11 rounded-full border border-black/10 shadow-[inset_0_2px_6px_rgba(0,0,0,0.15)]"
                         style={{ backgroundColor: c.hex ?? 'transparent' }}
                       />
-                      <span className="text-sm text-body-muted">{c.nameAr}</span>
+                      <span className="text-[0.72rem] text-body-muted">{c.nameAr}</span>
                     </li>
                   ))}
                 </ul>
@@ -145,11 +162,11 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
             {/* المقاسات */}
             {product.sizes.length > 0 && (
-              <div className="mt-6">
-                <h2 className="mb-3 text-sm font-semibold text-body">المقاسات</h2>
+              <div className="mt-8">
+                <h2 className="mb-3 text-base font-semibold text-body">المقاسات</h2>
                 <ul className="flex flex-wrap gap-2">
                   {product.sizes.map((s) => (
-                    <li key={s} className="grid h-10 min-w-10 place-items-center rounded-lg border border-edge-strong bg-panel/60 px-3 text-sm text-body">
+                    <li key={s} className="grid h-11 min-w-11 place-items-center rounded-xl border border-edge-strong px-3.5 text-sm text-body">
                       {s}
                     </li>
                   ))}
@@ -157,11 +174,31 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               </div>
             )}
 
-            {/* الأسعار */}
+            {/* الأزرار */}
+            <div className="mt-10 flex flex-wrap gap-3">
+              <Link
+                href="/#quote"
+                className="inline-flex items-center rounded-full bg-brand-fill px-8 py-4 text-sm font-medium text-on-brand transition-opacity hover:opacity-90"
+              >
+                اطلب عرض سعر
+              </Link>
+              {waHref && (
+                <a
+                  href={waHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full border border-edge-strong px-8 py-4 text-sm font-medium text-body transition-colors hover:border-brand hover:text-brand"
+                >
+                  اسأل على واتساب
+                </a>
+              )}
+            </div>
+
+            {/* الأسعار — أسفل، للمهتمّ */}
             {product.tiers.length > 0 && (
-              <div className="mt-8">
-                <h2 className="mb-3 text-sm font-semibold text-body">الأسعار حسب الكمية والخدمة</h2>
-                <div className="overflow-hidden rounded-xl border border-edge-strong">
+              <div className="mt-10 rounded-2xl border border-edge bg-panel/50 p-6">
+                <h2 className="mb-4 text-base font-semibold text-body">أسعار تقريبية حسب الكمية</h2>
+                <div className="overflow-hidden rounded-xl border border-edge">
                   <table className="w-full text-sm">
                     <thead className="bg-panel/70 text-body-muted">
                       <tr>
@@ -185,31 +222,9 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                     </tbody>
                   </table>
                 </div>
-                <p className="mt-2 text-xs text-body-subtle">
-                  الأسعار تقديرية وتتغيّر مع الكمية والتصميم — اطلب عرض سعر دقيق.
-                </p>
+                <p className="mt-3 text-xs text-body-subtle">الأسعار تتغيّر مع الكمية والتصميم — اطلب عرضاً دقيقاً.</p>
               </div>
             )}
-
-            {/* الأزرار */}
-            <div className="mt-9 flex flex-wrap gap-3">
-              <Link
-                href="/#quote"
-                className="inline-flex items-center rounded-full bg-brand-fill px-8 py-4 text-sm font-medium text-on-brand transition-opacity hover:opacity-90"
-              >
-                اطلب عرض سعر
-              </Link>
-              {waHref && (
-                <a
-                  href={waHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center rounded-full border border-edge-strong px-8 py-4 text-sm font-medium text-body transition-colors hover:border-brand hover:text-brand"
-                >
-                  اسأل على واتساب
-                </a>
-              )}
-            </div>
           </div>
         </div>
       </div>

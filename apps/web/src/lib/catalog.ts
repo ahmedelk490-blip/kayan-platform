@@ -217,6 +217,26 @@ export async function publicProduct(id: string): Promise<PublicProductDetail | n
   }
 }
 
+/**
+ * باقة ألوان المصنع القياسية — يتحكّم بها المدير من شاشة الألوان.
+ *
+ * تُعرض على صفحة المنتج حين لا يحدّد المنتج ألواناً بعينها: المصنع يقدّم
+ * هذه الألوان عموماً، فالعميل يعرف ما المتاح ولو لم تُنشأ متغيّرات بعد.
+ */
+export async function publicColors(): Promise<{ nameAr: string; hex: string | null }[]> {
+  setCurrentTenant(PUBLIC_TENANT);
+  try {
+    const rows = await prisma.color.findMany({
+      where: { tenantId: PUBLIC_TENANT, isDeleted: false },
+      orderBy: { sortOrder: 'asc' },
+      select: { nameAr: true, hex: true },
+    });
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
 /** معرّفات كل المنتجات النشطة — لتوليد مسارات الصفحات. */
 export async function publicProductIds(): Promise<string[]> {
   setCurrentTenant(PUBLIC_TENANT);
