@@ -32,7 +32,9 @@ export function Products({ products }: { products: PublicProduct[] }) {
           lead="اضغط على أي منتج تشوف تفاصيله وألوانه وخاماته كاملة."
         />
 
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {/* عمودان على الموبايل، ثلاثة ثم أربعة على الأكبر — بطاقات بحجم
+            واحد متّسق في كل المقاسات، لا بطاقة عملاقة على الهاتف. */}
+        <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
           {products.map((product, index) => (
             <motion.article
               key={product.id}
@@ -63,30 +65,27 @@ export function Products({ products }: { products: PublicProduct[] }) {
                 aria-label={`تفاصيل ${product.nameAr}`}
                 className="absolute inset-0 z-10"
               />
-              {/* object-contain لا cover: الموديل كامل يبان — لا رأس مقصوص.
-                  والنسبة طولية لأن الصور أشخاص واقفون. */}
-              <ImageReveal delay={(index % 3) * 0.08} className="relative aspect-[3/4] overflow-hidden bg-panel">
+              {/* نسبة واحدة لكل البطاقات (4:5) و object-cover: كل الصور
+                  بنفس الإطار والزاوية، فالشبكة تُقرأ كمجموعة واحدة متّسقة —
+                  على الموبايل والكمبيوتر سواء. الصورة صورة المصنع الحقيقية. */}
+              <ImageReveal delay={(index % 3) * 0.08} className="relative aspect-[4/5] overflow-hidden bg-panel-2">
                 <Image
                   src={product.image ?? ''}
                   alt={product.nameAr}
                   fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                  className="object-contain transition-transform duration-700 ease-out group-hover:scale-[1.05]"
+                  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                  className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
                 />
-                <span className="absolute bottom-4 start-4 rounded-full bg-page/80 px-3 py-1 text-[0.7rem] text-body-muted backdrop-blur">
-                  {product.imageCount} صور
-                </span>
+                {/* اسم المنتج على تدرّج خفيف أسفل الصورة — بطاقة نظيفة بلا
+                    كتلة تفاصيل جانبية. */}
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent p-4 pt-12">
+                  <h3 className="text-base font-semibold text-white">{product.nameAr}</h3>
+                  <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-white/85">
+                    شوف التفاصيل
+                    <span aria-hidden className="transition-transform duration-300 group-hover:-translate-x-1">←</span>
+                  </span>
+                </div>
               </ImageReveal>
-
-              <div className="relative p-6">
-                <p className="text-xs text-brand">{product.materials.join(' · ') || product.sku}</p>
-                <h3 className="mt-2 text-xl font-semibold text-body">{product.nameAr}</h3>
-                <p className="mt-3 line-clamp-2 text-sm leading-[1.85] text-body-muted">{product.descriptionAr ?? ''}</p>
-                <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-brand">
-                  شوف التفاصيل
-                  <span aria-hidden className="transition-transform duration-300 group-hover:-translate-x-1">←</span>
-                </span>
-              </div>
             </motion.article>
           ))}
         </div>

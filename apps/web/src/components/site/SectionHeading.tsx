@@ -29,21 +29,23 @@ export function SectionHeading({
       transition={{ duration: 0.8, ease: EASE.outExpo }}
       className="mb-12 max-w-[56ch] md:mb-16"
     >
-      {/* السطر التعريفي: بلون العلامة، سميك، بلا تباعد حروف — التباعد على
-          العربية يفصل الحروف الموصولة. الشريط أثخن وملوّن ليُرى. */}
-      <span className="mb-4 inline-flex items-center gap-3 text-sm font-semibold text-brand md:text-base">
-        <span className="h-[3px] w-9 rounded-full bg-brand-fill" />
+      {/* السطر التعريفي في سطر مستقلّ فوق العنوان: شارة بخلفية خفيفة بلون
+          العلامة، سميكة وواضحة، بلا تباعد حروف يقطّع العربية. */}
+      <span className="mb-5 inline-flex items-center gap-2.5 rounded-full bg-brand-fill/10 px-4 py-1.5 text-sm font-semibold text-brand md:text-base">
+        <span className="h-2 w-2 rounded-full bg-brand-fill" />
         {eyebrow}
       </span>
 
+      {/* العنوان ضخم: أكبر من مقاس القسم القياسي ليقرأ كعنوان رئيسي واضح
+          على الموبايل والكمبيوتر. وزن ثقيل وتباين عالٍ. */}
       <AnimatedText
         as="h2"
         text={title}
-        className="font-display text-display-3 font-semibold leading-[1.15] text-body"
+        className="font-display text-[clamp(2.3rem,5.5vw,4rem)] font-bold leading-[1.12] text-body"
       />
 
       {lead && (
-        <p className="mt-5 text-lg leading-[1.9] text-body-muted">{lead}</p>
+        <p className="mt-6 text-lg leading-[1.95] text-body-muted md:text-xl">{lead}</p>
       )}
     </motion.div>
   );

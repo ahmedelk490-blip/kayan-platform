@@ -43,19 +43,19 @@ export default async function HomePage() {
     raw: true,
   }));
 
-  // وإن لم يرفع شيئاً بعد، تُشتقّ الشرائح من المنتجات كما كانت — فالواجهة
-  // لا تفرغ يوماً، وترقية النظام لا تكسر ما كان يعمل.
-  const derived: HeroSlide[] = products
-    .filter((p) => p.image)
-    .slice(0, 6)
-    .map((p, i) => ({
-      src: p.image as string,
-      name: p.nameAr,
-      note: p.materials.join(' · ') || p.descriptionAr?.slice(0, 40) || p.sku,
-      tint: tint(i),
-    }));
+  // صور الموديلات الشفافة (قصاصات بلا خلفية) — هي واجهة الهيرو. مفصولة عن
+  // صور المنتجات في البطاقات: تلك صور المصنع الحقيقية، وهذه عرض راقٍ لشخص
+  // يلبس المنتج. raw لأنها تُقدَّم كما هي بلا محسّن Next يعيد قصّها.
+  const models: HeroSlide[] = [
+    { src: '/hero/vest-turkish-1.webp', name: 'اليلك التركي', note: 'خامة تركية · تطريز وطباعة داخل المصنع', tint: tint(0), raw: true },
+    { src: '/hero/vest-chinese.webp', name: 'اليلك الصيني', note: 'جيوب متعددة · شعارك مطرَّز', tint: tint(1), raw: true },
+    { src: '/hero/apron.webp', name: 'المريلة', note: 'قماش متين · للمطاعم والمقاهي', tint: tint(2), raw: true },
+    { src: '/hero/vest-turkish-2.webp', name: 'اليلك التركي — موديل ٢', note: 'قصّة عملية · بألوانك', tint: tint(3), raw: true },
+  ];
 
-  const slides = uploaded.length > 0 ? uploaded : derived;
+  // شرائح رفعها المدير تسبق كل شيء، ثم صور الموديلات الثابتة. الواجهة لا
+  // تفرغ يوماً.
+  const slides = uploaded.length > 0 ? uploaded : models;
 
   return (
     <>
