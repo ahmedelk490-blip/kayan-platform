@@ -39,7 +39,11 @@ export function StatCard({
   index = 0,
 }: {
   label: string;
-  value: number;
+  /**
+   * رقم يُعدّ تصاعدياً، أو نصّ جاهز (كقيمة مالية منسّقة بعملتها) يُعرض كما
+   * هو. العدّاد لا يفهم إلا الأرقام، فالنصّ يُطبع مباشرة بلا عدّ.
+   */
+  value: number | string;
   unit?: string;
   hint?: string;
   icon: ReactNode;
@@ -65,7 +69,7 @@ export function StatCard({
 
       <p className="mt-3 flex items-baseline gap-1.5">
         <span className="text-2xl font-semibold text-brand">
-          <CountUp value={value} decimals={decimals} />
+          {typeof value === 'number' ? <CountUp value={value} decimals={decimals} /> : value}
         </span>
         {unit && <span className="text-xs text-txt-3">{unit}</span>}
       </p>
