@@ -96,35 +96,36 @@ export function Navigation() {
           </MagneticButton>
         </div>
 
-        {/* On mobile the toggle sits beside the menu button, so the theme is
-            reachable without opening the menu first. */}
+        {/* على الموبايل: زرّ الثيم وزرّ القائمة في مجموعة واحدة عند الطرف.
+            كانا عنصرين منفصلين، و justify-between على الشريط كان يدفع زرّ
+            الثيم إلى منتصف الشريط بينهما. جمعهما في حاوية واحدة يُبقيهما
+            متجاورين جنب القائمة، حيث يتوقّعهما المستخدم. */}
         <div className="flex items-center gap-2 md:hidden">
           <ThemeToggle />
+          <button
+            type="button"
+            onClick={() => setMenuOpen((open) => !open)}
+            aria-expanded={menuOpen}
+            aria-controls="mobile-menu"
+            aria-label={menuOpen ? 'إغلاق القائمة' : 'فتح القائمة'}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-edge-strong"
+          >
+            <span className="relative block h-3 w-4">
+              <motion.span
+                animate={{ rotate: menuOpen ? 45 : 0, y: menuOpen ? 5 : 0 }}
+                className="absolute inset-x-0 top-0 h-px bg-body"
+              />
+              <motion.span
+                animate={{ opacity: menuOpen ? 0 : 1 }}
+                className="absolute inset-x-0 top-1.5 h-px bg-body"
+              />
+              <motion.span
+                animate={{ rotate: menuOpen ? -45 : 0, y: menuOpen ? -5 : 0 }}
+                className="absolute inset-x-0 bottom-0 h-px bg-body"
+              />
+            </span>
+          </button>
         </div>
-
-        <button
-          type="button"
-          onClick={() => setMenuOpen((open) => !open)}
-          aria-expanded={menuOpen}
-          aria-controls="mobile-menu"
-          aria-label={menuOpen ? 'إغلاق القائمة' : 'فتح القائمة'}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-edge-strong md:hidden"
-        >
-          <span className="relative block h-3 w-4">
-            <motion.span
-              animate={{ rotate: menuOpen ? 45 : 0, y: menuOpen ? 5 : 0 }}
-              className="absolute inset-x-0 top-0 h-px bg-body"
-            />
-            <motion.span
-              animate={{ opacity: menuOpen ? 0 : 1 }}
-              className="absolute inset-x-0 top-1.5 h-px bg-body"
-            />
-            <motion.span
-              animate={{ rotate: menuOpen ? -45 : 0, y: menuOpen ? -5 : 0 }}
-              className="absolute inset-x-0 bottom-0 h-px bg-body"
-            />
-          </span>
-        </button>
       </motion.nav>
 
       <motion.div

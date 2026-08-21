@@ -44,6 +44,11 @@
   /* Fill accent: always the exact logo maroon, with white on it. */
   --color-brand-fill: var(--color-primary);
   --color-on-brand: var(--color-text-on-accent);
+  /* النجاح: أخضر، لا نبيتي. رسالة «وصل طلبك» كانت بلون العلامة النبيتي،
+     وهو قريب بصرياً من الأحمر فيُقرأ كخطأ. الأخضر يفصل النجاح عن الخطأ
+     فصلاً لا لبس فيه. */
+  --color-ok: var(--color-success-500);
+  --color-ok-strong: var(--color-success-600);
 }
 
 @layer base {

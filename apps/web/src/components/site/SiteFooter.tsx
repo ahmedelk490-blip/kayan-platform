@@ -51,9 +51,13 @@ export function SiteFooter() {
           ))}
         </div>
 
+        {/* الكلمة الضخمة: بيضاء في الوضع الداكن، نبيتية في الفاتح. كانت
+            text-primary-900 ثابتاً — نبيتيّ غامق يكاد يختفي على الخلفية
+            الداكنة. اللون الآن يقلب مع الثيم عبر --wordmark-color. */}
         <p
           aria-hidden="true"
-          className="mt-20 select-none font-display text-[clamp(3rem,14vw,11rem)] leading-none tracking-tight text-primary-900"
+          style={{ color: 'var(--wordmark-color)' }}
+          className="mt-20 select-none font-display text-[clamp(3rem,14vw,11rem)] leading-none tracking-tight"
         >
           {BRAND.name}
         </p>

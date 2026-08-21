@@ -114,8 +114,16 @@
 
   --text-display-1: clamp(2.75rem, 9vw, 8.5rem);
   --text-display-2: clamp(2.25rem, 6vw, 5rem);
-  --text-display-3: clamp(1.75rem, 4vw, 3rem);
+  /* عناوين الأقسام. رُفع الحدّان: 2.1rem على الموبايل بدل 1.75 فيقرأ
+     العنوان كعنوان لا كسطر عريض، و3.4rem سقفاً على الشاشات الكبيرة. كل
+     أقسام الواجهة تستعمل هذا المقاس، فتكبر معاً وتبقى متّسقة. */
+  --text-display-3: clamp(2.1rem, 5vw, 3.4rem);
   --text-lead: clamp(1.05rem, 1.6vw, 1.375rem);
+
+  /* كلمة «كيان» الضخمة في تذييل الصفحة: بيضاء على الداكن، نبيتية على
+     الفاتح. لا توكن قائم يقلب بين الأبيض والنبيتي — accent نبيتيٌّ في
+     الحالتين — فيُعرَّف واحد صريح هنا ويُقلب مع الثيم أدناه. */
+  --wordmark-color: var(--color-neutral-100);
 
   /* ---------- Radius ----------------------------------------- */
   --radius-sm: 0.25rem;
@@ -155,6 +163,9 @@
   --color-accent-hover: var(--color-primary-700);
   --color-primary: var(--color-primary-600);
   --color-primary-hover: var(--color-primary-700);
+
+  /* الفاتح: الكلمة الضخمة بلون الشعار النبيتي. */
+  --wordmark-color: var(--color-primary-600);
 }
 
 @media (prefers-color-scheme: light) {
@@ -172,6 +183,8 @@
     --color-accent: var(--color-primary-600);
     --color-accent-hover: var(--color-primary-700);
     --color-primary-hover: var(--color-primary-700);
+
+    --wordmark-color: var(--color-primary-600);
   }
 }
 

@@ -170,8 +170,14 @@ export function QuoteForm() {
               </button>
 
               {status === 'sent' && (
-                <p role="status" className="text-sm text-brand">
-                  وصلنا طلبك. بنتواصل معك على الرقم اللي كتبته.
+                <p
+                  role="status"
+                  className="flex items-center gap-2 rounded-lg border border-ok/40 bg-ok/10 px-4 py-3 text-sm font-medium text-ok"
+                >
+                  <span aria-hidden className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-ok text-[0.7rem] text-white">
+                    ✓
+                  </span>
+                  تم التسجيل بنجاح. وصلنا طلبك وبنتواصل معك على الرقم اللي كتبته.
                 </p>
               )}
               {status === 'error' && failure && (

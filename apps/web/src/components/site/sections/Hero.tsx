@@ -64,8 +64,6 @@ export function Hero({ slides }: { slides: HeroSlide[] }) {
   const [simplified, setSimplified] = useState(false);
   const deckRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
-  /** Timestamp of the last accepted wheel step, for the cooldown. */
-  const lastWheel = useRef(0);
 
   // SLIDES صارت مشتقّة من خاصيّة لا ثابتاً في الوحدة، فطولها اعتمادية
   // حقيقية: إغلاق قديم على عدد مختلف يدور على شريحة غير موجودة.
@@ -103,51 +101,11 @@ export function Hero({ slides }: { slides: HeroSlide[] }) {
     return () => window.removeEventListener('mousemove', onMove);
   }, [reduced, simplified, pointerX, pointerY]);
 
-  /**
-   * العجلة فوق الـ Hero تغيّر المنتج.
-   *
-   * ── The rule that keeps this from being hostile ────────────
-   *
-   * Taking the wheel away from a visitor is a real accessibility cost, so it
-   * is taken back the moment the carousel has nothing left to give:
-   *
-   *   - scrolling DOWN on the last product releases to the page
-   *   - scrolling UP on the first product releases to the page
-   *
-   * That is why the wheel does NOT wrap, while the arrows and dots do. A
-   * wrapping wheel would trap the reader in the hero forever, which is
-   * exactly the behaviour that gives scroll-jacking its bad name.
-   *
-   * A 700ms cooldown, just over the 660ms transition, turns one flick of a
-   * trackpad's momentum into one product rather than five. Disabled entirely
-   * under reduced motion, where the page simply scrolls.
-   */
-  useEffect(() => {
-    if (reduced) return;
-    const node = sectionRef.current;
-    if (!node) return;
-
-    function onWheel(event: WheelEvent) {
-      // Ctrl+wheel is the browser's zoom. Never take that.
-      if (event.ctrlKey) return;
-      if (Math.abs(event.deltaY) < 4) return;
-
-      const forward = event.deltaY > 0;
-      const exhausted = forward ? active === SLIDES.length - 1 : active === 0;
-      if (exhausted) return; // hand the wheel back to the page
-
-      event.preventDefault();
-
-      const now = Date.now();
-      if (now - lastWheel.current < 700) return;
-      lastWheel.current = now;
-      setActive((current) => current + (forward ? 1 : -1));
-    }
-
-    // passive:false because preventDefault is the whole mechanism.
-    node.addEventListener('wheel', onWheel, { passive: false });
-    return () => node.removeEventListener('wheel', onWheel);
-  }, [reduced, active, SLIDES.length]);
+  // خطف عجلة السكرول أُزيل عمداً. كان يوقف تمرير الصفحة فوق الـ Hero
+  // ليبدّل المنتج، وهو ما شكا منه المستخدم: التمرير لأسفل يجب أن ينزل
+  // بالصفحة لا أن يُحتجز في الكاروسيل. تبديل المنتج يبقى متاحاً بالأسهم
+  // والنقاط والسحب ولوحة المفاتيح — كلها يطلبها الزائر صراحةً، بلا أن
+  // يُسلَب منه التمرير.
 
   function onKeyDown(event: React.KeyboardEvent) {
     // RTL: ArrowLeft advances, because forward is leftward on this page.
@@ -162,8 +120,10 @@ export function Hero({ slides }: { slides: HeroSlide[] }) {
   }
 
   function onDragEnd(_: unknown, info: PanInfo) {
-    if (info.offset.x < -60) go(1);
-    else if (info.offset.x > 60) go(-1);
+    // معكوس عن السابق بناءً على إحساس المستخدم: السحب نحو اليمين يقدّم،
+    // والسحب نحو اليسار يرجّع.
+    if (info.offset.x < -60) go(-1);
+    else if (info.offset.x > 60) go(1);
   }
 
   /** Shortest signed distance on a ring, so wrapping does not fly across. */
