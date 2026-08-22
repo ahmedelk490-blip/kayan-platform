@@ -61,6 +61,13 @@ export async function loadSalesOptions(tenantId: string) {
     return {
       value: v.id,
       label: `${parts.join(' · ')} (${v.sku})`,
+      // حقول منظّمة ليبني الفورم اختياراً متسلسلاً: منتج ← لون ← مقاس.
+      productId: v.product.id,
+      productName: v.product.nameAr,
+      colorId: v.colorId,
+      colorName: v.color?.nameAr ?? null,
+      sizeId: v.sizeId,
+      sizeCode: v.size?.code ?? null,
       price: dec(v.sellingPrice ?? v.product.sellingPrice ?? 0).toNumber(),
       available: available(onHand, reserved).toNumber(),
       // شرائح منتج هذا المتغيّر — تلك التي بلا متغيّر (للمنتج كله) أو الخاصة

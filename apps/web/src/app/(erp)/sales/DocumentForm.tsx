@@ -25,6 +25,12 @@ export interface VariantTier {
 export interface VariantOption {
   value: string;
   label: string;
+  productId: string;
+  productName: string;
+  colorId: string | null;
+  colorName: string | null;
+  sizeId: string | null;
+  sizeCode: string | null;
   price: number;
   available: number;
   /** شرائح سعر منتج هذا المتغيّر — السعر الحقيقي حسب الخدمة والكمية. */
@@ -32,6 +38,10 @@ export interface VariantOption {
 }
 
 export interface DocLine {
+  /** اختيار متسلسل: المنتج ثم اللون ثم المقاس يحدّدون المتغيّر. */
+  productId: string;
+  colorId: string;
+  sizeId: string;
   variantId: string;
   /** الخدمة المختارة (تطريز/DTF…)، تحدّد الشريحة والسعر. */
   service: string;
@@ -53,6 +63,9 @@ export interface DocValues {
 }
 
 const emptyLine = (): DocLine => ({
+  productId: '',
+  colorId: '',
+  sizeId: '',
   variantId: '',
   service: '',
   quantity: 1,
@@ -67,6 +80,67 @@ function servicesOf(v: VariantOption): string[] {
   const seen: string[] = [];
   for (const t of v.tiers) if (!seen.includes(t.service)) seen.push(t.service);
   return seen;
+}
+
+/** قيمة فريدة مع تسمية — للقوائم المنسدلة المشتقّة. */
+interface Choice {
+  id: string;
+  label: string;
+}
+
+/** المنتجات المميّزة من المتغيّرات، بترتيب ظهورها. */
+function productsOf(variants: VariantOption[]): Choice[] {
+  const seen = new Map<string, string>();
+  for (const v of variants) if (!seen.has(v.productId)) seen.set(v.productId, v.productName);
+  return [...seen].map(([id, label]) => ({ id, label }));
+}
+
+/** ألوان منتج (بلا التكرار). قد تكون فارغة لمنتج بلا ألوان. */
+function colorsOf(variants: VariantOption[], productId: string): Choice[] {
+  const seen = new Map<string, string>();
+  for (const v of variants)
+    if (v.productId === productId && v.colorId && v.colorName && !seen.has(v.colorId))
+      seen.set(v.colorId, v.colorName);
+  return [...seen].map(([id, label]) => ({ id, label }));
+}
+
+/** مقاسات منتج بلونٍ محدّد (أو بلا لون). */
+function sizesOf(variants: VariantOption[], productId: string, colorId: string): Choice[] {
+  const seen = new Map<string, string>();
+  for (const v of variants)
+    if (
+      v.productId === productId &&
+      (v.colorId ?? '') === colorId &&
+      v.sizeId &&
+      v.sizeCode &&
+      !seen.has(v.sizeId)
+    )
+      seen.set(v.sizeId, v.sizeCode);
+  return [...seen].map(([id, label]) => ({ id, label }));
+}
+
+/** المتغيّر المطابق للاختيار (منتج/لون/مقاس)، أو null. */
+function resolveVariant(
+  variants: VariantOption[],
+  productId: string,
+  colorId: string,
+  sizeId: string,
+): VariantOption | null {
+  if (!productId) return null;
+  const matches = variants.filter(
+    (v) =>
+      v.productId === productId && (v.colorId ?? '') === colorId && (v.sizeId ?? '') === sizeId,
+  );
+  return matches[0] ?? null;
+}
+
+/** يملأ حقول الاختيار (منتج/لون/مقاس) من المتغيّر المحفوظ عند التعديل. */
+function hydrate(line: DocLine, variants: VariantOption[]): DocLine {
+  if (line.variantId && !line.productId) {
+    const v = variants.find((x) => x.value === line.variantId);
+    if (v) return { ...line, productId: v.productId, colorId: v.colorId ?? '', sizeId: v.sizeId ?? '' };
+  }
+  return line;
 }
 
 /**
@@ -93,11 +167,13 @@ export function DocumentForm({
   submitLabel?: string;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
-  const [lines, setLines] = useState<DocLine[]>(
-    values?.lines?.length ? values.lines : [emptyLine()],
+  const [lines, setLines] = useState<DocLine[]>(() =>
+    values?.lines?.length ? values.lines.map((l) => hydrate(l, variants)) : [emptyLine()],
   );
   const [docDiscount, setDocDiscount] = useState(values?.discountAmount ?? 0);
   const [docDiscountPct, setDocDiscountPct] = useState(values?.discountPercent ?? 0);
+
+  const products = productsOf(variants);
 
   /**
    * يعيد تسعير السطر من شريحة الخدمة والكمية — هذا هو الحساب الصحيح.
@@ -126,19 +202,35 @@ export function DocumentForm({
     setLines((prev) => prev.map((l, i) => (i === index ? { ...l, ...patch } : l)));
   }
 
-  /** تعديل يُعقبه إعادة تسعير — للمتغيّر والخدمة والكمية. */
+  /** تعديل يُعقبه إعادة تسعير — للخدمة والكمية (لا يغيّر الاختيار). */
   function updatePriced(index: number, patch: Partial<DocLine>) {
+    setLines((prev) => prev.map((l, i) => (i === index ? reprice({ ...l, ...patch }) : l)));
+  }
+
+  /**
+   * اختيار متسلسل: المنتج ثم اللون ثم المقاس. كلٌّ يصفّر ما تحته، ويُختار
+   * تلقائياً حين لا بديل (لون واحد أو مقاس واحد)، ثم يُحلّ المتغيّر وتُختار
+   * الخدمة الافتراضية ويُعاد التسعير — فالسعر يظهر بمجرد اكتمال الاختيار.
+   */
+  function chooseInLine(index: number, patch: { productId?: string; colorId?: string; sizeId?: string }) {
     setLines((prev) =>
       prev.map((l, i) => {
         if (i !== index) return l;
         const next = { ...l, ...patch };
-        // عند تبديل المتغيّر: اختر خدمة معقولة (أول خدمة متاحة) إن لم تعد
-        // الخدمة الحالية موجودة، حتى يبدأ التسعير فوراً.
-        if (patch.variantId !== undefined) {
-          const v = variants.find((x) => x.value === patch.variantId);
-          const services = v ? servicesOf(v) : [];
-          next.service = services.includes(next.service) ? next.service : services[0] ?? '';
+        if (patch.productId !== undefined) {
+          next.colorId = '';
+          next.sizeId = '';
+          const colors = colorsOf(variants, next.productId);
+          if (colors.length === 1) next.colorId = colors[0].id;
         }
+        if (patch.colorId !== undefined) next.sizeId = '';
+        const sizes = sizesOf(variants, next.productId, next.colorId);
+        if (sizes.length === 1) next.sizeId = sizes[0].id;
+
+        const resolved = resolveVariant(variants, next.productId, next.colorId, next.sizeId);
+        next.variantId = resolved?.value ?? '';
+        const services = resolved ? servicesOf(resolved) : [];
+        next.service = services.includes(next.service) ? next.service : services[0] ?? '';
         return reprice(next);
       }),
     );
@@ -185,7 +277,11 @@ export function DocumentForm({
         <div className="space-y-3">
           {lines.map((line, index) => {
             const t = calcLine(line);
-            const variant = variants.find((v) => v.value === line.variantId);
+            const variant =
+              resolveVariant(variants, line.productId, line.colorId, line.sizeId) ??
+              variants.find((v) => v.value === line.variantId);
+            const colors = colorsOf(variants, line.productId);
+            const sizes = sizesOf(variants, line.productId, line.colorId);
             const short = variant && line.quantity > variant.available;
             const services = variant ? servicesOf(variant) : [];
             // هل تغطّي شريحةٌ هذه الكمية والخدمة؟
@@ -195,7 +291,7 @@ export function DocumentForm({
               !applicableTier(variant.tiers, {
                 service: line.service,
                 quantity: line.quantity,
-                variantId: line.variantId,
+                variantId: variant.value,
               });
             // نُظهر حقل سعر يدوي فقط حين لا يوجد سعر تلقائي صالح — وإلا نرسل
             // السعر التلقائي في حقل مخفي فلا يشغل المستخدم.
@@ -203,20 +299,47 @@ export function DocumentForm({
 
             return (
               <div key={index} className="rounded-xl border border-line bg-card-2 p-4">
-                <div className="grid items-end gap-3 sm:grid-cols-[1.8fr_1fr_0.8fr_auto]">
+                <div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-[1.6fr_1fr_0.8fr_1fr_0.7fr_auto]">
                   <label className="block">
                     <span className="mb-1.5 block text-xs text-txt-2">المنتج</span>
                     <select
-                      name="lineVariantId"
-                      value={line.variantId}
-                      onChange={(e) => updatePriced(index, { variantId: e.target.value })}
+                      value={line.productId}
+                      onChange={(e) => chooseInLine(index, { productId: e.target.value })}
                       className="erp-input py-2.5"
                     >
                       <option value="">اختر المنتج…</option>
-                      {variants.map((v) => (
-                        <option key={v.value} value={v.value}>
-                          {v.label}
-                        </option>
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>{p.label}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs text-txt-2">اللون</span>
+                    <select
+                      value={line.colorId}
+                      onChange={(e) => chooseInLine(index, { colorId: e.target.value })}
+                      disabled={colors.length === 0}
+                      className="erp-input py-2.5 disabled:opacity-50"
+                    >
+                      <option value="">{colors.length ? 'اختر اللون…' : '—'}</option>
+                      {colors.map((c) => (
+                        <option key={c.id} value={c.id}>{c.label}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs text-txt-2">المقاس</span>
+                    <select
+                      value={line.sizeId}
+                      onChange={(e) => chooseInLine(index, { sizeId: e.target.value })}
+                      disabled={sizes.length === 0}
+                      className="erp-input py-2.5 disabled:opacity-50"
+                    >
+                      <option value="">{sizes.length ? 'اختر المقاس…' : '—'}</option>
+                      {sizes.map((s) => (
+                        <option key={s.id} value={s.id}>{s.label}</option>
                       ))}
                     </select>
                   </label>
@@ -243,6 +366,7 @@ export function DocumentForm({
                     name="lineQuantity"
                     value={line.quantity}
                     onChange={(v) => updatePriced(index, { quantity: v })}
+                    integer
                   />
 
                   <button
@@ -259,8 +383,8 @@ export function DocumentForm({
                   </button>
                 </div>
 
-                {/* الحقول المخفية تُبقي عقد الخادم كما هو: خصم وضريبة السطر
-                    صفر, وملاحظة السطر فارغة. */}
+                {/* المتغيّر المحلول يُرسل للخادم؛ والخصم والضريبة صفر، والملاحظة فارغة. */}
+                <input type="hidden" name="lineVariantId" value={line.variantId} />
                 <input type="hidden" name="lineDiscount" value={0} />
                 <input type="hidden" name="lineTaxRate" value={0} />
                 <input type="hidden" name="lineNotes" value={line.notes} />
@@ -274,7 +398,7 @@ export function DocumentForm({
                         <span className="tnum">{formatMoney(line.unitPrice)}</span> × {line.quantity}
                       </>
                     ) : (
-                      'اختر المنتج والخدمة'
+                      'اختر المنتج واللون والمقاس'
                     )}
                     {variant && short && (
                       <span className="ms-3 text-bad">المتاح {variant.available} فقط</span>
@@ -375,11 +499,14 @@ function NumberCell({
   name,
   value,
   onChange,
+  integer = false,
 }: {
   label: string;
   name: string;
   value: number;
   onChange: (v: number) => void;
+  /** الكمية بالعدد الصحيح: تزيد ١، ٢، ٣ لا بالكسور. */
+  integer?: boolean;
 }) {
   return (
     <label className="block">
@@ -387,10 +514,14 @@ function NumberCell({
       <input
         name={name}
         type="number"
-        step="0.01"
+        step={integer ? 1 : 0.01}
+        min={integer ? 1 : undefined}
         dir="ltr"
         value={value}
-        onChange={(e) => onChange(Number(e.target.value) || 0)}
+        onChange={(e) => {
+          const n = Number(e.target.value) || 0;
+          onChange(integer ? Math.max(0, Math.round(n)) : n);
+        }}
         className="erp-input py-2.5 text-start"
       />
     </label>

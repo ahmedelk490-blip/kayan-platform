@@ -157,6 +157,10 @@ export default async function QuotationDetailPage({
               dateB: quotation.expiryDate?.toISOString().slice(0, 10),
               lines: quotation.lines.map((l) => ({
                 variantId: l.variantId,
+                // حقول الاختيار تُملأ من المتغيّر عند فتح الفورم (hydrate).
+                productId: '',
+                colorId: '',
+                sizeId: '',
                 // الخدمة لا تُحفظ على السطر؛ تبدأ فارغة والسعر المحفوظ يبقى
                 // كما هو حتى يعيد المستخدم اختيار الخدمة للتسعير من جديد.
                 service: '',

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { formatMoney, PURCHASE_STATUS_AR, type PurchaseStatus } from '@erp/domain';
+import { can, formatMoney, PURCHASE_STATUS_AR, type PurchaseStatus } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -26,6 +26,7 @@ export default async function PurchaseInvoicesPage() {
   });
 
   const fmt = new Intl.DateTimeFormat('ar-IQ', { dateStyle: 'medium' });
+  const canWrite = can(user.role, 'purchasing.write');
 
   return (
     <AppShell user={user} title="فواتير الشراء">
@@ -33,9 +34,16 @@ export default async function PurchaseInvoicesPage() {
         title="فواتير الشراء"
         count={orders.length}
         action={
-          <Link href="/purchasing" className="erp-btn-ghost">
-            إدارة المشتريات
-          </Link>
+          <div className="flex gap-2">
+            {canWrite && (
+              <Link href="/purchasing/new" className="erp-btn">
+                فاتورة شراء جديدة
+              </Link>
+            )}
+            <Link href="/purchasing" className="erp-btn-ghost">
+              إدارة المشتريات
+            </Link>
+          </div>
         }
       />
 
