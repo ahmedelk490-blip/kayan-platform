@@ -3,6 +3,8 @@ import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { Kpi, Panel } from '@/components/Kpi';
+import { can } from '@erp/domain';
+import { SeedButton } from './SeedButton';
 
 export const metadata: Metadata = { title: 'الإدارة' };
 
@@ -86,6 +88,12 @@ export default async function AdminPage() {
             </table>
           </div>
         </Panel>
+
+        {can(user.role, 'products.write') && (
+          <Panel title="تهيئة الأسعار والألوان والمعادلات">
+            <SeedButton />
+          </Panel>
+        )}
 
         <Panel title="الأدوار والصلاحيات">
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
