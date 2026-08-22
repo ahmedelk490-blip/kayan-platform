@@ -106,17 +106,27 @@ export function AppShell({
     links: items.filter((i) => i.group === title),
   })).filter((g) => g.links.length > 0);
 
+  const initials = (user.nameAr ?? user.name)
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('');
+
   return (
     <div className="flex min-h-screen">
-      <aside className="hidden w-60 shrink-0 border-e border-line bg-card lg:block">
-        <div className="flex h-16 items-center gap-3 border-b border-line px-5">
+      {/* الشريط عمودٌ كامل الارتفاع وثابت: القوائم أعلاه في منطقة قابلة
+          للتمرير، وبطاقة المستخدم مثبّتة أسفله. بلا التثبيت السفلي كانت
+          القوائم القليلة تترك فراغاً كبيراً تحتها يبدو كأن الشريط مقطوع. */}
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-e border-line bg-card lg:flex">
+        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-line px-5">
           <Logo height={30} className="rounded-md" />
           <span className="text-sm text-txt">نظام كيان</span>
         </div>
 
-        <nav className="p-3">
+        <nav className="flex-1 overflow-y-auto p-3">
           {/* عنصر واحد لكل مجموعة، يفتح لوحتها. التنقّل بين صفحات المجموعة
-              من التبويبات أعلى المحتوى، لا من الشريط الجانبي. */}
+              من التبويبات أعلى المحتوى, لا من الشريط الجانبي. */}
           <GroupNav
             groups={groups.map((g) => ({
               title: g.title || g.links[0].label,
@@ -140,13 +150,43 @@ export function AppShell({
             </div>
           )}
         </nav>
+
+        {/* بطاقة المستخدم مثبّتة أسفل الشريط — تملأ القاع فيبدو الشريط
+            متكاملاً, والخروج في متناول اليد دون العودة للأعلى. */}
+        <div className="shrink-0 border-t border-line p-3">
+          <div className="flex items-center gap-3 rounded-xl bg-card-2 px-3 py-2.5">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-sm font-semibold text-white">
+              {initials}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-txt">{user.nameAr ?? user.name}</p>
+              <p className="truncate text-[0.7rem] text-txt-3">{user.roleNameAr}</p>
+            </div>
+            <form action={logoutAction}>
+              <button
+                type="submit"
+                title="تسجيل الخروج"
+                aria-label="تسجيل الخروج"
+                className="grid h-8 w-8 place-items-center rounded-lg text-txt-3 transition-colors hover:bg-card hover:text-brand"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+              </button>
+            </form>
+          </div>
+        </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-line bg-card px-5 lg:px-8">
           <h1 className="truncate text-base font-semibold text-brand">{title}</h1>
 
-          <div className="flex items-center gap-4">
+          {/* هوية المستخدم والخروج في الترويسة للموبايل والتابلت حيث يختفي
+              الشريط الجانبي؛ على الديسكتوب تظهر في أسفل الشريط بدلاً منها. */}
+          <div className="flex items-center gap-4 lg:hidden">
             <div className="text-end">
               <p className="text-xs font-medium text-txt">{user.nameAr ?? user.name}</p>
               <p className="text-[0.7rem] text-txt-3">{user.roleNameAr}</p>
