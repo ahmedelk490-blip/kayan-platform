@@ -293,9 +293,6 @@ export function DocumentForm({
                 quantity: line.quantity,
                 variantId: variant.value,
               });
-            // نُظهر حقل سعر يدوي فقط حين لا يوجد سعر تلقائي صالح — وإلا نرسل
-            // السعر التلقائي في حقل مخفي فلا يشغل المستخدم.
-            const needsManualPrice = !!variant && (line.unitPrice <= 0 || !!priceGap);
 
             return (
               <div key={index} className="rounded-xl border border-line bg-card-2 p-4">
@@ -388,32 +385,10 @@ export function DocumentForm({
                 <input type="hidden" name="lineDiscount" value={0} />
                 <input type="hidden" name="lineTaxRate" value={0} />
                 <input type="hidden" name="lineNotes" value={line.notes} />
-                {!needsManualPrice && <input type="hidden" name="lineUnitPrice" value={line.unitPrice} />}
 
-                {/* السطر السفلي: السعر والإجمالي والمتاح — قراءة فقط. */}
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 border-t border-line/60 pt-3 text-sm">
-                  <span className="text-txt-3">
-                    {variant && line.unitPrice > 0 ? (
-                      <>
-                        <span className="tnum">{formatMoney(line.unitPrice)}</span> × {line.quantity}
-                      </>
-                    ) : (
-                      'اختر المنتج واللون والمقاس'
-                    )}
-                    {variant && short && (
-                      <span className="ms-3 text-bad">المتاح {variant.available} فقط</span>
-                    )}
-                  </span>
-                  <span className="font-semibold text-txt">
-                    <span className="tnum">{formatMoney(t.lineTotal)}</span>
-                  </span>
-                </div>
-
-                {needsManualPrice && (
-                  <div className="mt-3 rounded-lg border border-warn bg-warn-soft p-3">
-                    <p className="mb-2 text-[0.72rem] text-warn">
-                      لا يوجد سعر جاهز لهذه الكمية{line.service ? '' : ' — اختر الخدمة أولاً'}. اكتب سعر الوحدة يدوياً:
-                    </p>
+                {/* السطر السفلي: سعر الوحدة (يُملأ تلقائياً وقابل للتعديل) والإجمالي. */}
+                <div className="mt-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2 border-t border-line/60 pt-3">
+                  <div className="w-32">
                     <NumberCell
                       label="سعر الوحدة"
                       name="lineUnitPrice"
@@ -421,6 +396,19 @@ export function DocumentForm({
                       onChange={(v) => update(index, { unitPrice: v })}
                     />
                   </div>
+                  <div className="text-end text-sm">
+                    {variant && short && (
+                      <span className="block text-xs text-bad">المتاح {variant.available} فقط</span>
+                    )}
+                    <span className="text-xs text-txt-3">الإجمالي </span>
+                    <span className="tnum font-semibold text-txt">{formatMoney(t.lineTotal)}</span>
+                  </div>
+                </div>
+
+                {priceGap && (
+                  <p className="mt-1.5 text-[0.7rem] text-warn">
+                    لا توجد شريحة سعر جاهزة لهذه الكمية — السعر معروض للتعديل يدوياً.
+                  </p>
                 )}
               </div>
             );

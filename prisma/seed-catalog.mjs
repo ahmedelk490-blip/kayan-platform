@@ -38,6 +38,18 @@ const CONFIG = [
 const COLOR_NAMES = ['أسود', 'أبيض', 'كحلي', 'رمادي'];
 const SIZE_CODES = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
 
+// تكلفة مواد الطباعة DTF للقطعة الواحدة (الرول = ١٠٠ قطعة):
+//   فيلم الرول ١٠٠٬٠٠٠ ÷ ١٠٠ = ١٬٠٠٠
+//   حبر: ٤ أبيض + ٣ أصفر + ٠٫٥ أحمر + ٠٫٥ أزرق + ٠٫٥ أسود = ٨٫٥ علبة × ٦٥٬٠٠٠ ÷ ١٠٠ = ٥٬٥٢٥
+// = ٦٬٥٢٥ د.ع مواد فقط (لا تشمل القماش الخام ولا الأجرة — تُضاف حين تُحدَّد).
+const ROLL_PRICE = 100000;
+const PIECES_PER_ROLL = 100;
+const INK_BOX_PRICE = 65000;
+const INK_BOXES_PER_ROLL = 4 + 3 + 0.5 + 0.5 + 0.5; // أبيض/أصفر/أحمر/أزرق/أسود
+const DTF_MATERIAL_COST = Math.round(
+  ROLL_PRICE / PIECES_PER_ROLL + (INK_BOXES_PER_ROLL * INK_BOX_PRICE) / PIECES_PER_ROLL,
+);
+
 const colorSku = (c) => (c.nameEn || c.id.slice(-4)).replace(/\s+/g, '-').toUpperCase();
 
 async function run() {
@@ -52,6 +64,12 @@ async function run() {
         continue;
       }
       const tenantId = product.tenantId;
+
+      // التكلفة (مواد الطباعة للقطعة). تُخزَّن للربحية وقابلة للتعديل لاحقاً.
+      await prisma.product.update({
+        where: { id: product.id },
+        data: { cost: DTF_MATERIAL_COST },
+      });
 
       // الشرائح: احذف القديمة للمنتج (بلا متغيّر) وأنشئ الجديدة.
       await prisma.priceTier.deleteMany({ where: { productId: product.id, variantId: null } });
