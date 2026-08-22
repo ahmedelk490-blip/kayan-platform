@@ -366,34 +366,72 @@ export async function addColorsToProduct(
   if (!product) return { error: 'المنتج غير موجود.' };
 
   const colorIds = formData.getAll('colorIds').map(String).filter(Boolean);
-  if (colorIds.length === 0) return { error: 'اختر لوناً واحداً على الأقل.' };
+  const sizeIds = formData.getAll('sizeIds').map(String).filter(Boolean);
+  if (colorIds.length === 0 && sizeIds.length === 0) {
+    return { error: 'اختر لوناً أو مقاساً واحداً على الأقل.' };
+  }
 
-  // الألوان الموجودة سلفاً كمتغيّرات بلا مقاس — لا تُكرَّر.
-  const existing = await prisma.productVariant.findMany({
-    where: { productId, sizeId: null, colorId: { in: colorIds } },
-    select: { colorId: true },
-  });
-  const have = new Set(existing.map((v) => v.colorId));
+  const [colors, sizes, warehouse] = await Promise.all([
+    colorIds.length
+      ? prisma.color.findMany({
+          where: { tenantId: user.tenantId, id: { in: colorIds }, isDeleted: false },
+          select: { id: true, nameEn: true },
+        })
+      : Promise.resolve([]),
+    sizeIds.length
+      ? prisma.size.findMany({
+          where: { tenantId: user.tenantId, id: { in: sizeIds }, isDeleted: false },
+          select: { id: true, code: true },
+        })
+      : Promise.resolve([]),
+    prisma.warehouse.findFirst({
+      where: { tenantId: user.tenantId, isDeleted: false },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    }),
+  ]);
 
-  const colors = await prisma.color.findMany({
-    where: { tenantId: user.tenantId, id: { in: colorIds }, isDeleted: false },
-    select: { id: true, nameAr: true, nameEn: true },
-  });
+  const colorSku = (c: { nameEn: string | null; id: string }) =>
+    (c.nameEn || c.id.slice(-4)).replace(/\s+/g, '-').toUpperCase();
+
+  // تركيبات (لون×مقاس)، أو الألوان وحدها، أو المقاسات وحدها.
+  type Combo = { colorId: string | null; sizeId: string | null; sku: string };
+  const combos: Combo[] = [];
+  if (colors.length && sizes.length) {
+    for (const c of colors)
+      for (const s of sizes)
+        combos.push({ colorId: c.id, sizeId: s.id, sku: `${product.sku}-${colorSku(c)}-${s.code}` });
+  } else if (colors.length) {
+    for (const c of colors) combos.push({ colorId: c.id, sizeId: null, sku: `${product.sku}-${colorSku(c)}` });
+  } else {
+    for (const s of sizes) combos.push({ colorId: null, sizeId: s.id, sku: `${product.sku}-${s.code}` });
+  }
 
   let added = 0;
-  for (const color of colors) {
-    if (have.has(color.id)) continue;
-    // كود فريد: كود المنتج + رمز اللون (إنجليزي إن وُجد وإلا مقطع المعرّف).
-    const suffix = (color.nameEn || color.id.slice(-4)).replace(/\s+/g, '-').toUpperCase();
-    let sku = `${product.sku}-${suffix}`;
-    // في النادر أن يتصادم الكود، يُلحق بمقطع من معرّف اللون.
-    if (await prisma.productVariant.findUnique({ where: { sku } })) {
-      sku = `${sku}-${color.id.slice(-3)}`;
-    }
-    await prisma.productVariant.create({
-      data: { productId, sku, colorId: color.id, sizeId: null },
+  for (const combo of combos) {
+    const exists = await prisma.productVariant.findFirst({
+      where: { productId, colorId: combo.colorId, sizeId: combo.sizeId },
+      select: { id: true },
     });
+    if (exists) continue;
+    // كود فريد عالمياً: لو تصادم يُلحق بمقطع عشوائي.
+    let sku = combo.sku;
+    if (await prisma.productVariant.findUnique({ where: { sku } })) {
+      sku = `${sku}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+    }
+    const v = await prisma.productVariant.create({
+      data: { productId, sku, colorId: combo.colorId, sizeId: combo.sizeId },
+    });
+    if (warehouse) await prisma.stock.create({ data: { variantId: v.id, warehouseId: warehouse.id } });
     added += 1;
+  }
+
+  // عطّل المتغيّر الافتراضي (بلا لون/مقاس) بعد وجود متغيّرات حقيقية.
+  if (added > 0 && (colors.length > 0 || sizes.length > 0)) {
+    await prisma.productVariant.updateMany({
+      where: { productId, colorId: null, sizeId: null, isDeleted: false },
+      data: { isActive: false },
+    });
   }
 
   await audit({
@@ -402,12 +440,17 @@ export async function addColorsToProduct(
     action: 'variant.create',
     entityType: 'Product',
     entityId: productId,
-    detail: `${added} لون`,
+    detail: `${added} متغيّر (لون/مقاس)`,
   });
 
   revalidatePath(`/catalog/products/${productId}`);
   revalidatePath('/');
-  return { ok: added > 0 ? `أُضيف ${added} لون. ظاهر على المنتج وصفحته الآن.` : 'كل الألوان المختارة موجودة سلفاً.' };
+  return {
+    ok:
+      added > 0
+        ? `أُضيف ${added} متغيّر. يظهر على المنتج وفي المخزون والفاتورة الآن.`
+        : 'كل التركيبات المختارة موجودة سلفاً.',
+  };
 }
 
 export async function deleteVariant(productId: string, variantId: string): Promise<void> {

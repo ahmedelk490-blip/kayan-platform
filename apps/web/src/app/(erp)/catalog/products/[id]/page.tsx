@@ -256,14 +256,15 @@ export default async function ProductDetailPage({
 
           {canWrite && (
             <section className="erp-card p-6">
-              <h3 className="mb-1 text-sm font-semibold text-brand">إضافة ألوان بسرعة</h3>
+              <h3 className="mb-1 text-sm font-semibold text-brand">إضافة ألوان ومقاسات بسرعة</h3>
               <p className="mb-4 text-[0.7rem] leading-[1.9] text-txt-4">
-                اختر الألوان المتوفّرة لهذا المنتج — تُضاف دفعة واحدة وتظهر على المنتج
-                وصفحته وفي اختيار الأمر والفاتورة.
+                اختر ألوان ومقاسات هذا المنتج — يُنشأ متغيّر لكل تركيبة دفعة واحدة، ويظهر
+                على المنتج وصفحته وفي المخزون واختيار الأمر والفاتورة.
               </p>
               <AddColorsForm
                 action={addColorsToProduct.bind(null, product.id)}
                 colors={colorSwatches}
+                sizes={options.sizes.map((s) => ({ id: s.value, label: s.label }))}
               />
             </section>
           )}
