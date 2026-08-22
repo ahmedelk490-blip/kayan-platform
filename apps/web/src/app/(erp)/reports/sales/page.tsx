@@ -78,9 +78,14 @@ export default async function SalesReport({
       <ModuleHeader
         title="المبيعات"
         action={
-          <Link href="/reports" className="erp-btn-ghost">
-            كل التقارير
-          </Link>
+          <div className="flex gap-2">
+            <a href={`/reports/sales/export?period=${period}`} className="erp-btn-ghost">
+              تصدير Excel
+            </a>
+            <Link href="/reports" className="erp-btn-ghost">
+              كل التقارير
+            </Link>
+          </div>
         }
       />
 

@@ -60,9 +60,14 @@ export default async function InventoryReport() {
       <ModuleHeader
         title="تقييم المخزون"
         action={
-          <Link href="/reports" className="erp-btn-ghost">
-            كل التقارير
-          </Link>
+          <div className="flex gap-2">
+            <a href="/reports/inventory/export" className="erp-btn-ghost">
+              تصدير Excel
+            </a>
+            <Link href="/reports" className="erp-btn-ghost">
+              كل التقارير
+            </Link>
+          </div>
         }
       />
 
