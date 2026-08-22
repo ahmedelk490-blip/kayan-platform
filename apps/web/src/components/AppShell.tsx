@@ -43,11 +43,11 @@ interface NavItem {
 const NAV: NavItem[] = [
   { href: '/dashboard', label: 'لوحة المدير', permission: 'dashboard.view', built: true, group: '' },
 
-  { href: '/sales', label: 'لوحة المبيعات', permission: 'sales.view', built: true, group: 'المبيعات' },
-  { href: '/sales/quotations', label: 'عروض الأسعار', permission: 'sales.documents', built: true, group: 'المبيعات' },
-  { href: '/sales/orders', label: 'أوامر البيع', permission: 'sales.documents', built: true, group: 'المبيعات' },
-  { href: '/requests', label: 'طلبات الموقع', permission: 'customers.read', built: true, group: 'المبيعات' },
-  { href: '/invoices', label: 'الفواتير والتحصيل', permission: 'invoices.view', built: true, group: 'المبيعات' },
+  // المبيعات = فواتير المبيعات أولاً (هو المطلوب يومياً)، وتبويب واحد لفواتير
+  // الشراء. عروض الأسعار وأوامر البيع وطلبات الموقع صارت أقساماً أسفل شاشة
+  // الفواتير, لا تبويبات مستقلة — بطلب المالك.
+  { href: '/invoices', label: 'فواتير المبيعات', permission: 'invoices.view', built: true, group: 'المبيعات' },
+  { href: '/sales/purchase-invoices', label: 'فواتير الشراء', permission: 'purchasing.view', built: true, group: 'المبيعات' },
 
   { href: '/inventory', label: 'المخزون', permission: 'inventory.read', built: true, group: 'المخزون' },
   { href: '/manufacturing', label: 'التصنيع', permission: 'manufacturing.view', built: true, group: 'المخزون' },

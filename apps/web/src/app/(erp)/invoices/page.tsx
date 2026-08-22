@@ -13,6 +13,8 @@ import {
   INVOICE_STATUSES,
   INVOICE_STATUS_AR,
   RECEIVABLE_STATUSES,
+  QUOTATION_STATUS_AR,
+  ORDER_STATUS_AR,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
@@ -95,9 +97,59 @@ export default async function InvoicesPage({
 
   const canWrite = can(user.role, 'invoices.write');
 
+  // الأقسام المبسّطة أسفل الفواتير — عروض الأسعار وأوامر البيع وطلبات الموقع
+  // لم تعد تبويبات مستقلة، بل لمحة سريعة هنا مع رابط لكل شاشة كاملة.
+  const seeDocs = can(user.role, 'sales.documents');
+  const seeRequests = can(user.role, 'customers.read');
+  const [recentQuotations, recentOrders, recentRequests] = await Promise.all([
+    seeDocs
+      ? prisma.quotation.findMany({
+          where: { tenantId: user.tenantId, isDeleted: false },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: {
+            id: true, number: true, total: true, status: true,
+            customer: { select: { contactName: true, companyName: true } },
+          },
+        })
+      : [],
+    seeDocs
+      ? prisma.salesOrder.findMany({
+          where: { tenantId: user.tenantId, isDeleted: false },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: {
+            id: true, number: true, total: true, status: true,
+            customer: { select: { contactName: true, companyName: true } },
+          },
+        })
+      : [],
+    seeRequests
+      ? prisma.customerActivity.findMany({
+          where: { type: 'INQUIRY', customer: { tenantId: user.tenantId, isDeleted: false } },
+          orderBy: { occurredAt: 'desc' },
+          take: 5,
+          select: {
+            id: true, title: true, occurredAt: true,
+            customer: { select: { contactName: true, companyName: true } },
+          },
+        })
+      : [],
+  ]);
+
   return (
     <AppShell user={user} title="الفواتير">
-      <ModuleHeader title="الفواتير" count={count} />
+      <ModuleHeader
+        title="الفواتير"
+        count={count}
+        action={
+          canWrite ? (
+            <Link href="/invoices/new" className="erp-btn">
+              فاتورة مبيعات جديدة
+            </Link>
+          ) : null
+        }
+      />
 
       <section className="erp-card mb-6 p-5">
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
@@ -204,11 +256,105 @@ export default async function InvoicesPage({
 
       <Pager basePath="/invoices" query={query} count={count} />
 
-      {canWrite && (
-        <p className="mt-6 text-[0.7rem] text-txt-4">
-          الفواتير تُنشأ من أوامر البيع المؤكَّدة — افتح أمر البيع واضغط «إنشاء فاتورة».
-        </p>
-      )}
+      {/* أقسام مبسّطة أسفل الفواتير — لمحة سريعة وروابط للشاشات الكاملة. */}
+      <div className="mt-10 grid gap-5 lg:grid-cols-3">
+        {seeDocs && (
+          <SubSection
+            title="عروض الأسعار"
+            allHref="/sales/quotations"
+            newHref="/sales/quotations/new"
+            emptyNote="لا عروض أسعار بعد."
+            rows={recentQuotations.map((q) => ({
+              id: q.id,
+              href: `/sales/quotations/${q.id}`,
+              primary: q.number,
+              secondary: q.customer.companyName ?? q.customer.contactName,
+              badge: QUOTATION_STATUS_AR[q.status as keyof typeof QUOTATION_STATUS_AR] ?? q.status,
+              amount: formatMoney(q.total),
+            }))}
+          />
+        )}
+        {seeDocs && (
+          <SubSection
+            title="أوامر البيع"
+            allHref="/sales/orders"
+            newHref="/sales/orders/new"
+            emptyNote="لا أوامر بيع بعد."
+            rows={recentOrders.map((o) => ({
+              id: o.id,
+              href: `/sales/orders/${o.id}`,
+              primary: o.number,
+              secondary: o.customer.companyName ?? o.customer.contactName,
+              badge: ORDER_STATUS_AR[o.status as keyof typeof ORDER_STATUS_AR] ?? o.status,
+              amount: formatMoney(o.total),
+            }))}
+          />
+        )}
+        {seeRequests && (
+          <SubSection
+            title="طلبات الموقع"
+            allHref="/requests"
+            emptyNote="لا طلبات من الموقع بعد."
+            rows={recentRequests.map((r) => ({
+              id: r.id,
+              href: '/requests',
+              primary: r.customer.companyName ?? r.customer.contactName,
+              secondary: r.title,
+            }))}
+          />
+        )}
+      </div>
     </AppShell>
+  );
+}
+
+/** قسم مبسّط أسفل الفواتير: عنوان + روابط + آخر خمس مدخلات. */
+function SubSection({
+  title,
+  allHref,
+  newHref,
+  emptyNote,
+  rows,
+}: {
+  title: string;
+  allHref: string;
+  newHref?: string;
+  emptyNote: string;
+  rows: { id: string; href: string; primary: string; secondary?: string; badge?: string; amount?: string }[];
+}) {
+  return (
+    <section className="erp-card p-5">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-brand">{title}</h3>
+        <div className="flex items-center gap-3 text-xs">
+          {newHref && (
+            <Link href={newHref} className="text-brand hover:underline">
+              جديد
+            </Link>
+          )}
+          <Link href={allHref} className="text-txt-3 hover:text-brand hover:underline">
+            عرض الكل
+          </Link>
+        </div>
+      </div>
+      {rows.length === 0 ? (
+        <p className="py-4 text-center text-xs text-txt-4">{emptyNote}</p>
+      ) : (
+        <ul className="divide-y divide-line">
+          {rows.map((r) => (
+            <li key={r.id}>
+              <Link href={r.href} className="flex items-center justify-between gap-3 py-2.5 text-xs transition-colors hover:text-brand">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium text-txt" dir="auto">{r.primary}</span>
+                  {r.secondary && <span className="block truncate text-txt-3">{r.secondary}</span>}
+                </span>
+                {r.badge && <span className="shrink-0 rounded-full bg-card-2 px-2 py-0.5 text-[0.65rem] text-txt-3">{r.badge}</span>}
+                {r.amount && <span className="tnum shrink-0 font-medium text-txt-2">{r.amount}</span>}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

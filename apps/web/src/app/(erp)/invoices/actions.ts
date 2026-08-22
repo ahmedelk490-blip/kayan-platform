@@ -11,17 +11,110 @@ import {
   isInvoiceStatus,
   isPaymentMethod,
   INVOICE_TRANSITIONS,
+  calcLine,
+  calcDocument,
   dec,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
+import { readLines, decimal } from '@/app/(erp)/sales/shared';
 import {
   allocateInvoiceNumber,
   nextPaymentNumber,
   invoiceSettings,
   type FormState,
 } from './shared';
+
+/**
+ * إنشاء فاتورة مبيعات مباشرة — عميل ومنتجات وكميات، بلا عرض سعر ولا أمر بيع.
+ *
+ * هذا ما يحتاجه البيع اليومي: فاتورة كاملة في خطوة واحدة. تُنشأ مسوّدة ثم
+ * تُصدَّر من صفحتها (هناك يُخصَّص الرقم المتسلسل بلا فجوات كأي فاتورة).
+ * الأسعار تُنسخ لحظة الإنشاء فتبقى الفاتورة شاهدةً على ما دُفع فعلاً.
+ */
+export async function createSalesInvoice(_prev: FormState, formData: FormData): Promise<FormState> {
+  const user = await requirePermission('invoices.write');
+
+  const customerId = String(formData.get('customerId') ?? '').trim();
+  if (!customerId) return { fieldErrors: { customerId: 'العميل مطلوب.' } };
+
+  const customer = await prisma.customer.findFirst({
+    where: { id: customerId, tenantId: user.tenantId, isDeleted: false },
+    select: { id: true },
+  });
+  if (!customer) return { fieldErrors: { customerId: 'العميل غير موجود.' } };
+
+  const rawLines = readLines(formData);
+  if (rawLines.length === 0) return { error: 'أضف صنفاً واحداً على الأقل بكمية أكبر من صفر.' };
+
+  // المتغيّرات لبناء الوصف المجمّد ومعرفة المنتج — مقصورة على مستأجر المستخدم.
+  const variants = await prisma.productVariant.findMany({
+    where: { id: { in: rawLines.map((l) => l.variantId) }, product: { tenantId: user.tenantId } },
+    include: {
+      product: { select: { nameAr: true } },
+      color: { select: { nameAr: true } },
+      size: { select: { code: true } },
+    },
+  });
+  const byId = new Map(variants.map((v) => [v.id, v]));
+  if (rawLines.some((l) => !byId.has(l.variantId))) {
+    return { error: 'أحد الأصناف غير صالح. أعد اختيار المنتج.' };
+  }
+
+  const docDiscount = decimal(formData.get('discountAmount'));
+  const docDiscountPct = decimal(formData.get('discountPercent'));
+
+  const computed = rawLines.map((l) => calcLine(l));
+  const totals = calcDocument(computed, {
+    discountAmount: docDiscount,
+    discountPercent: docDiscountPct,
+  });
+
+  const invoice = await prisma.invoice.create({
+    data: {
+      tenantId: user.tenantId,
+      customerId,
+      status: 'DRAFT',
+      subtotal: totals.subtotal.toString(),
+      discountAmount: totals.discountAmount.toString(),
+      taxAmount: totals.taxAmount.toString(),
+      total: totals.total.toString(),
+      notes: String(formData.get('notes') ?? '').trim() || null,
+      createdById: user.id,
+      lines: {
+        create: rawLines.map((l, i) => {
+          const v = byId.get(l.variantId)!;
+          const t = computed[i];
+          return {
+            lineNo: i + 1,
+            productId: v.productId,
+            variantId: v.id,
+            description: [v.product.nameAr, v.color?.nameAr, v.size?.code].filter(Boolean).join(' · '),
+            quantity: dec(l.quantity).toString(),
+            unitPrice: dec(l.unitPrice).toString(),
+            discountAmount: dec(l.discountAmount).toString(),
+            taxRate: dec(l.taxRate).toString(),
+            taxAmount: t.taxAmount.toString(),
+            lineTotal: t.lineTotal.toString(),
+          };
+        }),
+      },
+    },
+  });
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'invoice.create',
+    entityType: 'Invoice',
+    entityId: invoice.id,
+    detail: 'فاتورة مبيعات مباشرة',
+  });
+
+  revalidatePath('/invoices');
+  redirect(`/invoices/${invoice.id}`);
+}
 
 /**
  * Create a draft invoice from a confirmed sales order.
