@@ -38,12 +38,13 @@ export function SectionHeading({
         {eyebrow}
       </span>
 
-      {/* العنوان ضخم جداً ومتمركز: يهيمن على القسم على الموبايل والكمبيوتر.
-          وزن ثقيل وتباعد أسطر مضغوط ليبدو كتلة واحدة قوية. */}
+      {/* عنوان كبير متمركز، لكن بمقاس محترم لا يبتلع الشاشة. تباعد الأسطر
+          فسيح لأن العربية بحروفها الهابطة وعلاماتها تتراكب مع تباعد ضيّق —
+          والمقاس الأدنى صغير كفاية ليقرأ سطرين على الموبايل لا أربعة. */}
       <AnimatedText
         as="h2"
         text={title}
-        className="font-display text-[clamp(2.7rem,7vw,5rem)] font-bold leading-[1.05] tracking-[-0.01em] text-body"
+        className="font-display text-[clamp(1.9rem,3.5vw+1rem,3.25rem)] font-bold leading-[1.5] text-body [text-wrap:balance]"
       />
 
       {lead && (
