@@ -9,6 +9,8 @@ export interface ProductFormOptions {
   materials: Option[];
   printingOptions: Option[];
   embroideryOptions: Option[];
+  colors: Option[];
+  sizes: Option[];
 }
 
 /**
@@ -23,7 +25,7 @@ export function NewProductModal({ options }: { options: ProductFormOptions }) {
     <FormModal
       trigger="منتج جديد"
       title="منتج جديد"
-      description="يُنشأ متغيّر افتراضي تلقائياً — المخزون يُتتبَّع على مستوى المتغيّر."
+      description="اختر الألوان والمقاسات لتُنشأ متغيّراتها وتظهر في المخزون."
       wide
     >
       {(onSuccess) => (
@@ -33,6 +35,9 @@ export function NewProductModal({ options }: { options: ProductFormOptions }) {
           materials={options.materials}
           printingOptions={options.printingOptions}
           embroideryOptions={options.embroideryOptions}
+          colors={options.colors}
+          sizes={options.sizes}
+          showVariants
           submitLabel="حفظ المنتج"
           onSuccess={onSuccess}
         />

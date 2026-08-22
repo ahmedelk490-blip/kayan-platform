@@ -82,7 +82,7 @@ export default async function ProductsPage({
   // Loaded only when the user can actually open it.
   const formOptions = canWrite
     ? await loadProductOptions(user.tenantId)
-    : { categories: [], materials: [], printingOptions: [], embroideryOptions: [] };
+    : { categories: [], materials: [], printingOptions: [], embroideryOptions: [], colors: [], sizes: [] };
 
   return (
     <AppShell user={user} title="المنتجات">

@@ -30,10 +30,14 @@ export default async function NewProductPage() {
           materials={options.materials}
           printingOptions={options.printingOptions}
           embroideryOptions={options.embroideryOptions}
+          colors={options.colors}
+          sizes={options.sizes}
+          showVariants
           submitLabel="إنشاء المنتج"
         />
         <p className="mt-4 text-[0.7rem] text-txt-4">
-          يُنشأ متغيّر افتراضي تلقائياً — المخزون يُتتبَّع على مستوى المتغيّر وليس المنتج.
+          بلا اختيار ألوان أو مقاسات يُنشأ متغيّر افتراضي واحد. المخزون يُتتبَّع على
+          مستوى المتغيّر — كل لون/مقاس يظهر في المخزون فور الإنشاء.
         </p>
       </div>
     </AppShell>

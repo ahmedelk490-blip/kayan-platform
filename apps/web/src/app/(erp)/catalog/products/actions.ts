@@ -83,6 +83,55 @@ async function createProductCore(
   });
   if (clash) return { state: { fieldErrors: { sku: 'هذا الكود مستخدم بالفعل.' } } };
 
+  // المتغيّرات من الألوان والمقاسات المختارة عند الإنشاء — بدل خطوة لاحقة على
+  // صفحة المنتج. لكل (لون×مقاس) متغيّر، أو للألوان وحدها، أو للمقاسات وحدها،
+  // وإلا متغيّر افتراضي واحد. المخزون يُتتبَّع على المتغيّر، فهكذا تظهر
+  // المقاسات والألوان في المخزون فوراً.
+  const colorIds = formData.getAll('colorIds').map(String).filter(Boolean);
+  const sizeIds = formData.getAll('sizeIds').map(String).filter(Boolean);
+  const [colors, sizes] = await Promise.all([
+    colorIds.length
+      ? prisma.color.findMany({
+          where: { tenantId: user.tenantId, id: { in: colorIds }, isDeleted: false },
+          orderBy: { sortOrder: 'asc' },
+          select: { id: true, nameEn: true },
+        })
+      : Promise.resolve([]),
+    sizeIds.length
+      ? prisma.size.findMany({
+          where: { tenantId: user.tenantId, id: { in: sizeIds }, isDeleted: false },
+          orderBy: { sortOrder: 'asc' },
+          select: { id: true, code: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const base = parsed.data.sku;
+  // رمز اللون: الإنجليزي إن وُجد وإلا مقطع من المعرّف — كما في إضافة الألوان.
+  const colorSku = (c: { nameEn: string | null; id: string }) =>
+    (c.nameEn || c.id.slice(-4)).replace(/\s+/g, '-').toUpperCase();
+
+  type NewVariant = { sku: string; colorId?: string | null; sizeId?: string | null };
+  let variantData: NewVariant[] = [];
+  if (colors.length && sizes.length) {
+    for (const c of colors)
+      for (const s of sizes)
+        variantData.push({ sku: `${base}-${colorSku(c)}-${s.code}`, colorId: c.id, sizeId: s.id });
+  } else if (colors.length) {
+    for (const c of colors) variantData.push({ sku: `${base}-${colorSku(c)}`, colorId: c.id });
+  } else if (sizes.length) {
+    for (const s of sizes) variantData.push({ sku: `${base}-${s.code}`, sizeId: s.id });
+  } else {
+    // Every product needs one stockable unit; stock lives on the variant.
+    variantData = [{ sku: `${base}-DEF` }];
+  }
+
+  if (variantData.length > 300) {
+    return {
+      state: { error: 'عدد المتغيّرات كبير جداً (الألوان × المقاسات). قلّل الاختيار.' },
+    };
+  }
+
   const created = await prisma.product.create({
     data: {
       tenantId: user.tenantId,
@@ -95,10 +144,24 @@ async function createProductCore(
       cost: num(parsed.data.cost),
       sellingPrice: num(parsed.data.sellingPrice),
       status: parsed.data.status,
-      // Every product needs one stockable unit; stock lives on the variant.
-      variants: { create: { sku: `${parsed.data.sku}-DEF` } },
+      variants: { create: variantData },
     },
+    include: { variants: { select: { id: true } } },
   });
+
+  // صفّ مخزون بصفر لكل متغيّر في المخزن الرئيسي، ليظهر المنتج في أرصدة
+  // المخزون فور إنشائه بدل أن يغيب حتى يُسجَّل له رصيد.
+  const warehouse = await prisma.warehouse.findFirst({
+    where: { tenantId: user.tenantId, isDeleted: false },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  if (warehouse && created.variants.length > 0) {
+    await prisma.stock.createMany({
+      data: created.variants.map((v) => ({ variantId: v.id, warehouseId: warehouse.id })),
+      skipDuplicates: true,
+    });
+  }
 
   await syncLinks(created.id, formData);
   await audit({
