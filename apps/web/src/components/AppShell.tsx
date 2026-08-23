@@ -58,7 +58,9 @@ const NAV: NavItem[] = [
 
   { href: '/purchasing', label: 'المشتريات', permission: 'purchasing.view', built: true, group: 'المشتريات' },
   { href: '/suppliers', label: 'الموردون', permission: 'suppliers.read', built: true, group: 'المشتريات' },
-  { href: '/expenses', label: 'المصروفات الثانوية', permission: 'expenses.view', built: true, group: 'المشتريات' },
+
+  // المصروفات قسم مستقل بذاته — بطلب المالك لمتابعتها منعزلة عن المشتريات.
+  { href: '/expenses', label: 'المصروفات', permission: 'expenses.view', built: true, group: 'المصروفات' },
 
   { href: '/catalog/products', label: 'المنتجات', permission: 'products.read', built: true, group: 'المنتجات' },
   { href: '/catalog/categories', label: 'التصنيفات والقوائم', permission: 'products.read', built: true, group: 'المنتجات' },
@@ -82,6 +84,7 @@ const GROUP_ORDER = [
   'المبيعات',
   'المخزون',
   'المشتريات',
+  'المصروفات',
   'المنتجات',
   'العملاء',
   'التقارير',
