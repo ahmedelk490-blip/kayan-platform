@@ -19,3 +19,4 @@ export * from './invoicing.ts';
 export * from './reporting.ts';
 export * from './pricing.ts';
 export * from './consumption.ts';
+export * from './hr.ts';

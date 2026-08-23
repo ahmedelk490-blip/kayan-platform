@@ -114,6 +114,7 @@ model Tenant {
   priceTiers PriceTier[]
   siteContent SiteContent[]
   heroSlides HeroSlide[]
+  employeePayments EmployeePayment[]
 }
 
 model Company {
@@ -181,6 +182,11 @@ model User {
   lastLoginAt  DateTime?
   failedLogins Int       @default(0)
   lockedUntil  DateTime?
+
+  /// راتب شهري ثابت للموظف (اختياري) ونسبة عمولته من أرباح فواتيره.
+  monthlySalary     Decimal? @db.Decimal(19, 4)
+  commissionPercent Decimal? @db.Decimal(19, 4)
+
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -215,9 +221,46 @@ model User {
   invoicesIssued        Invoice[]           @relation("InvoiceIssuer")
   invoicesCreated       Invoice[]           @relation("InvoiceCreator")
   paymentsRecorded      Payment[]
+  employeePayments      EmployeePayment[]   @relation("EmployeePaymentEmployee")
+  employeePaymentsMade  EmployeePayment[]   @relation("EmployeePaymentCreator")
 
   @@index([tenantId])
   @@index([roleId])
+}
+
+/// دفعة/خصم للموظف: راتب، عمولة، مقابل خدمة، مكافأة، خصم، سلفة.
+///
+/// سجلّ واحد لكل حركة مالية مع الموظف، لتُجمَّع في كشف مستحقاته: الموجب
+/// يُدفع له (SALARY/COMMISSION/SERVICE/BONUS) والسالب يُخصم (DEDUCTION/ADVANCE).
+model EmployeePayment {
+  id         String   @id @default(cuid())
+  tenantId   String
+  number     String
+  employeeId String
+
+  /// SALARY | COMMISSION | SERVICE | BONUS | DEDUCTION | ADVANCE
+  kind   String
+  amount Decimal @db.Decimal(19, 4)
+  paidAt DateTime @default(now())
+
+  /// للراتب: الشهر والسنة اللذان يخصّهما، لتفادي ازدواج صرف الشهر.
+  periodMonth Int?
+  periodYear  Int?
+
+  note        String?
+  createdById String?
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee  User   @relation("EmployeePaymentEmployee", fields: [employeeId], references: [id])
+  createdBy User?  @relation("EmployeePaymentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, employeeId])
+  @@index([tenantId, paidAt])
 }
 
 model Role {

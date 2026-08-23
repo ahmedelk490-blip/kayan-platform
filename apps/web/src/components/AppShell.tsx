@@ -68,6 +68,7 @@ const NAV: NavItem[] = [
   { href: '/reports', label: 'التقارير', permission: 'reports.view', built: true, group: 'التقارير' },
 
   { href: '/users', label: 'حسابات الفريق', permission: 'users.manage', built: true, group: 'الإدارة' },
+  { href: '/hr', label: 'الرواتب والموظفين', permission: 'users.manage', built: true, group: 'الإدارة' },
   { href: '/content', label: 'نصوص الموقع', permission: 'settings.manage', built: true, group: 'الإدارة' },
   { href: '/content/hero', label: 'صور الواجهة', permission: 'settings.manage', built: true, group: 'الإدارة' },
   { href: '/settings', label: 'الإعدادات المالية', permission: 'settings.manage', built: true, group: 'الإدارة' },
