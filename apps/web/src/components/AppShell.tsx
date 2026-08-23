@@ -106,12 +106,15 @@ export function AppShell({
     links: items.filter((i) => i.group === title),
   })).filter((g) => g.links.length > 0);
 
-  const initials = (user.nameAr ?? user.name)
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join('');
+  // آمن ضد الاسم الفارغ: لو الاسمان فارغان لا نستدعي split على null فيسقط
+  // الشِّل كله (كل صفحات ERP). نرجع حرفاً بديلاً بدل الانهيار.
+  const initials =
+    (user.nameAr ?? user.name ?? '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0])
+      .join('') || '؟';
 
   return (
     <div className="flex min-h-screen">
