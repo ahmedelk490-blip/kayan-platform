@@ -24,6 +24,7 @@ import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 import { QuickActions, type QuickAction } from '@/components/dashboard/QuickActions';
 import { IconCategory, IconProduct, IconUsers, IconBell } from '@/components/dashboard/Icons';
 import { BarChartInteractive } from '@/components/dashboard/BarChartInteractive';
+import { HBarChartInteractive } from '@/components/dashboard/HBarChartInteractive';
 
 export const metadata: Metadata = { title: 'لوحة المبيعات' };
 
@@ -133,6 +134,29 @@ export default async function SalesDashboard() {
     display: formatMoney(p.value),
   }));
 
+  // أفضل المنتجات مبيعاً هذه السنة — من بنود الفواتير الصادرة.
+  const invoiceLines = seeMoney
+    ? await prisma.invoiceLine.findMany({
+        where: {
+          invoice: {
+            tenantId,
+            isDeleted: false,
+            status: { notIn: ['DRAFT', 'VOID'] },
+            issueDate: { gte: from, lte: to },
+          },
+        },
+        select: { description: true, lineTotal: true },
+      })
+    : [];
+  const byProduct = new Map<string, ReturnType<typeof dec>>();
+  for (const l of invoiceLines) {
+    byProduct.set(l.description, (byProduct.get(l.description) ?? dec(0)).plus(dec(l.lineTotal)));
+  }
+  const topProducts = [...byProduct.entries()]
+    .sort((a, b) => b[1].minus(a[1]).toNumber())
+    .slice(0, 6)
+    .map(([label, value]) => ({ label, value: value.toNumber(), display: formatMoney(value) }));
+
   const actions: QuickAction[] = [
     { href: '/sales/quotations/new', label: 'عرض سعر جديد', description: `${openQuotations} عرض مفتوح`, available: seeDocs },
     { href: '/sales/orders/new', label: 'أمر بيع جديد', description: `${orderTotal} أمر`, available: seeDocs },
@@ -187,6 +211,16 @@ export default async function SalesDashboard() {
               ) : (
                 <BarChartInteractive points={chartPoints} />
               )}
+            </div>
+          </section>
+        )}
+
+        {/* رسم تفاعلي: أفضل المنتجات مبيعاً — أعمدة أفقية بالمرور. */}
+        {seeMoney && topProducts.length > 0 && (
+          <section>
+            <SectionTitle note="من قيمة بنود الفواتير الصادرة">أفضل المنتجات مبيعاً</SectionTitle>
+            <div className="erp-card p-6">
+              <HBarChartInteractive points={topProducts} />
             </div>
           </section>
         )}
