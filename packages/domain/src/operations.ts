@@ -22,6 +22,16 @@ export const EXPENSE_CATEGORIES = [
   'OFFICE',
   'MAINTENANCE',
   'RENT',
+  // بنود تخصّ التشغيل والمشتريات — تُخصم من الربح في التقرير المالي.
+  'SUPPLIES',
+  'INK',
+  'PRINTING_ROLL',
+  'THREAD',
+  'RAW_MATERIAL',
+  'EQUIPMENT',
+  'SHIPPING',
+  'PACKAGING',
+  'ADVERTISING',
   'OTHER',
 ] as const;
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
@@ -37,6 +47,15 @@ export const EXPENSE_CATEGORY_AR: Record<ExpenseCategory, string> = {
   OFFICE: 'أدوات مكتبية',
   MAINTENANCE: 'صيانة',
   RENT: 'إيجار',
+  SUPPLIES: 'مستلزمات ولوازم',
+  INK: 'أحبار',
+  PRINTING_ROLL: 'رولات طباعة',
+  THREAD: 'خيوط',
+  RAW_MATERIAL: 'خامات',
+  EQUIPMENT: 'معدات وأدوات',
+  SHIPPING: 'شحن وتوصيل',
+  PACKAGING: 'تغليف',
+  ADVERTISING: 'دعاية وإعلان',
   OTHER: 'أخرى',
 };
 
