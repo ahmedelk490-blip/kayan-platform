@@ -5,7 +5,7 @@ import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
-import { CompensationModal, PaymentModal } from './HRForms';
+import { CompensationModal, PaymentModal, SalaryRunModal } from './HRForms';
 
 export const metadata: Metadata = { title: 'الرواتب والموظفين' };
 
@@ -44,7 +44,12 @@ export default async function HRPage() {
       <ModuleHeader
         title="الرواتب والموظفين"
         count={employees.length}
-        action={<PaymentModal employees={employeeOptions} />}
+        action={
+          <div className="flex gap-2">
+            <SalaryRunModal />
+            <PaymentModal employees={employeeOptions} />
+          </div>
+        }
       />
 
       <Table

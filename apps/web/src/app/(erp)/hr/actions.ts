@@ -139,6 +139,72 @@ export async function recordEmployeePayment(
   return { ok: `تم تسجيل ${number}.` };
 }
 
+/**
+ * صرف رواتب شهر لكل الموظفين ذوي الراتب الثابت — بضغطة واحدة.
+ *
+ * idempotent لكل (موظف، شهر، سنة): من صُرف له راتب هذا الشهر لا يُصرف له
+ * ثانيةً، فتكرار الضغط لا يزدوج الصرف.
+ */
+export async function runMonthlySalaries(_prev: FormState, formData: FormData): Promise<FormState> {
+  const user = await requirePermission('users.manage');
+
+  const month = num(formData.get('month'));
+  const year = num(formData.get('year'));
+  if (month === null || month < 1 || month > 12) return { fieldErrors: { month: 'الشهر بين 1 و12.' } };
+  if (year === null || year < 2000) return { fieldErrors: { year: 'سنة غير صالحة.' } };
+
+  const employees = await prisma.user.findMany({
+    where: { tenantId: user.tenantId, isActive: true, monthlySalary: { gt: 0 } },
+    select: { id: true, monthlySalary: true },
+  });
+  if (employees.length === 0) return { error: 'لا يوجد موظفون براتب ثابت محدَّد.' };
+
+  const existing = await prisma.employeePayment.findMany({
+    where: { tenantId: user.tenantId, isDeleted: false, kind: 'SALARY', periodMonth: month, periodYear: year },
+    select: { employeeId: true },
+  });
+  const alreadyPaid = new Set(existing.map((e) => e.employeeId));
+
+  let created = 0;
+  let skipped = 0;
+  for (const e of employees) {
+    if (alreadyPaid.has(e.id) || e.monthlySalary === null) {
+      skipped += 1;
+      continue;
+    }
+    const number = await nextPaymentNumber(user.tenantId);
+    await prisma.employeePayment.create({
+      data: {
+        tenantId: user.tenantId,
+        number,
+        employeeId: e.id,
+        kind: 'SALARY',
+        amount: e.monthlySalary,
+        paidAt: new Date(),
+        periodMonth: month,
+        periodYear: year,
+        note: `راتب شهر ${month}/${year}`,
+        createdById: user.id,
+      },
+    });
+    created += 1;
+  }
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'employee.salary.run',
+    entityType: 'Tenant',
+    entityId: user.tenantId,
+    detail: `${month}/${year}: صُرف ${created}، تُخطّي ${skipped}`,
+  });
+
+  revalidatePath('/hr');
+  return {
+    ok: `تم صرف ${created} راتب لشهر ${month}/${year}${skipped ? `، وتخطّي ${skipped} مصروف سلفاً` : ''}.`,
+  };
+}
+
 /** حذف دفعة (soft-delete). */
 export async function deleteEmployeePayment(id: string): Promise<void> {
   const user = await requirePermission('users.manage');

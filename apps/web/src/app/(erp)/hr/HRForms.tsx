@@ -5,7 +5,7 @@ import { EMPLOYEE_PAYMENT_KINDS, EMPLOYEE_PAYMENT_KIND_AR, type EmployeePaymentK
 import { Field, Select, TextArea, SubmitButton, FormError } from '@/components/crud/Form';
 import { EditModal, FormModal } from '@/components/crud/FormModal';
 import { useFormSuccess } from '@/components/crud/useFormSuccess';
-import { setCompensation, recordEmployeePayment, type FormState } from './actions';
+import { setCompensation, recordEmployeePayment, runMonthlySalaries, type FormState } from './actions';
 
 const KIND_OPTIONS = EMPLOYEE_PAYMENT_KINDS.map((k) => ({
   value: k,
@@ -93,6 +93,35 @@ export function PaymentModal({
         <PaymentForm employees={employees} defaultEmployeeId={defaultEmployeeId} onSuccess={onSuccess} />
       )}
     </FormModal>
+  );
+}
+
+/** صرف رواتب الشهر لكل الموظفين بضغطة. */
+export function SalaryRunModal() {
+  const now = new Date();
+  return (
+    <FormModal trigger="صرف رواتب الشهر" title="صرف رواتب الشهر">
+      {(onSuccess) => <SalaryRunForm month={now.getMonth() + 1} year={now.getFullYear()} onSuccess={onSuccess} />}
+    </FormModal>
+  );
+}
+
+function SalaryRunForm({ month, year, onSuccess }: { month: number; year: number; onSuccess: () => void }) {
+  const [state, action] = useActionState<FormState, FormData>(runMonthlySalaries, {});
+  useFormSuccess(state.ok, onSuccess);
+  return (
+    <form action={action} className="space-y-4" noValidate>
+      <FormError message={state.error} />
+      <p className="text-xs leading-[1.9] text-txt-3">
+        يصرف الراتب الشهري لكل موظف براتب ثابت. آمن للتكرار — من صُرف له هذا الشهر لا يُصرف له
+        ثانيةً.
+      </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field name="month" label="الشهر (1–12)" type="number" dir="ltr" required defaultValue={month} errors={state.fieldErrors} />
+        <Field name="year" label="السنة" type="number" dir="ltr" required defaultValue={year} errors={state.fieldErrors} />
+      </div>
+      <SubmitButton label="صرف الرواتب" />
+    </form>
   );
 }
 

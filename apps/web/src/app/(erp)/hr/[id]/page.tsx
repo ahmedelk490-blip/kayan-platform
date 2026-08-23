@@ -92,6 +92,7 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
         action={
           <div className="flex gap-2">
             <PaymentModal employees={[{ value: id, label: name }]} defaultEmployeeId={id} trigger="تسجيل دفعة" />
+            <a href={`/hr/${id}/export`} className="erp-btn-ghost">تصدير Excel</a>
             <Link href="/hr" className="erp-btn-ghost">رجوع</Link>
           </div>
         }
