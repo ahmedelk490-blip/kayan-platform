@@ -15,6 +15,7 @@ export const REPORTS = [
   { href: '/reports/inventory', title: 'تقييم المخزون', body: 'الرصيد الحالي بالتكلفة.' },
   { href: '/reports/production', title: 'إنتاجية التصنيع', body: 'أوامر الإنتاج وزمن الدورة.' },
   { href: '/reports/profitability', title: 'ربحية المنتجات', body: 'الإيراد مقابل التكلفة المحفوظة.' },
+  { href: '/reports/employees', title: 'ربحية الموظفين', body: 'ربح كل موظف من فواتيره.' },
 ] as const;
 
 export function PeriodTabs({ basePath, active }: { basePath: string; active: Period }) {
