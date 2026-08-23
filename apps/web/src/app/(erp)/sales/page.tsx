@@ -9,6 +9,8 @@ import {
   ORDER_STATUSES,
   ORDER_STATUS_AR,
   RECEIVABLE_STATUSES,
+  monthlySeries,
+  periodRange,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
@@ -21,6 +23,7 @@ import { Donut } from '@/components/dashboard/Donut';
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 import { QuickActions, type QuickAction } from '@/components/dashboard/QuickActions';
 import { IconCategory, IconProduct, IconUsers, IconBell } from '@/components/dashboard/Icons';
+import { BarChartInteractive } from '@/components/dashboard/BarChartInteractive';
 
 export const metadata: Metadata = { title: 'لوحة المبيعات' };
 
@@ -106,6 +109,30 @@ export default async function SalesDashboard() {
     .filter((i) => RECEIVABLE_STATUSES.includes(i.status as never))
     .reduce((s, i) => s.plus(balance(i.total, i.paidAmount)), dec(0));
 
+  // سلسلة المبيعات الشهرية لهذه السنة، للرسم التفاعلي.
+  const { from, to } = periodRange('YEAR');
+  const monthlyInvoices = seeMoney
+    ? await prisma.invoice.findMany({
+        where: {
+          tenantId,
+          isDeleted: false,
+          status: { notIn: ['DRAFT', 'VOID'] },
+          issueDate: { gte: from, lte: to },
+        },
+        select: { total: true, issueDate: true },
+      })
+    : [];
+  const salesSeries = monthlySeries(
+    monthlyInvoices.map((i) => ({ date: i.issueDate as Date, amount: i.total })),
+    from,
+    to,
+  );
+  const chartPoints = salesSeries.map((p) => ({
+    label: p.key.slice(-2),
+    value: dec(p.value).toNumber(),
+    display: formatMoney(p.value),
+  }));
+
   const actions: QuickAction[] = [
     { href: '/sales/quotations/new', label: 'عرض سعر جديد', description: `${openQuotations} عرض مفتوح`, available: seeDocs },
     { href: '/sales/orders/new', label: 'أمر بيع جديد', description: `${orderTotal} أمر`, available: seeDocs },
@@ -145,6 +172,20 @@ export default async function SalesDashboard() {
               <Donut label="الأوامر المسلَّمة" value={deliveredOrders} max={orderTotal || 1} center={`${deliveredOrders}/${orderTotal}`} sub="مُسلَّم ومكتمل" tone="brand" />
               {seeMoney && (
                 <Donut label="نسبة التحصيل" value={Number(collected)} max={Number(invoiced) || 1} sub={`${formatMoney(collected)} من ${formatMoney(invoiced)}`} tone={dec(outstanding).gt(0) ? 'warn' : 'ok'} />
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* رسم تفاعلي: المبيعات المفوترة شهرياً — المرور يُظهر قيمة كل شهر. */}
+        {seeMoney && (
+          <section>
+            <SectionTitle note="مرِّر على أي عمود لرؤية قيمة الشهر">المبيعات شهرياً</SectionTitle>
+            <div className="erp-card p-6">
+              {chartPoints.every((p) => p.value === 0) ? (
+                <p className="py-8 text-center text-sm text-txt-3">لا فواتير صادرة هذه السنة بعد.</p>
+              ) : (
+                <BarChartInteractive points={chartPoints} />
               )}
             </div>
           </section>
