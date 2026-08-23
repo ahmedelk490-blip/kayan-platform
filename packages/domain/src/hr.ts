@@ -11,6 +11,7 @@ export const EMPLOYEE_PAYMENT_KINDS = [
   'BONUS',
   'ADVANCE',
   'DEDUCTION',
+  'LOSS',
 ] as const;
 export type EmployeePaymentKind = (typeof EMPLOYEE_PAYMENT_KINDS)[number];
 
@@ -21,10 +22,14 @@ export const EMPLOYEE_PAYMENT_KIND_AR: Record<EmployeePaymentKind, string> = {
   BONUS: 'مكافأة',
   ADVANCE: 'سلفة',
   DEDUCTION: 'خصم',
+  LOSS: 'خسارة محمّلة',
 };
 
-/** الخصم يُنقص من مستحقات الموظف؛ الباقي يُدفع له. */
-export const DEDUCTION_KINDS: EmployeePaymentKind[] = ['DEDUCTION'];
+/**
+ * ما يُحمَّل على الموظف ويُنقص من مستحقاته: الخصم، والخسارة، والسلفة (مبلغ
+ * أخذه ويُسترَدّ). الباقي يُدفع له.
+ */
+export const DEDUCTION_KINDS: EmployeePaymentKind[] = ['DEDUCTION', 'LOSS', 'ADVANCE'];
 
 export function isEmployeePaymentKind(v: string): v is EmployeePaymentKind {
   return (EMPLOYEE_PAYMENT_KINDS as readonly string[]).includes(v);

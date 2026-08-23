@@ -54,7 +54,7 @@ export function ExpenseForm({
         />
       </div>
 
-      <TextArea name="notes" label="ملاحظات" rows={2} />
+      <TextArea name="notes" label="اسم البند / الوصف (اكتب الصنف الذي اشتريته)" rows={2} />
 
       <div className="flex items-center gap-3">
         <SubmitButton label="تسجيل المصروف" />

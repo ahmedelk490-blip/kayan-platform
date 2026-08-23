@@ -46,6 +46,7 @@ const NAV: NavItem[] = [
   // المبيعات = فواتير المبيعات أولاً (هو المطلوب يومياً)، وتبويب واحد لفواتير
   // الشراء. عروض الأسعار وأوامر البيع وطلبات الموقع صارت أقساماً أسفل شاشة
   // الفواتير, لا تبويبات مستقلة — بطلب المالك.
+  { href: '/sales', label: 'لوحة المبيعات', permission: 'sales.view', built: true, group: 'المبيعات' },
   { href: '/invoices', label: 'فواتير المبيعات', permission: 'invoices.view', built: true, group: 'المبيعات' },
   { href: '/sales/purchase-invoices', label: 'فواتير الشراء', permission: 'purchasing.view', built: true, group: 'المبيعات' },
 

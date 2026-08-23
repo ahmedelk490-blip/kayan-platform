@@ -98,11 +98,17 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
         }
       />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Figure label="الراتب الشهري" value={employee.monthlySalary === null ? '—' : formatMoney(employee.monthlySalary)} hint={employee.role.nameAr} />
         <Figure label={`ربح فواتيره (${year})`} value={formatMoney(profit)} hint={`${invoices.length} فاتورة`} strong tone={profit.lt(0) ? 'bad' : undefined} />
         <Figure label="العمولة المستحقة" value={formatMoney(commissionDue)} hint={`${commissionRate.toFixed(1)}٪ من الربح`} />
-        <Figure label="صافي المصروف له" value={formatMoney(netPaid)} hint="مدفوعات ناقص خصومات وجزاءات" strong tone={netPaid.lt(0) ? 'warn' : undefined} />
+        <Figure
+          label="المحمّل عليه"
+          value={formatMoney(deducted.plus(penaltyTotal))}
+          hint="خصومات وخسائر وسلف + جزاءات"
+          tone={deducted.plus(penaltyTotal).gt(0) ? 'warn' : undefined}
+        />
+        <Figure label="صافي المصروف له" value={formatMoney(netPaid)} hint="مدفوعات ناقص المحمّل" strong tone={netPaid.lt(0) ? 'warn' : undefined} />
       </div>
 
       {penaltyTotal.gt(0) && (
