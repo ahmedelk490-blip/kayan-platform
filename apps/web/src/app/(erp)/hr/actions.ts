@@ -75,6 +75,56 @@ export async function setCompensation(
   return { ok: 'تم حفظ الراتب والعمولة.' };
 }
 
+/** تعديل بيانات الموظف: الاسم، الدور، الراتب، العمولة — في مكان واحد. */
+export async function updateEmployee(
+  employeeId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requirePermission('users.manage');
+
+  const employee = await prisma.user.findFirst({
+    where: { id: employeeId, tenantId: user.tenantId },
+    select: { id: true },
+  });
+  if (!employee) return { error: 'الموظف غير موجود.' };
+
+  const nameAr = String(formData.get('nameAr') ?? '').trim();
+  if (nameAr.length < 2) return { fieldErrors: { nameAr: 'الاسم مطلوب.' } };
+
+  const roleKey = String(formData.get('roleKey') ?? '').trim();
+  const role = roleKey ? await prisma.role.findFirst({ where: { key: roleKey }, select: { id: true } }) : null;
+
+  const salary = num(formData.get('monthlySalary'));
+  const commission = num(formData.get('commissionPercent'));
+  if (commission !== null && (commission < 0 || commission > 100))
+    return { fieldErrors: { commissionPercent: 'النسبة بين 0 و100.' } };
+
+  await prisma.user.update({
+    where: { id: employeeId },
+    data: {
+      nameAr,
+      name: nameAr,
+      ...(role ? { roleId: role.id } : {}),
+      monthlySalary: salary,
+      commissionPercent: commission,
+    },
+  });
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'employee.update',
+    entityType: 'User',
+    entityId: employeeId,
+    detail: nameAr,
+  });
+
+  revalidatePath('/hr');
+  revalidatePath(`/hr/${employeeId}`);
+  return { ok: 'تم حفظ بيانات الموظف.' };
+}
+
 const PaymentSchema = z.object({
   employeeId: z.string().min(1, 'الموظف مطلوب.'),
   kind: z.string().refine(isEmployeePaymentKind, 'نوع الدفعة غير معروف.'),

@@ -5,32 +5,45 @@ import { EMPLOYEE_PAYMENT_KINDS, EMPLOYEE_PAYMENT_KIND_AR, type EmployeePaymentK
 import { Field, Select, TextArea, SubmitButton, FormError } from '@/components/crud/Form';
 import { EditModal, FormModal } from '@/components/crud/FormModal';
 import { useFormSuccess } from '@/components/crud/useFormSuccess';
-import { setCompensation, recordEmployeePayment, runMonthlySalaries, type FormState } from './actions';
+import { updateEmployee, recordEmployeePayment, runMonthlySalaries, type FormState } from './actions';
+import { createUser, setUserActive } from '@/app/(erp)/users/actions';
 
 const KIND_OPTIONS = EMPLOYEE_PAYMENT_KINDS.map((k) => ({
   value: k,
   label: EMPLOYEE_PAYMENT_KIND_AR[k as EmployeePaymentKind],
 }));
 
-/** تعديل راتب الموظف الشهري ونسبة عمولته. */
-export function CompensationModal({
+interface RoleOption {
+  value: string;
+  label: string;
+}
+
+/** تعديل بيانات الموظف: الاسم، الدور، الراتب، العمولة. */
+export function EmployeeEditModal({
   employeeId,
   employeeName,
+  roleKey,
   salary,
   commission,
+  roles,
 }: {
   employeeId: string;
   employeeName: string;
+  roleKey: string;
   salary: number | null;
   commission: number | null;
+  roles: RoleOption[];
 }) {
   return (
-    <EditModal label="الراتب/العمولة" title={`راتب وعمولة ${employeeName}`}>
+    <EditModal label="تعديل" title={`تعديل ${employeeName}`}>
       {(onSuccess) => (
-        <CompensationForm
+        <EmployeeEditForm
           employeeId={employeeId}
+          employeeName={employeeName}
+          roleKey={roleKey}
           salary={salary}
           commission={commission}
+          roles={roles}
           onSuccess={onSuccess}
         />
       )}
@@ -38,41 +51,72 @@ export function CompensationModal({
   );
 }
 
-function CompensationForm({
+function EmployeeEditForm({
   employeeId,
+  employeeName,
+  roleKey,
   salary,
   commission,
+  roles,
   onSuccess,
 }: {
   employeeId: string;
+  employeeName: string;
+  roleKey: string;
   salary: number | null;
   commission: number | null;
+  roles: RoleOption[];
   onSuccess: () => void;
 }) {
-  const [state, action] = useActionState<FormState, FormData>(setCompensation.bind(null, employeeId), {});
+  const [state, action] = useActionState<FormState, FormData>(updateEmployee.bind(null, employeeId), {});
   useFormSuccess(state.ok, onSuccess);
   return (
     <form action={action} className="space-y-4" noValidate>
       <FormError message={state.error} />
-      <Field
-        name="monthlySalary"
-        label="الراتب الشهري"
-        type="number"
-        dir="ltr"
-        defaultValue={salary ?? ''}
-        errors={state.fieldErrors}
-        hint="اتركه فارغاً لو الموظف بلا راتب ثابت"
-      />
-      <Field
-        name="commissionPercent"
-        label="نسبة العمولة %"
-        type="number"
-        dir="ltr"
-        defaultValue={commission ?? ''}
-        errors={state.fieldErrors}
-        hint="نسبة من أرباح فواتير الموظف (0–100)"
-      />
+      <Field name="nameAr" label="اسم الموظف" required defaultValue={employeeName} errors={state.fieldErrors} />
+      <Select name="roleKey" label="الدور" options={roles} defaultValue={roleKey} errors={state.fieldErrors} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field name="monthlySalary" label="الراتب الشهري" type="number" dir="ltr" defaultValue={salary ?? ''} errors={state.fieldErrors} hint="فارغ = بلا راتب ثابت" />
+        <Field name="commissionPercent" label="نسبة العمولة %" type="number" dir="ltr" defaultValue={commission ?? ''} errors={state.fieldErrors} hint="0–100" />
+      </div>
       <SubmitButton label="حفظ" />
+    </form>
+  );
+}
+
+/** إضافة موظف جديد (حساب + راتب اختياري). */
+export function EmployeeCreateModal({ roles }: { roles: RoleOption[] }) {
+  return (
+    <FormModal trigger="موظف جديد" title="موظف جديد">
+      {(onSuccess) => <EmployeeCreateForm roles={roles} onSuccess={onSuccess} />}
+    </FormModal>
+  );
+}
+
+function EmployeeCreateForm({ roles, onSuccess }: { roles: RoleOption[]; onSuccess: () => void }) {
+  const [state, action] = useActionState<FormState, FormData>(createUser, {});
+  useFormSuccess(state.ok, onSuccess);
+  return (
+    <form action={action} className="space-y-4" noValidate>
+      <FormError message={state.error} />
+      <Field name="nameAr" label="اسم الموظف" required errors={state.fieldErrors} />
+      <Field name="email" label="البريد الإلكتروني (للدخول)" type="email" dir="ltr" required errors={state.fieldErrors} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Select name="roleKey" label="الدور" required options={roles} placeholder="اختر الدور" errors={state.fieldErrors} />
+        <Field name="password" label="كلمة المرور" type="password" required errors={state.fieldErrors} hint="8 أحرف على الأقل" />
+      </div>
+      <SubmitButton label="إنشاء الموظف" />
+    </form>
+  );
+}
+
+/** تفعيل/إيقاف موظف — الإيقاف بديل الحذف (يحفظ السجلّ والفواتير المربوطة). */
+export function EmployeeActiveToggle({ employeeId, active }: { employeeId: string; active: boolean }) {
+  return (
+    <form action={setUserActive.bind(null, employeeId, !active)}>
+      <button type="submit" className={`text-xs hover:underline ${active ? 'text-bad' : 'text-ok'}`}>
+        {active ? 'إيقاف' : 'تفعيل'}
+      </button>
     </form>
   );
 }
