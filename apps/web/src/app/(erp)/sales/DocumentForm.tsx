@@ -6,7 +6,10 @@ import {
   calcDocument,
   formatMoney,
   applicableTier,
+  dec,
   PRICE_SERVICE_AR,
+  PAYMENT_METHODS,
+  PAYMENT_METHOD_AR,
   type PriceService,
 } from '@erp/domain';
 import { Field, TextArea, Select, SubmitButton, FormError } from '@/components/crud/Form';
@@ -158,6 +161,7 @@ export function DocumentForm({
   values,
   labels,
   submitLabel,
+  instantIssue = false,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   customers: { value: string; label: string }[];
@@ -165,6 +169,8 @@ export function DocumentForm({
   values?: DocValues;
   labels: { dateA: string; dateB: string };
   submitLabel?: string;
+  /** يُتيح «إصدار وتحصيل فوري» — خاص بالفاتورة المباشرة فقط. */
+  instantIssue?: boolean;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const [lines, setLines] = useState<DocLine[]>(() =>
@@ -172,6 +178,9 @@ export function DocumentForm({
   );
   const [docDiscount, setDocDiscount] = useState(values?.discountAmount ?? 0);
   const [docDiscountPct, setDocDiscountPct] = useState(values?.discountPercent ?? 0);
+  const [issueNow, setIssueNow] = useState(false);
+  const [payMethod, setPayMethod] = useState('CASH');
+  const [payAmount, setPayAmount] = useState(0);
 
   const products = productsOf(variants);
 
@@ -437,6 +446,78 @@ export function DocumentForm({
         </p>
       )}
 
+      {/* ٣.٥ إصدار وتحصيل فوري — للفاتورة المباشرة فقط. العميل الذي يدفع في
+          الحال يخرج بفاتورة مُصدَرة ومُحصَّلة بضغطة، بلا خطوتَي إصدار وتحصيل
+          منفصلتين. الخادم يُخصّص الرقم المتسلسل ويسجّل الدفعة في معاملة واحدة. */}
+      {instantIssue && (
+        <section className="rounded-xl border border-line bg-card-2 p-4">
+          <label className="flex cursor-pointer items-center gap-2.5">
+            <input
+              type="checkbox"
+              checked={issueNow}
+              onChange={(e) => setIssueNow(e.target.checked)}
+              className="h-4 w-4 accent-[var(--color-brand)]"
+            />
+            <span className="text-sm font-medium text-txt">إصدار وتحصيل فوري</span>
+          </label>
+          <p className="mt-1.5 text-[0.7rem] leading-[1.8] text-txt-4">
+            يُصدر الفاتورة (فيُخصَّص رقمها المتسلسل) ويسجّل الدفعة مباشرة — للعميل الذي
+            يدفع في الحال. اتركه فارغاً لحفظها كمسوّدة تُصدَّر لاحقاً.
+          </p>
+          <input type="hidden" name="issueNow" value={issueNow ? '1' : '0'} />
+
+          {issueNow && (
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <label className="block">
+                <span className="mb-1.5 block text-xs text-txt-2">المبلغ المدفوع</span>
+                <input
+                  name="paymentAmount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  dir="ltr"
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(Math.max(0, Number(e.target.value) || 0))}
+                  className="erp-input py-2.5 text-start"
+                />
+                <button
+                  type="button"
+                  onClick={() => setPayAmount(totals.total.toNumber())}
+                  className="mt-1 text-[0.7rem] text-brand hover:underline"
+                >
+                  المبلغ كامل ({formatMoney(totals.total)})
+                </button>
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs text-txt-2">طريقة السداد</span>
+                <select
+                  name="paymentMethod"
+                  value={payMethod}
+                  onChange={(e) => setPayMethod(e.target.value)}
+                  className="erp-input py-2.5"
+                >
+                  {PAYMENT_METHODS.map((m) => (
+                    <option key={m} value={m}>
+                      {PAYMENT_METHOD_AR[m]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="block">
+                <span className="mb-1.5 block text-xs text-txt-2">المتبقّي على العميل</span>
+                <div
+                  className={`tnum rounded-lg border border-line bg-card px-3 py-2.5 text-sm font-bold ${
+                    dec(totals.total).minus(payAmount).lte(0) ? 'text-ok' : 'text-warn'
+                  }`}
+                >
+                  {formatMoney(dec(totals.total).minus(payAmount))}
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
       {/* ٤. اختياري ومطويّ: خصم وتواريخ وملاحظات — لا يراها من لا يحتاجها. */}
       <details className="rounded-xl border border-line bg-card-2 px-4 py-3">
         <summary className="cursor-pointer select-none text-sm font-medium text-txt-2">
@@ -477,7 +558,15 @@ export function DocumentForm({
         </div>
       </details>
 
-      <SubmitButton label={submitLabel} />
+      <SubmitButton
+        label={
+          instantIssue && issueNow
+            ? payAmount > 0
+              ? 'إنشاء وإصدار وتحصيل'
+              : 'إنشاء وإصدار'
+            : submitLabel
+        }
+      />
     </form>
   );
 }

@@ -36,6 +36,7 @@ export default async function NewInvoicePage() {
           variants={options.variants}
           labels={{ dateA: 'تاريخ الإصدار', dateB: 'تاريخ الاستحقاق' }}
           submitLabel="إنشاء الفاتورة"
+          instantIssue
         />
         <p className="mt-4 text-[0.7rem] text-txt-4">
           تُنشأ الفاتورة كمسوّدة، ثم تُصدَّر من صفحتها ليُخصَّص لها الرقم المتسلسل.

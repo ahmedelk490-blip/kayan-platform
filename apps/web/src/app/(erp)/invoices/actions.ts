@@ -14,6 +14,7 @@ import {
   calcLine,
   calcDocument,
   dec,
+  can,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
@@ -71,36 +72,117 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
     discountPercent: docDiscountPct,
   });
 
-  const invoice = await prisma.invoice.create({
-    data: {
+  const notes = String(formData.get('notes') ?? '').trim() || null;
+  const lineData = rawLines.map((l, i) => {
+    const v = byId.get(l.variantId)!;
+    const t = computed[i];
+    return {
+      lineNo: i + 1,
+      productId: v.productId,
+      variantId: v.id,
+      description: [v.product.nameAr, v.color?.nameAr, v.size?.code].filter(Boolean).join(' · '),
+      quantity: dec(l.quantity).toString(),
+      unitPrice: dec(l.unitPrice).toString(),
+      discountAmount: dec(l.discountAmount).toString(),
+      taxRate: dec(l.taxRate).toString(),
+      taxAmount: t.taxAmount.toString(),
+      lineTotal: t.lineTotal.toString(),
+    };
+  });
+
+  const baseData = {
+    tenantId: user.tenantId,
+    customerId,
+    subtotal: totals.subtotal.toString(),
+    discountAmount: totals.discountAmount.toString(),
+    taxAmount: totals.taxAmount.toString(),
+    total: totals.total.toString(),
+    notes,
+    createdById: user.id,
+    lines: { create: lineData },
+  };
+
+  // ── إصدار وتحصيل فوري (اختياري) ─────────────────────────────
+  // العميل الذي يدفع فوراً لا يحتاج ثلاث خطوات: نُنشئ الفاتورة، ونُصدرها
+  // (فيُخصَّص رقمها المتسلسل داخل نفس المعاملة كأي إصدار)، ونُسجّل الدفعة —
+  // كلها في معاملة واحدة تحفظ الانضباط: لا رقم يُحرق، ولا دفعة على مسوّدة.
+  const issueNow = ['1', 'on', 'true'].includes(String(formData.get('issueNow') ?? ''));
+
+  if (issueNow) {
+    if (!can(user.role, 'invoices.issue')) {
+      return { error: 'لا تملك صلاحية إصدار الفواتير — احفظها كمسوّدة ثم اطلب إصدارها.' };
+    }
+
+    const payAmount = dec(decimal(formData.get('paymentAmount')));
+    const payMethodRaw = String(formData.get('paymentMethod') ?? 'CASH');
+    const wantsPayment = payAmount.gt(0);
+
+    if (wantsPayment) {
+      if (!can(user.role, 'payments.record')) {
+        return { error: 'لا تملك صلاحية تسجيل الدفعات.' };
+      }
+      if (!isPaymentMethod(payMethodRaw)) {
+        return { fieldErrors: { paymentMethod: 'طريقة سداد غير معروفة.' } };
+      }
+      if (exceedsBalance(payAmount, totals.total, 0)) {
+        return {
+          fieldErrors: { paymentAmount: `المبلغ المدفوع يتجاوز إجمالي الفاتورة (${totals.total.toString()}).` },
+        };
+      }
+    }
+
+    const settings = await invoiceSettings(user.tenantId);
+    const issuedAt = new Date();
+    const paymentNumber = wantsPayment ? await nextPaymentNumber(user.tenantId) : null;
+
+    const created = await tenantTransaction(async (tx) => {
+      const number = await allocateInvoiceNumber(tx, user.tenantId, settings.prefix);
+      const status = wantsPayment
+        ? deriveInvoiceStatus(totals.total, payAmount, 'ISSUED' as never)
+        : 'ISSUED';
+      const inv = await tx.invoice.create({
+        data: {
+          ...baseData,
+          number,
+          status,
+          issueDate: issuedAt,
+          dueDate: dueDate(issuedAt, settings.termDays),
+          issuedById: user.id,
+          paidAmount: wantsPayment ? payAmount.toString() : '0',
+        },
+      });
+      if (wantsPayment) {
+        await tx.payment.create({
+          data: {
+            tenantId: user.tenantId,
+            number: paymentNumber!,
+            invoiceId: inv.id,
+            amount: payAmount.toString(),
+            method: payMethodRaw,
+            paidAt: issuedAt,
+            recordedById: user.id,
+          },
+        });
+      }
+      return inv;
+    });
+
+    await audit({
       tenantId: user.tenantId,
-      customerId,
-      status: 'DRAFT',
-      subtotal: totals.subtotal.toString(),
-      discountAmount: totals.discountAmount.toString(),
-      taxAmount: totals.taxAmount.toString(),
-      total: totals.total.toString(),
-      notes: String(formData.get('notes') ?? '').trim() || null,
-      createdById: user.id,
-      lines: {
-        create: rawLines.map((l, i) => {
-          const v = byId.get(l.variantId)!;
-          const t = computed[i];
-          return {
-            lineNo: i + 1,
-            productId: v.productId,
-            variantId: v.id,
-            description: [v.product.nameAr, v.color?.nameAr, v.size?.code].filter(Boolean).join(' · '),
-            quantity: dec(l.quantity).toString(),
-            unitPrice: dec(l.unitPrice).toString(),
-            discountAmount: dec(l.discountAmount).toString(),
-            taxRate: dec(l.taxRate).toString(),
-            taxAmount: t.taxAmount.toString(),
-            lineTotal: t.lineTotal.toString(),
-          };
-        }),
-      },
-    },
+      userId: user.id,
+      action: 'invoice.create',
+      entityType: 'Invoice',
+      entityId: created.id,
+      detail: `فاتورة مباشرة — إصدار${wantsPayment ? ` وتحصيل ${payAmount.toString()}` : ''} فوري (${created.number})`,
+    });
+
+    revalidatePath('/invoices');
+    redirect(`/invoices/${created.id}`);
+  }
+
+  // المسار الافتراضي: مسوّدة تُصدَّر لاحقاً من صفحتها.
+  const invoice = await prisma.invoice.create({
+    data: { ...baseData, status: 'DRAFT' },
   });
 
   await audit({
