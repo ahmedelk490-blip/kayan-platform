@@ -1,13 +1,31 @@
 import type { Metadata } from 'next';
-import { ROLES, ROLE_PERMISSIONS, PERMISSIONS, type RoleKey } from '@erp/domain';
+import {
+  ROLES,
+  ROLE_PERMISSIONS,
+  PERMISSIONS,
+  effectivePermissions,
+  toPermissionKeys,
+  isRoleKey,
+  type RoleKey,
+} from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { authDb } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
-import { CreateUserForm, ResetPasswordForm } from './UserForms';
+import { CreateUserForm, ResetPasswordForm, PermissionsModal } from './UserForms';
 import { createUser, resetPassword, setUserActive, grantableRoles } from './actions';
 
 export const metadata: Metadata = { title: 'حسابات الفريق' };
+
+/** يفكّ عمود JSON للصلاحيات بأمان — قيمة معطوبة تُعامَل كلا شيء. */
+function safeJson(raw: string | null): unknown {
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
 
 /**
  * حسابات الفريق.
@@ -56,6 +74,12 @@ export default async function UsersPage() {
             {users.map((u) => {
               const isAdmin = u.role.key === 'ADMIN';
               const isSelf = u.id === actor.id;
+              // الصلاحيات الفعّالة لهذا الموظف (الدور ± تعديلاته) — لتعبئة المحرّر.
+              const roleKey = isRoleKey(u.role.key) ? (u.role.key as RoleKey) : undefined;
+              const effective = effectivePermissions(roleKey, {
+                grant: toPermissionKeys(safeJson(u.grantedPermissions)),
+                deny: toPermissionKeys(safeJson(u.deniedPermissions)),
+              });
               return (
                 <tr key={u.id}>
                   <td className="px-4 py-3 text-txt">{u.nameAr ?? u.name}</td>
@@ -82,19 +106,29 @@ export default async function UsersPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-end">
-                    {!isAdmin && !isSelf && (
-                      <form action={setUserActive.bind(null, u.id, !u.isActive)}>
-                        <button
-                          type="submit"
-                          className={`text-[0.7rem] hover:underline ${
-                            u.isActive ? 'text-bad' : 'text-ok'
-                          }`}
-                        >
-                          {u.isActive ? 'تعطيل' : 'تفعيل'}
-                        </button>
-                      </form>
-                    )}
-                    {isSelf && <span className="text-[0.7rem] text-txt-4">أنت</span>}
+                    <div className="flex items-center justify-end gap-3">
+                      {!isAdmin && !isSelf && (
+                        <PermissionsModal
+                          userId={u.id}
+                          userName={u.nameAr ?? u.name}
+                          roleNameAr={ROLES[u.role.key as RoleKey]?.nameAr ?? u.role.key}
+                          effective={effective}
+                        />
+                      )}
+                      {!isAdmin && !isSelf && (
+                        <form action={setUserActive.bind(null, u.id, !u.isActive)}>
+                          <button
+                            type="submit"
+                            className={`text-[0.7rem] hover:underline ${
+                              u.isActive ? 'text-bad' : 'text-ok'
+                            }`}
+                          >
+                            {u.isActive ? 'تعطيل' : 'تفعيل'}
+                          </button>
+                        </form>
+                      )}
+                      {isSelf && <span className="text-[0.7rem] text-txt-4">أنت</span>}
+                    </div>
                   </td>
                 </tr>
               );
@@ -106,8 +140,9 @@ export default async function UsersPage() {
         <section className="erp-card p-6">
           <h3 className="mb-1 text-sm font-semibold text-brand">ماذا يرى كل دور</h3>
           <p className="mb-4 text-[0.7rem] leading-[1.9] text-txt-4">
-            الصلاحيات تُعدَّل في الكود لا من هنا. مصفوفة تُحرَّر أثناء التشغيل تعني
-            أن أحداً قد يمنح نفسه ما لم يُقصد له.
+            هذه صلاحيات الأدوار الأساسية (تُعرّف في الكود). لضبط موظف بعينه استخدم
+            «الصلاحيات» بجانب حسابه: تؤشّر ما يظهر له فوق دوره أو يُسحب منه. لا
+            تستطيع منح صلاحية لا تملكها أنت، وإدارة المستخدمين تبقى بالدور.
           </p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {(Object.keys(ROLES) as RoleKey[]).map((key) => {

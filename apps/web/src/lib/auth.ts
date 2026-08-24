@@ -3,8 +3,8 @@ import 'server-only';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { cookies, headers } from 'next/headers';
 import { hash, verify } from '@node-rs/argon2';
-import type { RoleKey } from '@erp/domain';
-import { isRoleKey } from '@erp/domain';
+import type { RoleKey, PermissionOverrides } from '@erp/domain';
+import { isRoleKey, toPermissionKeys } from '@erp/domain';
 import { authDb } from './prisma';
 
 /**
@@ -67,6 +67,18 @@ export interface SessionUser {
   tenantId: string;
   role: RoleKey;
   roleNameAr: string;
+  /** تحكّم صلاحيات هذا الموظف فوق دوره (ممنوح/مسحوب). */
+  overrides: PermissionOverrides;
+}
+
+/** يقرأ عمود JSON للصلاحيات ويصفّيه إلى مفاتيح معروفة فقط. */
+function parsePerms(raw: string | null | undefined): ReturnType<typeof toPermissionKeys> {
+  if (!raw) return [];
+  try {
+    return toPermissionKeys(JSON.parse(raw));
+  } catch {
+    return [];
+  }
 }
 
 export async function createSession(userId: string): Promise<string> {
@@ -120,6 +132,10 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     tenantId: session.user.tenantId,
     role: session.user.role.key,
     roleNameAr: session.user.role.nameAr,
+    overrides: {
+      grant: parsePerms(session.user.grantedPermissions),
+      deny: parsePerms(session.user.deniedPermissions),
+    },
   };
 }
 

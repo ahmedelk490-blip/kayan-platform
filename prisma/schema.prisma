@@ -189,6 +189,11 @@ model User {
   monthlySalary     Decimal? @db.Decimal(19, 4)
   commissionPercent Decimal? @db.Decimal(19, 4)
 
+  /// تحكّم صلاحيات لكل موظف فوق دوره: JSON بمصفوفتَي مفاتيح — ما يُمنح زيادةً
+  /// على الدور، وما يُسحب منه. الصافي = (صلاحيات الدور ∪ الممنوح) − المسحوب.
+  grantedPermissions String? @db.Text
+  deniedPermissions  String? @db.Text
+
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

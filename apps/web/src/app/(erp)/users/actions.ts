@@ -3,7 +3,16 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { hash } from '@node-rs/argon2';
-import { isRoleKey, ROLES } from '@erp/domain';
+import {
+  isRoleKey,
+  ROLES,
+  ROLE_PERMISSIONS,
+  ALL_PERMISSIONS,
+  toPermissionKeys,
+  userCan,
+  type RoleKey,
+  type PermissionKey,
+} from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { authDb } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
@@ -186,4 +195,68 @@ export async function setUserActive(userId: string, active: boolean) {
 /** الأدوار المتاحة للمنح، بأسمائها العربية. */
 export async function grantableRoles() {
   return GRANTABLE.map((key) => ({ value: key, label: ROLES[key].nameAr }));
+}
+
+// ── تحكّم صلاحيات لكل موظف ───────────────────────────────────
+
+/** المفاتيح القابلة للتعديل من الشاشة — «إدارة المستخدمين» مستثناة عمداً
+ *  فلا يُصنع مديرُ حسابات جزئيّ يعدّل غيره (تصعيد صلاحيات). ملف «use server»
+ *  لا يصدّر إلا دوالّ async، فتبقى هذه محليّة. */
+const EDITABLE_PERMISSIONS = ALL_PERMISSIONS.filter((p) => p !== 'users.manage');
+
+/**
+ * ضبط صلاحيات موظف فوق دوره.
+ *
+ * المدير يؤشّر ما يراه الموظف؛ نحوّل ذلك إلى دلتا عن الدور: ما زيد يُخزَّن
+ * ممنوحاً، وما نُزع يُخزَّن مسحوباً. حواجز ضد التصعيد:
+ *   - لا يُعدَّل حساب مدير النظام (ADMIN) ولا حساب المستخدم نفسه.
+ *   - لا يَمنح المدير صلاحية لا يملكها هو (لا يُعطي ما ليس له).
+ *   - «إدارة المستخدمين» غير قابلة للمنح إطلاقاً من هنا.
+ */
+export async function setUserPermissions(userId: string, formData: FormData): Promise<void> {
+  const actor = await requirePermission('users.manage');
+
+  const target = await authDb.user.findFirst({
+    where: { id: userId, tenantId: actor.tenantId },
+    include: { role: true },
+  });
+  if (!target) return;
+  if (target.role.key === 'ADMIN') return; // محمي
+  if (target.id === actor.id) return; // لا يعدّل نفسه
+
+  const roleKey = isRoleKey(target.role.key) ? (target.role.key as RoleKey) : undefined;
+  const rolePerms = new Set<PermissionKey>(roleKey ? ROLE_PERMISSIONS[roleKey] : []);
+
+  // ما أشّره المدير (مقصوراً على المفاتيح القابلة للتعديل).
+  const editable = new Set<PermissionKey>(EDITABLE_PERMISSIONS);
+  const chosen = new Set<PermissionKey>(
+    toPermissionKeys(formData.getAll('perm')).filter((p) => editable.has(p)),
+  );
+
+  // المسحوب: من صلاحيات الدور ما لم يُؤشَّر (السحب لا يُصعّد، فمسموح دائماً).
+  const deny = [...rolePerms].filter((p) => editable.has(p) && !chosen.has(p));
+
+  // الممنوح: ما أُشّر وليس في الدور — بشرط أن يملكه المدير نفسه.
+  const grant = [...chosen].filter(
+    (p) => !rolePerms.has(p) && userCan(actor.role, actor.overrides, p),
+  );
+
+  await authDb.user.update({
+    where: { id: target.id },
+    data: {
+      grantedPermissions: grant.length ? JSON.stringify(grant) : null,
+      deniedPermissions: deny.length ? JSON.stringify(deny) : null,
+    },
+  });
+
+  await audit({
+    tenantId: actor.tenantId,
+    userId: actor.id,
+    action: 'user.permissions',
+    entityType: 'User',
+    entityId: target.id,
+    detail: `${target.email} · +${grant.length} / −${deny.length}`,
+  });
+
+  revalidatePath('/users');
 }

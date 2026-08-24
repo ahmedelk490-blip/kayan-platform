@@ -1,5 +1,5 @@
 import { Logo } from '@erp/brand/logo';
-import { can, dec, type PermissionKey } from '@erp/domain';
+import { can, userCan, dec, type PermissionKey } from '@erp/domain';
 import type { SessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logoutAction } from '@/app/(erp)/login/actions';
@@ -108,7 +108,7 @@ export async function AppShell({
   title: string;
   children: React.ReactNode;
 }) {
-  const permitted = NAV.filter((item) => can(user.role, item.permission));
+  const permitted = NAV.filter((item) => userCan(user.role, user.overrides, item.permission));
   const items = permitted.filter((item) => item.built);
   const pending = permitted.filter((item) => !item.built);
 
@@ -123,7 +123,7 @@ export async function AppShell({
   // الشِّل كله (كل صفحات ERP). نرجع حرفاً بديلاً بدل الانهيار.
   // تنبيهات نقص المخزون والمستلزمات — تُحسب لمن يرى المخزون فقط. تبقى القائمة
   // فارغة (بلا استعلام) لغيره، فلا تُثقل صفحاته.
-  const seeInventory = can(user.role, 'inventory.read');
+  const seeInventory = userCan(user.role, user.overrides, 'inventory.read');
   let alerts: Alert[] = [];
   if (seeInventory) {
     const [lowStock, lowSupplies] = await Promise.all([

@@ -2,7 +2,7 @@ import 'server-only';
 
 import { redirect } from 'next/navigation';
 import type { PermissionKey } from '@erp/domain';
-import { can, landingPathFor } from '@erp/domain';
+import { userCan, landingPathFor } from '@erp/domain';
 import { getSessionUser, type SessionUser } from './auth';
 import { setCurrentTenant } from './tenant-context';
 
@@ -36,7 +36,7 @@ export async function requireUser(): Promise<SessionUser> {
  */
 export async function requirePermission(permission: PermissionKey): Promise<SessionUser> {
   const user = await requireUser();
-  if (!can(user.role, permission)) {
+  if (!userCan(user.role, user.overrides, permission)) {
     redirect(landingPathFor(user.role));
   }
   return user;

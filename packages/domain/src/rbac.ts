@@ -254,6 +254,47 @@ export function can(role: RoleKey | undefined, permission: PermissionKey): boole
   return granted.includes(permission);
 }
 
+/**
+ * تحكّم صلاحيات لكل موظف فوق دوره.
+ *
+ * `grant` صلاحيات تُضاف على الدور، و`deny` صلاحيات تُسحب منه. السحب يغلب:
+ * موظف مُنع من شيء لا يراه ولو كان دوره يمنحه.
+ */
+export interface PermissionOverrides {
+  grant?: PermissionKey[];
+  deny?: PermissionKey[];
+}
+
+/** الصلاحية الفعّالة للمستخدم: (صلاحيات الدور ∪ الممنوح) − المسحوب. */
+export function userCan(
+  role: RoleKey | undefined,
+  overrides: PermissionOverrides | undefined,
+  permission: PermissionKey,
+): boolean {
+  if (overrides?.deny?.includes(permission)) return false;
+  if (can(role, permission)) return true;
+  return overrides?.grant?.includes(permission) ?? false;
+}
+
+/** كل الصلاحيات الفعّالة للمستخدم — لعرضها أو لتصفية القائمة الجانبية. */
+export function effectivePermissions(
+  role: RoleKey | undefined,
+  overrides?: PermissionOverrides,
+): PermissionKey[] {
+  const set = new Set<PermissionKey>(role ? ROLE_PERMISSIONS[role] : []);
+  for (const g of overrides?.grant ?? []) set.add(g);
+  for (const d of overrides?.deny ?? []) set.delete(d);
+  return [...set];
+}
+
+/** يفلتر قائمة مفاتيح واردة (قد تكون من نموذج) إلى صلاحيات معروفة فقط. */
+export function toPermissionKeys(values: unknown): PermissionKey[] {
+  if (!Array.isArray(values)) return [];
+  return values.filter((v): v is PermissionKey =>
+    typeof v === 'string' && (ALL_PERMISSIONS as readonly string[]).includes(v),
+  );
+}
+
 /** True if the role holds every permission listed. */
 export function canAll(role: RoleKey | undefined, permissions: PermissionKey[]): boolean {
   return permissions.every((p) => can(role, p));
