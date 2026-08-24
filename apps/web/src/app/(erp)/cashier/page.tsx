@@ -1,51 +1,65 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requirePermission } from '@/lib/guard';
+import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader } from '@/components/crud/Shell';
-import { DocumentForm } from '@/app/(erp)/sales/DocumentForm';
 import { loadSalesOptions } from '@/app/(erp)/sales/options';
-import { createSalesInvoice } from '../invoices/actions';
+import { CashierBoard } from './CashierBoard';
 
 export const metadata: Metadata = { title: 'الكاشير' };
 
 /**
- * لوحة الكاشير — بيع وتحصيل في شاشة واحدة.
+ * لوحة الكاشير — بيع سريع بكروت منتجات مصوّرة.
  *
- * نفس محرّك الفاتورة المباشرة، لكن «إصدار وتحصيل فوري» يبدأ مفعّلاً: الكاشير
- * يختار العميل والأصناف (أو السيريه)، والمبلغ المدفوع، فتخرج فاتورة مُصدَرة
- * ومُحصَّلة بضغطة. للعميل العابر أنشئ عميلاً باسم «عميل نقدي» واستخدمه.
+ * الكاشير يضغط صورة المنتج، يختار اللون والمقاس والكمية، فتُبنى الفاتورة على
+ * اليسار. «بيع وتحصيل» يُصدرها ويحصّلها ويصرف البضاعة من المخزن — فتظهر في
+ * المخزون وعند المدير فوراً.
  */
 export default async function CashierPage() {
   const user = await requirePermission('invoices.write');
-  const options = await loadSalesOptions(user.tenantId);
+  const [options, productImages, warehouse] = await Promise.all([
+    loadSalesOptions(user.tenantId),
+    prisma.product.findMany({
+      where: { tenantId: user.tenantId, isDeleted: false, status: 'ACTIVE' },
+      select: { id: true, images: { where: { isPrimary: true }, take: 1, select: { path: true } } },
+    }),
+    prisma.warehouse.findFirst({
+      where: { tenantId: user.tenantId, isDeleted: false },
+      orderBy: { code: 'asc' },
+      select: { id: true, nameAr: true },
+    }),
+  ]);
+
+  const images: Record<string, string | null> = {};
+  for (const p of productImages) images[p.id] = p.images[0]?.path ?? null;
 
   return (
     <AppShell user={user} title="الكاشير">
       <ModuleHeader
         title="لوحة الكاشير"
-        action={
-          <Link href="/invoices" className="erp-btn-ghost">
-            الفواتير
-          </Link>
-        }
+        action={<Link href="/invoices" className="erp-btn-ghost">الفواتير</Link>}
       />
-      <div className="erp-card max-w-4xl p-6">
-        <p className="mb-5 rounded-xl border border-brand/30 bg-brand/5 px-4 py-3 text-xs leading-[1.9] text-txt-2">
-          بيع سريع: اختر العميل والأصناف (أو أضِف سيريه)، ثم المبلغ المدفوع — تخرج
-          فاتورة مُصدَرة ومُحصَّلة فوراً. «إصدار وتحصيل فوري» مفعّل تلقائياً هنا.
-        </p>
-        <DocumentForm
-          action={createSalesInvoice}
-          customers={options.customers}
-          variants={options.variants}
-          bundles={options.bundles}
-          labels={{ dateA: 'تاريخ الإصدار', dateB: 'تاريخ الاستحقاق' }}
-          submitLabel="بيع"
-          instantIssue
-          instantDefault
-        />
-      </div>
+      {!warehouse ? (
+        <div className="erp-card p-8 text-center">
+          <p className="text-sm text-txt-2">لا يوجد مخزن لصرف البضاعة منه.</p>
+          <p className="mt-2 text-xs text-txt-4">أنشئ مخزناً أولاً حتى يخصم بيع الكاشير من المخزون.</p>
+        </div>
+      ) : (
+        <>
+          <p className="mb-4 text-xs text-txt-3">
+            اضغط صورة المنتج ← اختر اللون والمقاس والكمية ← «بيع وتحصيل». يُصرف من مخزن
+            «{warehouse.nameAr}» وتظهر البيعة في المخزون وعند المدير فوراً. للعميل العابر
+            أنشئ عميلاً باسم «عميل نقدي».
+          </p>
+          <CashierBoard
+            customers={options.customers}
+            variants={options.variants}
+            images={images}
+            warehouseId={warehouse.id}
+          />
+        </>
+      )}
     </AppShell>
   );
 }
