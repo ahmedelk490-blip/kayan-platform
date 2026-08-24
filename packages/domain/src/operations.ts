@@ -32,6 +32,11 @@ export const EXPENSE_CATEGORIES = [
   'SHIPPING',
   'PACKAGING',
   'ADVERTISING',
+  'TELECOM',
+  'LEGAL',
+  'BANK_FEES',
+  'GOV_FEES',
+  'ASSETS',
   'OTHER',
 ] as const;
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
@@ -56,6 +61,11 @@ export const EXPENSE_CATEGORY_AR: Record<ExpenseCategory, string> = {
   SHIPPING: 'شحن وتوصيل',
   PACKAGING: 'تغليف',
   ADVERTISING: 'دعاية وإعلان',
+  TELECOM: 'اتصالات',
+  LEGAL: 'قانونية ومحاسبية',
+  BANK_FEES: 'رسوم ومصاريف بنكية',
+  GOV_FEES: 'رسوم حكومية وتراخيص',
+  ASSETS: 'أصول ومقتنيات',
   OTHER: 'أخرى',
 };
 
