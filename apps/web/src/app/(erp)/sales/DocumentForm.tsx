@@ -171,6 +171,7 @@ export function DocumentForm({
   submitLabel,
   instantIssue = false,
   bundles = [],
+  webOrderId,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   customers: { value: string; label: string }[];
@@ -182,6 +183,8 @@ export function DocumentForm({
   instantIssue?: boolean;
   /** السيريات/الأطقم المتاحة — لإضافة توزيع مقاسات دفعة واحدة. */
   bundles?: BundleOption[];
+  /** طلب موقع مصدر هذه الفاتورة — يُوسَم «تحوّل» عند الإنشاء. */
+  webOrderId?: string;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const [lines, setLines] = useState<DocLine[]>(() =>
@@ -335,6 +338,7 @@ export function DocumentForm({
 
   return (
     <form action={formAction} className="space-y-6" noValidate>
+      {webOrderId && <input type="hidden" name="webOrderId" value={webOrderId} />}
       <FormError message={state.error} />
       {state.ok && (
         <p role="status" className="rounded-lg border border-ok bg-ok-soft px-4 py-2.5 text-xs text-ok">

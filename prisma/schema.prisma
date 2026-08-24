@@ -116,6 +116,7 @@ model Tenant {
   heroSlides HeroSlide[]
   employeePayments EmployeePayment[]
   productBundles ProductBundle[]
+  webOrders WebOrder[]
 }
 
 model Company {
@@ -389,6 +390,48 @@ model ProductBundle {
   lines   ProductBundleLine[]
 
   @@index([tenantId, productId])
+}
+
+/// طلب وارد من الموقع العام — العميل اختار منتجاً بمقاسه ولونه وكميته.
+///
+/// مسار كتابة عامّ مقيّد (كالـleads): يُنشئ طلباً معلّقاً فقط، لا فاتورة ولا
+/// وصولاً لأي كيان آخر. المندوب يراجعه في الـERP ويحوّله لفاتورة بضغطة —
+/// عندها تُنسخ الأسعار وتُخصَّص أرقامها. المنتج/المتغيّر تُخزَّن كمعرّفات
+/// وكنصوص وصفية معاً، فالطلب يبقى مقروءاً ولو حُذف المنتج لاحقاً.
+model WebOrder {
+  id           String  @id @default(cuid())
+  tenantId     String
+  number       String
+  customerName String
+  phone        String
+  company      String?
+  note         String?
+  /// PENDING | CONVERTED | REJECTED
+  status       String  @default("PENDING")
+  /// الفاتورة الناتجة بعد التحويل (بلا علاقة صريحة — مجرّد ربط).
+  invoiceId    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lines  WebOrderLine[]
+
+  @@index([tenantId, status])
+}
+
+/// سطر في طلب الموقع: منتج/متغيّر وكميته، مع نصوص وصفية محفوظة.
+model WebOrderLine {
+  id           String  @id @default(cuid())
+  webOrderId   String
+  productId    String
+  variantId    String?
+  productLabel String
+  colorLabel   String?
+  sizeLabel    String?
+  quantity     Int     @default(1)
+
+  webOrder WebOrder @relation(fields: [webOrderId], references: [id], onDelete: Cascade)
 }
 
 /// سطر في السيريه: مقاس وكميته داخل الطقم الواحد.

@@ -50,6 +50,7 @@ const NAV: NavItem[] = [
   // الفواتير, لا تبويبات مستقلة — بطلب المالك.
   { href: '/sales', label: 'لوحة المبيعات', permission: 'sales.view', built: true, group: 'المبيعات' },
   { href: '/invoices', label: 'فواتير المبيعات', permission: 'invoices.view', built: true, group: 'المبيعات' },
+  { href: '/sales/web-orders', label: 'طلبات الموقع', permission: 'invoices.write', built: true, group: 'المبيعات' },
   { href: '/sales/purchase-invoices', label: 'فواتير الشراء', permission: 'purchasing.view', built: true, group: 'المبيعات' },
 
   { href: '/inventory', label: 'المخزون', permission: 'inventory.read', built: true, group: 'المخزون' },

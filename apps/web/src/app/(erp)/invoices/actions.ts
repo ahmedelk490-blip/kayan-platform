@@ -40,6 +40,17 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
   const customerId = String(formData.get('customerId') ?? '').trim();
   if (!customerId) return { fieldErrors: { customerId: 'العميل مطلوب.' } };
 
+  // طلب موقع مصدر هذه الفاتورة، إن وُجد — يُوسَم «تحوّل» بعد الإنشاء.
+  const webOrderId = String(formData.get('webOrderId') ?? '').trim() || null;
+  const markWebOrder = async (invoiceId: string) => {
+    if (!webOrderId) return;
+    await prisma.webOrder.updateMany({
+      where: { id: webOrderId, tenantId: user.tenantId, status: 'PENDING' },
+      data: { status: 'CONVERTED', invoiceId },
+    });
+    revalidatePath('/sales/web-orders');
+  };
+
   const customer = await prisma.customer.findFirst({
     where: { id: customerId, tenantId: user.tenantId, isDeleted: false },
     select: { id: true },
@@ -176,6 +187,7 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
       detail: `فاتورة مباشرة — إصدار${wantsPayment ? ` وتحصيل ${payAmount.toString()}` : ''} فوري (${created.number})`,
     });
 
+    await markWebOrder(created.id);
     revalidatePath('/invoices');
     redirect(`/invoices/${created.id}`);
   }
@@ -194,6 +206,7 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
     detail: 'فاتورة مبيعات مباشرة',
   });
 
+  await markWebOrder(invoice.id);
   revalidatePath('/invoices');
   redirect(`/invoices/${invoice.id}`);
 }

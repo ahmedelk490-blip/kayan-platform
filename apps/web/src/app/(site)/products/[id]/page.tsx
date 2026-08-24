@@ -3,6 +3,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { publicProduct, publicColors, siteWhatsApp } from '@/lib/catalog';
+import { OrderForm } from './OrderForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -194,7 +195,14 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               )}
             </div>
 
-            {/* الأسعار — أسفل، للمهتمّ. عمود «اللون» يظهر فقط حين يختلف السعر
+            {/* طلب المنتج مباشرة — يصل للـERP كطلب معلّق يحوّله المندوب لفاتورة. */}
+            <OrderForm
+              productId={product.id}
+              colors={colors.map((c) => c.nameAr)}
+              sizes={product.sizes}
+            />
+
+            {/* الأسعار — أسفل, للمهتمّ. عمود «اللون» يظهر فقط حين يختلف السعر
                 حسب اللون، فلا نُثقل الجدول بعمود «كل الألوان» بلا داعٍ. */}
             {product.tiers.length > 0 && (() => {
               const hasColorPricing = product.tiers.some((t) => t.color !== null);
