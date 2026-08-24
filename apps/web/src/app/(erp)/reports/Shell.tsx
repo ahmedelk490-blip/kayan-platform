@@ -14,6 +14,7 @@ export const REPORTS = [
   { href: '/reports/clients', title: 'تحليل العملاء', body: 'لكل عميل: الفواتير والتحصيل والمتبقّي والربح.' },
   { href: '/reports/client', title: 'تقرير عميل', body: 'اختر عميلاً لعرض تقريره الكامل وفواتيره.' },
   { href: '/reports/aging', title: 'تقدّم الديون', body: 'المستحقات موزّعة حسب مدى تأخّرها.' },
+  { href: '/reports/cashflow', title: 'التدفق النقدي', body: 'الداخل مقابل الخارج والرصيد التراكمي.' },
   { href: '/reports/sales', title: 'المبيعات', body: 'الإيراد والفواتير عبر الفترة.' },
   { href: '/reports/inventory', title: 'تقييم المخزون', body: 'الرصيد الحالي بالتكلفة.' },
   { href: '/reports/production', title: 'إنتاجية التصنيع', body: 'أوامر الإنتاج وزمن الدورة.' },
