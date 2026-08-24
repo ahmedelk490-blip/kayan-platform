@@ -1,7 +1,8 @@
-import { dec, isPeriod, periodRange, PRODUCTION_STATUS_AR, type Period } from '@erp/domain';
+import { dec, PRODUCTION_STATUS_AR } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { withTenant } from '@/lib/prisma';
 import { csvResponse, stampedName } from '../../csv';
+import { resolveRange } from '../../range';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,9 +11,8 @@ const day = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : '');
 /** تصدير أوامر التصنيع للفترة إلى شيت Excel (CSV). */
 export async function GET(request: Request) {
   const user = await requirePermission('reports.view');
-  const raw = new URL(request.url).searchParams.get('period');
-  const period: Period = raw && isPeriod(raw) ? raw : 'YEAR';
-  const { from, to } = periodRange(period);
+  const sp = new URL(request.url).searchParams;
+  const { from, to } = resolveRange({ from: sp.get('from') ?? undefined, to: sp.get('to') ?? undefined, period: sp.get('period') ?? undefined });
 
   const orders = await withTenant(user.tenantId, (tx) =>
     tx.productionOrder.findMany({

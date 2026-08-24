@@ -2,8 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
   formatMoney,
-  periodRange,
-  isPeriod,
   total,
   isEmpty,
   average,
@@ -12,14 +10,14 @@ import {
   dec,
   balance,
   RECEIVABLE_STATUSES,
-  type Period,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import type { SearchParams } from '@/lib/query';
-import { PeriodTabs, Figure, Empty, Bar } from '../Shell';
+import { ReportFilter, Figure, Empty, Bar } from '../Shell';
+import { resolveRange } from '../range';
 
 export const metadata: Metadata = { title: 'تقرير المبيعات' };
 
@@ -30,9 +28,8 @@ export default async function SalesReport({
 }) {
   const user = await requirePermission('reports.view');
   const params = await searchParams;
-  const raw = Array.isArray(params.period) ? params.period[0] : params.period;
-  const period: Period = raw && isPeriod(raw) ? raw : 'YEAR';
-  const { from, to } = periodRange(period);
+  const range = resolveRange(params);
+  const { from, to } = range;
 
   const [orders, invoices, receivable] = await Promise.all([
     prisma.salesOrder.findMany({
@@ -79,7 +76,7 @@ export default async function SalesReport({
         title="المبيعات"
         action={
           <div className="flex gap-2">
-            <a href={`/reports/sales/export?period=${period}`} className="erp-btn-ghost">
+            <a href={`/reports/sales/export?from=${range.fromStr}&to=${range.toStr}`} className="erp-btn-ghost">
               تصدير Excel
             </a>
             <Link href="/reports" className="erp-btn-ghost">
@@ -89,7 +86,7 @@ export default async function SalesReport({
         }
       />
 
-      <PeriodTabs basePath="/reports/sales" active={period} />
+      <ReportFilter basePath="/reports/sales" period={range.period} from={range.fromStr} to={range.toStr} />
 
       {isEmpty(orderTotal) && isEmpty(invoiceTotal) ? (
         <Empty what="مبيعات" />

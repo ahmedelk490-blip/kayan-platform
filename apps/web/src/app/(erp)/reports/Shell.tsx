@@ -18,6 +18,45 @@ export const REPORTS = [
   { href: '/reports/employees', title: 'ربحية الموظفين', body: 'ربح كل موظف من فواتيره.' },
 ] as const;
 
+/**
+ * فلتر التقرير: أزرار الفترات الجاهزة + مدى مخصّص (من/إلى) بأي تاريخ.
+ *
+ * المدى المخصّص نموذج GET بسيط بلا جافاسكربت — يوجّه لنفس الصفحة بـ from/to،
+ * فيقرأها resolveRange. يتيح للمالك «من شهر لشهر» أو «من يوم ليوم» بدل
+ * الفترات الثابتة.
+ */
+export function ReportFilter({
+  basePath,
+  period,
+  from,
+  to,
+}: {
+  basePath: string;
+  period: Period | null;
+  from: string;
+  to: string;
+}) {
+  return (
+    <div className="mb-6 space-y-3">
+      <PeriodTabs basePath={basePath} active={period ?? ('' as Period)} />
+      <form method="get" action={basePath} className="flex flex-wrap items-end gap-2 rounded-xl border border-line bg-card-2 p-3">
+        <label className="block">
+          <span className="mb-1 block text-[0.7rem] text-txt-3">من</span>
+          <input type="date" name="from" defaultValue={from} dir="ltr" className="erp-input py-2 text-start" />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[0.7rem] text-txt-3">إلى</span>
+          <input type="date" name="to" defaultValue={to} dir="ltr" className="erp-input py-2 text-start" />
+        </label>
+        <button type="submit" className="erp-btn py-2">تطبيق المدى</button>
+        {period === null && (
+          <span className="self-center text-[0.7rem] text-brand">مدى مخصّص مطبّق</span>
+        )}
+      </form>
+    </div>
+  );
+}
+
 export function PeriodTabs({ basePath, active }: { basePath: string; active: Period }) {
   return (
     <div className="mb-6 flex flex-wrap gap-2">

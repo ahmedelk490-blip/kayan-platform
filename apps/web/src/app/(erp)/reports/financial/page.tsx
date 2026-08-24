@@ -2,21 +2,19 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
   formatMoney,
-  periodRange,
-  isPeriod,
   dec,
   balance,
   RECEIVABLE_STATUSES,
   EXPENSE_CATEGORY_AR,
   type ExpenseCategory,
-  type Period,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import type { SearchParams } from '@/lib/query';
-import { PeriodTabs, Figure, Empty } from '../Shell';
+import { ReportFilter, Figure, Empty } from '../Shell';
+import { resolveRange } from '../range';
 
 export const metadata: Metadata = { title: 'التقرير المالي' };
 
@@ -34,9 +32,8 @@ export default async function FinancialReport({
 }) {
   const user = await requirePermission('reports.view');
   const params = await searchParams;
-  const raw = Array.isArray(params.period) ? params.period[0] : params.period;
-  const period: Period = raw && isPeriod(raw) ? raw : 'YEAR';
-  const { from, to } = periodRange(period);
+  const range = resolveRange(params);
+  const { from, to } = range;
 
   const [invoices, receivable, expenses] = await Promise.all([
     prisma.invoice.findMany({
@@ -85,7 +82,7 @@ export default async function FinancialReport({
         title="التقرير المالي"
         action={
           <div className="flex gap-2">
-            <a href={`/reports/financial/export?period=${period}`} className="erp-btn-ghost">
+            <a href={`/reports/financial/export?from=${range.fromStr}&to=${range.toStr}`} className="erp-btn-ghost">
               تصدير Excel
             </a>
             <Link href="/reports" className="erp-btn-ghost">
@@ -95,7 +92,7 @@ export default async function FinancialReport({
         }
       />
 
-      <PeriodTabs basePath="/reports/financial" active={period} />
+      <ReportFilter basePath="/reports/financial" period={range.period} from={range.fromStr} to={range.toStr} />
 
       {empty ? (
         <Empty what="حركة مالية" />

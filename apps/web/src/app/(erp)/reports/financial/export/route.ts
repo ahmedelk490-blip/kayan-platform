@@ -1,25 +1,22 @@
 import {
   dec,
-  isPeriod,
-  periodRange,
   balance,
   RECEIVABLE_STATUSES,
   EXPENSE_CATEGORY_AR,
   type ExpenseCategory,
-  type Period,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { withTenant } from '@/lib/prisma';
 import { csvResponse, stampedName } from '../../csv';
+import { resolveRange } from '../../range';
 
 export const dynamic = 'force-dynamic';
 
 /** تصدير التقرير المالي للفترة إلى شيت Excel (CSV). */
 export async function GET(request: Request) {
   const user = await requirePermission('reports.view');
-  const raw = new URL(request.url).searchParams.get('period');
-  const period: Period = raw && isPeriod(raw) ? raw : 'YEAR';
-  const { from, to } = periodRange(period);
+  const sp = new URL(request.url).searchParams;
+  const { from, to } = resolveRange({ from: sp.get('from') ?? undefined, to: sp.get('to') ?? undefined, period: sp.get('period') ?? undefined });
 
   const [invoices, receivable, expenses] = await withTenant(user.tenantId, (tx) =>
     Promise.all([

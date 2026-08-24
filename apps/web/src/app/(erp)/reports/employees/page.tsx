@@ -1,18 +1,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import {
-  formatMoney,
-  periodRange,
-  isPeriod,
-  dec,
-  type Period,
-} from '@erp/domain';
+import { formatMoney, dec } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import type { SearchParams } from '@/lib/query';
-import { PeriodTabs, Figure, Empty } from '../Shell';
+import { ReportFilter, Figure, Empty } from '../Shell';
+import { resolveRange } from '../range';
 
 export const metadata: Metadata = { title: 'ربحية الموظفين' };
 
@@ -30,9 +25,8 @@ export default async function EmployeeReport({
 }) {
   const user = await requirePermission('cost.margin');
   const params = await searchParams;
-  const raw = Array.isArray(params.period) ? params.period[0] : params.period;
-  const period: Period = raw && isPeriod(raw) ? raw : 'YEAR';
-  const { from, to } = periodRange(period);
+  const range = resolveRange(params);
+  const { from, to } = range;
 
   const invoices = await prisma.invoice.findMany({
     where: {
@@ -95,7 +89,7 @@ export default async function EmployeeReport({
         title="ربحية الموظفين"
         action={
           <div className="flex gap-2">
-            <a href={`/reports/employees/export?period=${period}`} className="erp-btn-ghost">
+            <a href={`/reports/employees/export?from=${range.fromStr}&to=${range.toStr}`} className="erp-btn-ghost">
               تصدير Excel
             </a>
             <Link href="/reports" className="erp-btn-ghost">
@@ -105,7 +99,7 @@ export default async function EmployeeReport({
         }
       />
 
-      <PeriodTabs basePath="/reports/employees" active={period} />
+      <ReportFilter basePath="/reports/employees" period={range.period} from={range.fromStr} to={range.toStr} />
 
       {rows.length === 0 ? (
         <Empty what="فواتير للموظفين" />

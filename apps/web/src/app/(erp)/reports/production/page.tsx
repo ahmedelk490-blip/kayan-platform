@@ -4,20 +4,18 @@ import {
   formatQty,
   formatMoney,
   throughput,
-  periodRange,
-  isPeriod,
   total,
   dec,
   PRODUCTION_STATUS_AR,
   PRODUCTION_STATUSES,
-  type Period,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import type { SearchParams } from '@/lib/query';
-import { PeriodTabs, Figure, Empty, Bar } from '../Shell';
+import { ReportFilter, Figure, Empty, Bar } from '../Shell';
+import { resolveRange } from '../range';
 
 export const metadata: Metadata = { title: 'إنتاجية التصنيع' };
 
@@ -28,9 +26,8 @@ export default async function ProductionReport({
 }) {
   const user = await requirePermission('reports.view');
   const params = await searchParams;
-  const raw = Array.isArray(params.period) ? params.period[0] : params.period;
-  const period: Period = raw && isPeriod(raw) ? raw : 'YEAR';
-  const { from, to } = periodRange(period);
+  const range = resolveRange(params);
+  const { from, to } = range;
 
   const [orders, damage] = await Promise.all([
     prisma.productionOrder.findMany({
@@ -71,7 +68,7 @@ export default async function ProductionReport({
         title="إنتاجية التصنيع"
         action={
           <div className="flex gap-2">
-            <a href={`/reports/production/export?period=${period}`} className="erp-btn-ghost">
+            <a href={`/reports/production/export?from=${range.fromStr}&to=${range.toStr}`} className="erp-btn-ghost">
               تصدير Excel
             </a>
             <Link href="/reports" className="erp-btn-ghost">
@@ -81,7 +78,7 @@ export default async function ProductionReport({
         }
       />
 
-      <PeriodTabs basePath="/reports/production" active={period} />
+      <ReportFilter basePath="/reports/production" period={range.period} from={range.fromStr} to={range.toStr} />
 
       {orders.length === 0 ? (
         <Empty what="أوامر إنتاج" />
