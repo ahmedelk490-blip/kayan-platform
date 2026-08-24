@@ -53,9 +53,16 @@ export function DamageForm({
         <Field name="machine" label="الماكينة" placeholder="رقم أو اسم الماكينة" errors={state.fieldErrors} />
         <Select
           name="variantId"
-          label="المنتج / المتغيّر"
+          label="المنتج / المتغيّر (من النظام)"
           options={variants}
           placeholder="غير مرتبط بمنتج"
+          errors={state.fieldErrors}
+        />
+        <Field
+          name="productLabel"
+          label="أو اكتب المنتج يدويًا"
+          placeholder="اسم المنتج/الصنف التالف"
+          hint="لِما لا يوجد في النظام — خامة أو صنف غير مسجَّل"
           errors={state.fieldErrors}
         />
         <Select

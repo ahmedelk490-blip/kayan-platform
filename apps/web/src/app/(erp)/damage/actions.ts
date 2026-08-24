@@ -24,6 +24,7 @@ const Schema = z.object({
   department: z.string().trim().max(120).optional().or(z.literal('')),
   machine: z.string().trim().max(120).optional().or(z.literal('')),
   variantId: z.string().optional(),
+  productLabel: z.string().trim().max(200).optional().or(z.literal('')),
   productionOrderId: z.string().optional(),
   quantity: z.coerce.number().positive('الكمية يجب أن تكون أكبر من صفر.'),
   // Required by validation, not merely by convention — a damage record with
@@ -41,6 +42,7 @@ function read(formData: FormData) {
     department: String(formData.get('department') ?? ''),
     machine: String(formData.get('machine') ?? ''),
     variantId: String(formData.get('variantId') ?? ''),
+    productLabel: String(formData.get('productLabel') ?? ''),
     productionOrderId: String(formData.get('productionOrderId') ?? ''),
     quantity: String(formData.get('quantity') ?? ''),
     reason: String(formData.get('reason') ?? ''),
@@ -85,6 +87,8 @@ export async function createDamage(_prev: FormState, formData: FormData): Promis
       machine: parsed.data.machine || null,
       productId,
       variantId: parsed.data.variantId || null,
+      // اسم المنتج اليدوي يُحفظ فقط حين لا يُختار منتج من النظام — لا نُكرّر.
+      productLabel: !parsed.data.variantId ? parsed.data.productLabel || null : null,
       productionOrderId: parsed.data.productionOrderId || null,
       quantity: parsed.data.quantity,
       reason: parsed.data.reason,

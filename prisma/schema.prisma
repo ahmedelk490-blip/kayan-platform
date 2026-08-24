@@ -1848,6 +1848,9 @@ model DamageRecord {
 
   productId         String?
   variantId         String?
+  /// اسم منتج مكتوب يدوياً حين يكون التالف غير مرتبط بمنتج في النظام (خامة،
+  /// منتج قيد التجهيز، صنف لم يُسجَّل بعد). يظهر في السجل والتقارير كبديل.
+  productLabel      String?
   productionOrderId String?
 
   quantity Decimal @db.Decimal(19, 4)

@@ -139,7 +139,7 @@ export default async function DamagePage({
               {row.employee ? (row.employee.nameAr ?? row.employee.name) : '—'}
             </td>
             <td className="px-4 py-3 text-txt-3">{row.department ?? '—'}</td>
-            <td className="px-4 py-3 text-txt-3">{row.product?.nameAr ?? '—'}</td>
+            <td className="px-4 py-3 text-txt-3">{row.product?.nameAr ?? row.productLabel ?? '—'}</td>
             <td className="tnum px-4 py-3">
               {row.productionOrder ? (
                 <Link

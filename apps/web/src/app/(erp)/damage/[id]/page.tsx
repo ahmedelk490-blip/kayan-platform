@@ -289,7 +289,11 @@ export default async function DamageDetailPage({
               <Row label="الماكينة" value={damage.machine ?? '—'} />
               <Row
                 label="المنتج"
-                value={damage.product ? `${damage.product.nameAr} · ${damage.variant?.sku ?? ''}` : '—'}
+                value={
+                  damage.product
+                    ? `${damage.product.nameAr} · ${damage.variant?.sku ?? ''}`
+                    : (damage.productLabel ?? '—')
+                }
               />
               <Row
                 label="سجّله"
