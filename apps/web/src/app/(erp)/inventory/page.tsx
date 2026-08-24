@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { can, available, dec, formatQty, type Numeric } from '@erp/domain';
+import { can, available, dec, formatQty, formatMoney, type Numeric } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -29,7 +29,7 @@ export default async function InventoryPage() {
 
   const seeSupplies = can(user.role, 'supplies.view');
 
-  const [stock, variants, warehouses, locations, movements, supplies, supplyTx] = await Promise.all([
+  const [stock, variants, warehouses, locations, movements, supplies, supplyTx, reorderStock] = await Promise.all([
     prisma.stock.findMany({
       where: { variant: { product: { tenantId: user.tenantId } } },
       include: {
@@ -86,6 +86,16 @@ export default async function InventoryPage() {
           },
         })
       : [],
+
+    // جدول النواقص: كل رصيد منتج له حدٌّ أدنى مضبوط — غير مقيّد بالـ100 المعروضة
+    // في تبويب الأرصدة، فجدول «ما يجب طلبه» يجب أن يكون كاملاً لا عيّنة.
+    prisma.stock.findMany({
+      where: { minStock: { gt: 0 }, variant: { product: { tenantId: user.tenantId } } },
+      include: {
+        variant: { include: { product: true, color: true, size: true } },
+        warehouse: { select: { nameAr: true } },
+      },
+    }),
   ]);
 
   // ملخّص الخامات: كم صنفاً، وكم تحت الحد، وكم نفد.
@@ -114,6 +124,47 @@ export default async function InventoryPage() {
   const lowStock = stock.filter(
     (s) => dec(s.minStock).gt(0) && dec(s.onHand).lte(dec(s.minStock)),
   );
+
+  // جدول إعادة الطلب: كل منتج وخامة تحت الحدّ الأدنى، مع مقدار النقص
+  // (الحدّ − الرصيد)، منتجات وخامات في قائمة واحدة، الأسوأ نقصاً أولاً.
+  // هذا هو «الجدول» الذي يتصرّف عليه المالك: ماذا نطلب، وكم.
+  type ReorderRow = {
+    key: string;
+    kind: 'منتج' | 'خامة';
+    label: string;
+    where: string;
+    onHand: ReturnType<typeof dec>;
+    minStock: ReturnType<typeof dec>;
+    shortfall: ReturnType<typeof dec>;
+    unit: string;
+    empty: boolean;
+  };
+  const reorderRows: ReorderRow[] = [
+    ...reorderStock
+      .filter((s) => dec(s.onHand).lte(dec(s.minStock)))
+      .map((s) => ({
+        key: `st-${s.id}`,
+        kind: 'منتج' as const,
+        label: variantLabel(s.variant),
+        where: s.warehouse.nameAr,
+        onHand: dec(s.onHand),
+        minStock: dec(s.minStock),
+        shortfall: dec(s.minStock).minus(dec(s.onHand)),
+        unit: 'قطعة',
+        empty: dec(s.onHand).lte(0),
+      })),
+    ...(seeSupplies ? lowSupplies : []).map((s) => ({
+      key: `sp-${s.id}`,
+      kind: 'خامة' as const,
+      label: s.nameAr,
+      where: '—',
+      onHand: dec(s.onHand),
+      minStock: dec(s.minStock),
+      shortfall: dec(s.minStock).minus(dec(s.onHand)),
+      unit: s.unit ?? '—',
+      empty: dec(s.onHand).lte(0),
+    })),
+  ].sort((a, b) => b.shortfall.minus(a.shortfall).toNumber());
 
   return (
     <AppShell user={user} title="المخزون">
@@ -152,17 +203,62 @@ export default async function InventoryPage() {
       <SegmentedTabs
         tabs={[
           {
+            key: 'reorder',
+            label: 'نواقص وإعادة الطلب',
+            badge: reorderRows.length,
+            content: (
+              <section>
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-brand">جدول ما يجب طلبه</h3>
+                  <span className="text-[0.7rem] text-txt-4">
+                    {reorderRows.length === 0
+                      ? 'كل الأصناف فوق حدّها الأدنى'
+                      : `${reorderRows.length} صنف تحت الحدّ · ${reorderRows.filter((r) => r.empty).length} نفد`}
+                  </span>
+                </div>
+                <Table
+                  headers={['الصنف', 'النوع', 'الموقع', 'الرصيد', 'الحدّ الأدنى', 'النقص', 'الحالة']}
+                  empty={reorderRows.length === 0}
+                >
+                  {reorderRows.map((r) => (
+                    <tr key={r.key} className="hover:bg-card-2">
+                      <td className="px-4 py-3 text-txt">{r.label}</td>
+                      <td className="px-4 py-3 text-txt-3">{r.kind}</td>
+                      <td className="px-4 py-3 text-txt-3">{r.where}</td>
+                      <td className={`tnum px-4 py-3 font-medium ${r.empty ? 'text-bad' : 'text-txt-2'}`}>
+                        {formatQty(r.onHand)}
+                      </td>
+                      <td className="tnum px-4 py-3 text-txt-3">{formatQty(r.minStock)}</td>
+                      <td className="tnum px-4 py-3 font-semibold text-bad">
+                        {formatQty(r.shortfall)} {r.unit}
+                      </td>
+                      <td className="px-4 py-3">
+                        {r.empty ? <Badge tone="bad">نفد</Badge> : <Badge tone="bad">قارب على النفاد</Badge>}
+                      </td>
+                    </tr>
+                  ))}
+                </Table>
+                <p className="mt-2 text-[0.7rem] leading-[1.8] text-txt-4">
+                  النقص = الحدّ الأدنى − الرصيد الحالي — أي الكمية اللازمة لبلوغ الحدّ. القائمة
+                  كاملة (كل الأصناف ذات حدٍّ أدنى)، لا عيّنة من المعروض في تبويب الأرصدة. الأصناف
+                  بلا حدٍّ أدنى مضبوط لا تظهر هنا — اضبط حدَّها ليُنبّهك النظام قبل نفادها.
+                </p>
+              </section>
+            ),
+          },
+          {
             key: 'balances',
             label: 'أرصدة المنتجات',
             badge: lowStock.length,
             content: (
               <section>
             <Table
-              headers={['المنتج / المتغيّر', 'المخزن', 'الموقع', 'الرصيد', 'محجوز', 'المتاح', 'تالف', 'الحد الأدنى']}
+              headers={['المنتج / المتغيّر', 'المخزن', 'الموقع', 'الرصيد', 'محجوز', 'المتاح', 'تالف', 'قيمة الرصيد', 'الحد الأدنى']}
               empty={stock.length === 0}
             >
               {stock.map((s) => {
                 const atp = available(s.onHand, s.reserved);
+                const unitCost = s.variant.cost ?? s.variant.product.cost ?? null;
                 return (
                 <tr key={s.id} className="hover:bg-card-2">
                   <td className="px-4 py-3 text-txt">{variantLabel(s.variant)}</td>
@@ -177,6 +273,15 @@ export default async function InventoryPage() {
                     {formatQty(atp)}
                   </td>
                   <td className="tnum px-4 py-3 text-txt-2">{formatQty(s.damaged)}</td>
+                  {/* قيمة الرصيد بالتكلفة — تكلفة المتغيّر ثم المنتج. المجهولة تُعرض
+                      «—» لا صفراً، فالصفر يبدو قياساً وهو ليس كذلك. */}
+                  <td className="tnum px-4 py-3 text-txt-2">
+                    {unitCost === null ? (
+                      <span className="text-txt-4">—</span>
+                    ) : (
+                      formatMoney(dec(s.onHand).times(dec(unitCost)))
+                    )}
+                  </td>
                   <td className="tnum px-4 py-3">
                     {dec(s.minStock).gt(0) && dec(s.onHand).lte(dec(s.minStock)) ? (
                       <Badge tone="bad">{formatQty(s.minStock)}</Badge>
