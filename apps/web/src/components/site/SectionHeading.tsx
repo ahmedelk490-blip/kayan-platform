@@ -2,15 +2,13 @@
 
 import { motion } from 'motion/react';
 import { EASE } from '@erp/motion';
-import { AnimatedText } from '@erp/ui-market';
 
 /**
- * رأس قسم موحّد — كبير وواضح.
+ * رأس قسم موحّد — كبير، احترافيّ، محاذى للبداية.
  *
- * كانت الرؤوس ثلاثة نسخ متطابقة بعنوان صغير باهت (text-xs، muted) لا يُقرأ
- * كعنوان، وفوقه سطر تعريفي بتباعد حروف — والتباعد يقطّع العربية. صار رأساً
- * واحداً: سطرٌ تعريفيّ بلون العلامة وبلا تباعد يكسر الوصل، وعنوانٌ ضخم عالي
- * التباين. قسم واحد يُغيَّر فيتغيّر الثلاثة معاً.
+ * بطلب المالك: العنوان ضخمٌ ومحاذٍ للبداية (لا في المنتصف)، بحروف متّصلة بلا
+ * تباعد يكسر العربية، والشارة النبيتيّة أكبر وواضحة على الموبايل. قسم واحد
+ * يُغيَّر فتتغيّر كل الأقسام معاً.
  */
 export function SectionHeading({
   eyebrow,
@@ -23,32 +21,38 @@ export function SectionHeading({
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-80px' }}
       transition={{ duration: 0.8, ease: EASE.outExpo }}
-      // في المنتصف: العنوان يتوسّط القسم فيقرأ كعنوان رئيسي، لا سطراً في
-      // الجنب. عمود متمركز بعرض محدود ليبقى السطر مقروءاً.
-      className="mx-auto mb-14 flex max-w-[52ch] flex-col items-center text-center md:mb-20"
+      className="mb-12 flex flex-col items-start text-start md:mb-20"
     >
-      {/* السطر التعريفي شارة بخلفية خفيفة بلون العلامة، سميكة وواضحة، بلا
-          تباعد حروف يقطّع العربية. */}
-      <span className="mb-6 inline-flex items-center gap-2.5 rounded-full bg-brand-fill/10 px-5 py-2 text-sm font-semibold text-brand md:text-base">
-        <span className="h-2 w-2 rounded-full bg-brand-fill" />
+      {/* الشارة النبيتيّة: أكبر وأوضح، تظهر جيداً على الموبايل. */}
+      <span className="mb-6 inline-flex items-center gap-2.5 rounded-full bg-brand-fill/15 px-5 py-2.5 text-base font-bold text-brand shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-brand-fill)_30%,transparent)] md:text-lg">
+        <span className="h-2.5 w-2.5 rounded-full bg-brand-fill" />
         {eyebrow}
       </span>
 
-      {/* عنوان كبير متمركز، لكن بمقاس محترم لا يبتلع الشاشة. تباعد الأسطر
-          فسيح لأن العربية بحروفها الهابطة وعلاماتها تتراكب مع تباعد ضيّق —
-          والمقاس الأدنى صغير كفاية ليقرأ سطرين على الموبايل لا أربعة. */}
-      <AnimatedText
-        as="h2"
-        text={title}
-        className="font-display text-[clamp(1.9rem,3.5vw+1rem,3.25rem)] font-bold leading-[1.5] text-body [text-wrap:balance]"
-      />
+      {/* عنوان ضخم احترافيّ. الحروف متّصلة (letter-spacing طبيعيّ) والكلمة لا
+          تُكسر في منتصفها؛ عرضٌ محدود بالحروف يضبط عدد الأسطر دون بعثرة. */}
+      <h2
+        className="font-display font-bold text-body"
+        style={{
+          fontSize: 'clamp(2.4rem, 7vw, 4.5rem)',
+          lineHeight: 1.14,
+          letterSpacing: 'normal',
+          wordSpacing: 'normal',
+          overflowWrap: 'normal',
+          wordBreak: 'normal',
+          maxWidth: '20ch',
+          textWrap: 'balance',
+        }}
+      >
+        {title}
+      </h2>
 
       {lead && (
-        <p className="mt-7 max-w-[46ch] text-lg leading-[2] text-body-muted md:text-xl">{lead}</p>
+        <p className="mt-6 max-w-[54ch] text-lg leading-[2] text-body-muted md:text-xl">{lead}</p>
       )}
     </motion.div>
   );
