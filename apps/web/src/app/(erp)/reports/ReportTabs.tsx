@@ -10,6 +10,7 @@ import { usePathname } from 'next/navigation';
  */
 const TABS: { href: string; label: string }[] = [
   { href: '/reports/financial', label: 'ملخص مالي' },
+  { href: '/reports/statement', label: 'البيان المالي' },
   { href: '/reports/clients', label: 'تحليل العملاء' },
   { href: '/reports/client', label: 'تقرير عميل' },
   { href: '/reports/profitability', label: 'تحليل المنتجات' },

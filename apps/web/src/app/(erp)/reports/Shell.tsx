@@ -12,6 +12,7 @@ import { ReportTabs } from './ReportTabs';
 
 export const REPORTS = [
   { href: '/reports/financial', title: 'التقرير المالي', body: 'المبيعات والمصروفات والصافي والتدفّق النقدي.' },
+  { href: '/reports/statement', title: 'البيان المالي', body: 'المبيعات حسب المنتج ناقص التكاليف = الربح الصافي.' },
   { href: '/reports/clients', title: 'تحليل العملاء', body: 'لكل عميل: الفواتير والتحصيل والمتبقّي والربح.' },
   { href: '/reports/client', title: 'تقرير عميل', body: 'اختر عميلاً لعرض تقريره الكامل وفواتيره.' },
   { href: '/reports/aging', title: 'تقدّم الديون', body: 'المستحقات موزّعة حسب مدى تأخّرها.' },
