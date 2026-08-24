@@ -210,7 +210,7 @@ export async function createPenalty(
   if (penaltyExceedsDamage(parsed.data.amount, damage.totalCost)) {
     return {
       fieldErrors: {
-        amount: `الجزاء لا يتجاوز تكلفة الهالك (${damage.totalCost.toString()} ج.م).`,
+        amount: `الجزاء لا يتجاوز تكلفة الهالك (${damage.totalCost.toString()} د.ع).`,
       },
     };
   }

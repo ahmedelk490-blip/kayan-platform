@@ -234,7 +234,7 @@ export default async function InvoicePage({
           <section className="erp-card p-5">
             <h3 className="mb-3 text-sm font-semibold text-brand">بيانات الفاتورة</h3>
             <dl className="space-y-2 text-sm">
-              <Row label="العملة" value={company?.currency ?? 'EGP'} />
+              <Row label="العملة" value={company?.currency ?? 'IQD'} />
               <Row
                 label="الرقم الضريبي"
                 value={company?.taxNumber ?? 'غير مُدخَل'}

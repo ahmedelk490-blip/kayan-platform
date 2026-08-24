@@ -89,7 +89,7 @@ export async function invoiceSettings(tenantId: string) {
     prefix: company?.invoicePrefix ?? 'INV',
     taxRate: company?.defaultTaxRate ?? 0,
     termDays: company?.paymentTermDays ?? 0,
-    currency: company?.currency ?? 'EGP',
+    currency: company?.currency ?? 'IQD',
     taxNumber: company?.taxNumber ?? null,
   };
 }

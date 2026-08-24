@@ -272,7 +272,7 @@ export default async function FormulaDetailPage({
                     <h4 className="mb-3 text-sm font-semibold text-brand">أسعار الوحدات</h4>
                     <PriceEditor
                       action={updateVersionPrices.bind(null, formula.id, shown.id)}
-                      currency={company?.currency ?? 'EGP'}
+                      currency={company?.currency ?? 'IQD'}
                       rows={shown.lines.map((l) => ({
                         id: l.id,
                         sequence: l.sequence,

@@ -39,7 +39,7 @@ export function ExpenseForm({
         />
         <Field
           name="amount"
-          label="المبلغ (ج.م)"
+          label="المبلغ (د.ع)"
           type="number"
           required
           dir="ltr"

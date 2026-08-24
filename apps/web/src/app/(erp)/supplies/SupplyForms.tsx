@@ -136,7 +136,7 @@ export function TransactionForm({
         <Field name="quantity" label="الكمية" type="number" required dir="ltr" errors={state.fieldErrors} />
         <Field
           name="unitCost"
-          label="تكلفة الوحدة (ج.م)"
+          label="تكلفة الوحدة (د.ع)"
           type="number"
           required
           dir="ltr"

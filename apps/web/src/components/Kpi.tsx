@@ -2,7 +2,7 @@
  * KPI tile and empty-state — the two primitives every dashboard uses.
  *
  * `EmptyMetric` exists because most of the ERP has no data yet. A tile
- * showing "0 ج.م" would read as a measured zero; this reads as "not built",
+ * showing "0 د.ع" would read as a measured zero; this reads as "not built",
  * which is the truth. Constitution P5: gaps are stated.
  */
 

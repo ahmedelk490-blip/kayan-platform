@@ -37,7 +37,7 @@ export function PenaltyForm({
         />
         <Field
           name="amount"
-          label="المبلغ (ج.م)"
+          label="المبلغ (د.ع)"
           type="number"
           required
           dir="ltr"

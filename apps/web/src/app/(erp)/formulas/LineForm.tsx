@@ -107,7 +107,7 @@ export function LineForm({
             />
             <Field
               name="unitCost"
-              label="تكلفة الوحدة (ج.م)"
+              label="تكلفة الوحدة (د.ع)"
               type="number"
               required
               dir="ltr"

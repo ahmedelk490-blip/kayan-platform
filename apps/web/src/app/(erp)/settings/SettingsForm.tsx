@@ -66,7 +66,7 @@ export function SettingsForm({
             dir="ltr"
             defaultValue={company.currency}
             errors={state.fieldErrors}
-            hint="رمز قصير يظهر بجوار المبالغ، مثل EGP."
+            hint="رمز قصير يظهر بجوار المبالغ، مثل IQD (دينار عراقي)."
           />
         </div>
       </section>

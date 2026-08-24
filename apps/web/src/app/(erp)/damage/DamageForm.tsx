@@ -75,7 +75,7 @@ export function DamageForm({
         />
         <Field
           name="materialCost"
-          label="تكلفة الخامات (ج.م)"
+          label="تكلفة الخامات (د.ع)"
           type="number"
           required
           dir="ltr"
@@ -84,7 +84,7 @@ export function DamageForm({
         />
         <Field
           name="laborCost"
-          label="تكلفة العمالة (ج.م)"
+          label="تكلفة العمالة (د.ع)"
           type="number"
           required
           dir="ltr"

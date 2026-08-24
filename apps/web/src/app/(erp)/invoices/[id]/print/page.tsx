@@ -51,7 +51,7 @@ export default async function InvoicePrintPage({
   const shareText = [
     `${INVOICE_STATUS_AR[invoice.status as keyof typeof INVOICE_STATUS_AR] ?? ''} ${invoice.number ?? 'مسودة'}`,
     `${company?.nameAr ?? 'كيان'}`,
-    `الإجمالي: ${formatMoney(invoice.total)} ${company?.currency ?? 'EGP'}`,
+    `الإجمالي: ${formatMoney(invoice.total)} ${company?.currency ?? 'IQD'}`,
     invoice.dueDate ? `الاستحقاق: ${invoice.dueDate.toLocaleDateString('ar-EG')}` : '',
   ]
     .filter(Boolean)
@@ -69,7 +69,7 @@ export default async function InvoicePrintPage({
         statusNote={statusNote}
         company={{
           name: company?.nameAr ?? 'كيان',
-          currency: company?.currency ?? 'EGP',
+          currency: company?.currency ?? 'IQD',
           taxNumber: company?.taxNumber,
           commercialRegister: company?.commercialRegister,
           paymentTerms: company?.paymentTerms,

@@ -64,7 +64,7 @@ export default async function QuotationPrintPage({
   const shareText = [
     `عرض سعر ${quotation.number}`,
     company?.nameAr ?? 'كيان',
-    `الإجمالي: ${formatMoney(quotation.total)} ${company?.currency ?? 'EGP'}`,
+    `الإجمالي: ${formatMoney(quotation.total)} ${company?.currency ?? 'IQD'}`,
     quotation.expiryDate
       ? `صالح حتى: ${quotation.expiryDate.toLocaleDateString('ar-EG')}`
       : '',
@@ -85,7 +85,7 @@ export default async function QuotationPrintPage({
         statusNote={statusNote}
         company={{
           name: company?.nameAr ?? 'كيان',
-          currency: company?.currency ?? 'EGP',
+          currency: company?.currency ?? 'IQD',
           taxNumber: company?.taxNumber,
           commercialRegister: company?.commercialRegister,
           paymentTerms: company?.paymentTerms,
