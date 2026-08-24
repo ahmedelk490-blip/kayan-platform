@@ -471,6 +471,9 @@ model Product {
   sellingPrice  Decimal?  @db.Decimal(19, 4)
   /// ACTIVE | DRAFT | DISCONTINUED
   status        String    @default("ACTIVE")
+  /// معروض على الموقع العام؟ محور مستقل عن status: منتج قد يكون ACTIVE
+  /// للاستخدام الداخلي لكن يُخفى عن الموقع. الموقع يعرض ACTIVE + showOnSite فقط.
+  showOnSite    Boolean   @default(true)
   isDeleted     Boolean   @default(false)
   deletedAt     DateTime?
   createdAt     DateTime  @default(now())

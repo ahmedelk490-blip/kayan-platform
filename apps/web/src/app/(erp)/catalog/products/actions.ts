@@ -734,3 +734,36 @@ export async function moveProductImage(productId: string, imageId: string, dir: 
   revalidatePath(`/catalog/products/${productId}`);
   revalidatePath('/');
 }
+
+/**
+ * إظهار/إخفاء المنتج على الموقع العام — محور مستقل عن حالة المنتج الداخلية.
+ *
+ * ما يظهر للزائر هو ما يوافق عليه المدير هنا. لا نشر ولا تعديل كود: القراءة
+ * العامة تُصفّى على showOnSite، فالتبديل يظهر أو يختفي فوراً.
+ */
+export async function setShowOnSite(productId: string, show: boolean): Promise<void> {
+  const user = await requirePermission('products.write');
+
+  const product = await prisma.product.findFirst({
+    where: { id: productId, tenantId: user.tenantId, isDeleted: false },
+    select: { id: true, sku: true },
+  });
+  if (!product) return;
+
+  await prisma.product.update({ where: { id: product.id }, data: { showOnSite: show } });
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'product.showOnSite',
+    entityType: 'Product',
+    entityId: product.id,
+    detail: `${product.sku} → ${show ? 'معروض' : 'مخفي'}`,
+  });
+
+  revalidatePath('/catalog/review');
+  revalidatePath('/catalog/products');
+  revalidatePath(`/catalog/products/${productId}`);
+  revalidatePath('/products');
+  revalidatePath('/');
+}

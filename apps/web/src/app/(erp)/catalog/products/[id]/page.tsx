@@ -19,6 +19,7 @@ import {
   deleteProductImage,
   setPrimaryImage,
   moveProductImage,
+  setShowOnSite,
 } from '../actions';
 import { loadProductOptions } from '../options';
 import { VariantForm } from './VariantForm';
@@ -110,9 +111,38 @@ export default async function ProductDetailPage({
         }
       />
 
-      <p className="mb-5 text-xs text-txt-3">
-        <span dir="ltr" className="tnum">{product.sku}</span> · {product.category.nameAr}
-      </p>
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <p className="text-xs text-txt-3">
+          <span dir="ltr" className="tnum">{product.sku}</span> · {product.category.nameAr}
+        </p>
+        {/* حالة الظهور على الموقع + تبديلها من هنا مباشرة. المتوقّف/المسودة لا
+            يظهر مهما كان المفتاح، فنوضّح ذلك بدل تبديل بلا أثر. */}
+        {product.status === 'ACTIVE' ? (
+          product.showOnSite ? (
+            <span className="inline-flex items-center gap-2 rounded-full bg-ok-soft px-3 py-1 text-[0.7rem] text-ok">
+              معروض على الموقع
+              {canWrite && (
+                <form action={setShowOnSite.bind(null, product.id, false)}>
+                  <button type="submit" className="text-txt-3 underline hover:text-bad">إخفاء</button>
+                </form>
+              )}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-2 rounded-full bg-card-2 px-3 py-1 text-[0.7rem] text-txt-2">
+              مخفي عن الموقع
+              {canWrite && (
+                <form action={setShowOnSite.bind(null, product.id, true)}>
+                  <button type="submit" className="font-medium text-brand underline">إظهار</button>
+                </form>
+              )}
+            </span>
+          )
+        ) : (
+          <span className="rounded-full bg-card-2 px-3 py-1 text-[0.7rem] text-txt-4">
+            لا يظهر على الموقع (المنتج غير نشط)
+          </span>
+        )}
+      </div>
 
       {canWrite && (
         <section className="erp-card mb-6 p-6">

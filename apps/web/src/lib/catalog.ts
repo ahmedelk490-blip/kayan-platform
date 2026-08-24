@@ -67,7 +67,7 @@ export async function publicProducts(): Promise<PublicProduct[]> {
 
 async function queryProducts(): Promise<PublicProduct[]> {
   const rows = await prisma.product.findMany({
-    where: { tenantId: PUBLIC_TENANT, isDeleted: false, status: 'ACTIVE' },
+    where: { tenantId: PUBLIC_TENANT, isDeleted: false, status: 'ACTIVE', showOnSite: true },
     orderBy: { sku: 'asc' },
     select: {
       id: true,
