@@ -82,12 +82,8 @@ export function Navigation() {
 
         <div className="hidden items-center gap-3 md:flex">
           <ThemeToggle />
-          <Link
-            href="/login"
-            className="rounded-full border border-edge-strong px-4 py-2 text-xs text-body-muted transition-colors hover:border-brand hover:text-brand"
-          >
-            دخول النظام
-          </Link>
+          {/* رابط دخول النظام أُزيل من الشريط بطلب المالك — لا يظهر للزبون.
+              مدخل الموظفين انتقل إلى أسفل التذييل بشكل خافت. */}
           {/* #quote, not #contact — the contact section was replaced by the
               quote form in Phase 8, and this button pointed at an anchor that
               no longer existed, so it silently did nothing. */}
@@ -152,18 +148,10 @@ export function Navigation() {
             </Link>
           ))}
           <Link
-            href="/login"
-            onClick={() => setMenuOpen(false)}
-            tabIndex={menuOpen ? 0 : -1}
-            className="mt-2 rounded-xl border border-edge-strong px-4 py-3 text-center text-sm text-body"
-          >
-            دخول النظام
-          </Link>
-          <Link
             href="#quote"
             onClick={() => setMenuOpen(false)}
             tabIndex={menuOpen ? 0 : -1}
-            className="rounded-xl bg-brand-fill px-4 py-3 text-center text-sm font-medium text-on-brand"
+            className="mt-2 rounded-xl bg-brand-fill px-4 py-3 text-center text-sm font-medium text-on-brand"
           >
             اطلب عرض سعر
           </Link>

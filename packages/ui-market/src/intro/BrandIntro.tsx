@@ -115,6 +115,16 @@ export function BrandIntro() {
               shows through; the logo layer sits above it. */}
           <div className="absolute inset-0 bg-ink-950" />
 
+          {/* المس أيّ مكان للتخطّي. طبقة شفّافة فوق كل شيء (z-102، أعلى من
+              الكانفس z-100) تلتقط أول لمسة فتُنهي المقدمة فوراً — فلا تحبس
+              الزائر ثوانٍ ينتظر زرّاً صغيراً. */}
+          <button
+            type="button"
+            onClick={finish}
+            aria-label="تخطّي المقدمة"
+            className="absolute inset-0 z-[102] cursor-pointer"
+          />
+
           <motion.div
             initial={{ opacity: 0, scale: 0.92 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -132,12 +142,14 @@ export function BrandIntro() {
             </motion.p>
           </motion.div>
 
+          {/* تلميح مرئي فوق طبقة اللمس (z-103). النقر عليه أو على أيّ مكان
+              يُنهي المقدمة. */}
           <button
             type="button"
             onClick={finish}
-            className="absolute bottom-8 end-8 z-[101] rounded-full border border-ink-700 bg-ink-950/60 px-5 py-2 text-xs uppercase tracking-[0.16em] text-neutral-400 backdrop-blur transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="absolute bottom-8 end-8 z-[103] rounded-full border border-ink-700 bg-ink-950/60 px-5 py-2 text-xs tracking-[0.16em] text-neutral-300 backdrop-blur transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            Skip
+            تخطّي · المس للدخول
           </button>
         </motion.div>
       )}

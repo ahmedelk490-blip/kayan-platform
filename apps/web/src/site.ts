@@ -222,7 +222,8 @@ export const FOOTER_GROUPS = [
   {
     title: 'روابط',
     links: [
-      { href: '/login', label: 'دخول النظام' },
+      // «دخول النظام» أُزيل من خريطة الموقع بطلب المالك — مدخل الموظفين خافت
+      // في أسفل التذييل فقط، لا يظهر للزبون كرابط معنوَن.
       { href: '/legal/privacy', label: 'الخصوصية' },
       { href: '/legal/terms', label: 'الشروط' },
     ],

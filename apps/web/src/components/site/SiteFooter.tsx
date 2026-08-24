@@ -70,7 +70,17 @@ export function SiteFooter() {
           <span>
             {BRAND.nameAr} | {BRAND.name} — مصنع الزي الموحد والطباعة والتطريز
           </span>
-          <span>© {new Date().getFullYear()} · جميع الحقوق محفوظة</span>
+          <span className="flex items-center gap-3">
+            © {new Date().getFullYear()} · جميع الحقوق محفوظة
+            {/* مدخل النظام للموظفين — خافت في أسفل التذييل، لا يلفت الزبون. */}
+            <Link
+              href="/login"
+              className="text-body-subtle/60 transition-colors hover:text-body-muted"
+              aria-label="دخول الموظفين إلى النظام"
+            >
+              ·
+            </Link>
+          </span>
         </div>
       </div>
     </footer>
