@@ -133,7 +133,8 @@ export interface PublicProductDetail {
   colors: { nameAr: string; hex: string | null }[];
   sizes: string[];
   materials: string[];
-  tiers: { service: string; minQty: number; maxQty: number | null; price: string; currency: string }[];
+  /** شريحة سعر؛ color = اسم اللون إن كان السعر يخصّ لوناً بعينه، وإلا null (كل الألوان). */
+  tiers: { service: string; minQty: number; maxQty: number | null; price: string; currency: string; color: string | null }[];
 }
 
 /**
@@ -147,7 +148,7 @@ export async function publicProduct(id: string): Promise<PublicProductDetail | n
 
   try {
     const p = await prisma.product.findFirst({
-      where: { id, tenantId: PUBLIC_TENANT, isDeleted: false, status: 'ACTIVE' },
+      where: { id, tenantId: PUBLIC_TENANT, isDeleted: false, status: 'ACTIVE', showOnSite: true },
       select: {
         id: true,
         sku: true,
@@ -162,6 +163,7 @@ export async function publicProduct(id: string): Promise<PublicProductDetail | n
         variants: {
           where: { isDeleted: false },
           select: {
+            id: true,
             color: { select: { nameAr: true, hex: true, sortOrder: true } },
             size: { select: { code: true, sortOrder: true } },
           },
@@ -170,12 +172,16 @@ export async function publicProduct(id: string): Promise<PublicProductDetail | n
         priceTiers: {
           where: { isActive: true },
           orderBy: [{ service: 'asc' }, { minQty: 'asc' }],
-          select: { service: true, minQty: true, maxQty: true, price: true, currency: true },
+          select: { service: true, minQty: true, maxQty: true, price: true, currency: true, variantId: true },
         },
       },
     });
 
     if (!p) return null;
+
+    // متغيّر → اسم لونه، لنسب كل شريحة سعر لِلونها. الشريحة بلا متغيّر تعمّ كل الألوان.
+    const variantColor = new Map<string, string | null>();
+    for (const v of p.variants) variantColor.set(v.id, v.color?.nameAr ?? null);
 
     // لون واحد لكل اسم، مرتّب كما في النظام. Map يزيل التكرار ويحفظ الكود.
     const colorMap = new Map<string, { nameAr: string; hex: string | null; sortOrder: number }>();
@@ -209,6 +215,7 @@ export async function publicProduct(id: string): Promise<PublicProductDetail | n
         maxQty: t.maxQty,
         price: t.price.toString(),
         currency: t.currency,
+        color: t.variantId ? (variantColor.get(t.variantId) ?? null) : null,
       })),
     };
   } catch (error) {

@@ -194,8 +194,11 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               )}
             </div>
 
-            {/* الأسعار — أسفل، للمهتمّ */}
-            {product.tiers.length > 0 && (
+            {/* الأسعار — أسفل، للمهتمّ. عمود «اللون» يظهر فقط حين يختلف السعر
+                حسب اللون، فلا نُثقل الجدول بعمود «كل الألوان» بلا داعٍ. */}
+            {product.tiers.length > 0 && (() => {
+              const hasColorPricing = product.tiers.some((t) => t.color !== null);
+              return (
               <div className="mt-10 rounded-2xl border border-edge bg-panel/50 p-6">
                 <h2 className="mb-4 text-base font-semibold text-body">أسعار تقريبية حسب الكمية</h2>
                 <div className="overflow-hidden rounded-xl border border-edge">
@@ -203,6 +206,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                     <thead className="bg-panel/70 text-body-muted">
                       <tr>
                         <th className="px-4 py-2.5 text-start font-medium">الخدمة</th>
+                        {hasColorPricing && <th className="px-4 py-2.5 text-start font-medium">اللون</th>}
                         <th className="px-4 py-2.5 text-start font-medium">الكمية</th>
                         <th className="px-4 py-2.5 text-start font-medium">السعر</th>
                       </tr>
@@ -211,6 +215,9 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                       {product.tiers.map((t, i) => (
                         <tr key={i} className="border-t border-edge">
                           <td className="px-4 py-2.5 text-body">{SERVICE_AR[t.service] ?? t.service}</td>
+                          {hasColorPricing && (
+                            <td className="px-4 py-2.5 text-body-muted">{t.color ?? 'كل الألوان'}</td>
+                          )}
                           <td className="px-4 py-2.5 text-body-muted">
                             {t.maxQty ? `${t.minQty}–${t.maxQty}` : `${t.minQty}+`} قطعة
                           </td>
@@ -224,7 +231,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                 </div>
                 <p className="mt-3 text-xs text-body-subtle">الأسعار تتغيّر مع الكمية والتصميم — اطلب عرضاً دقيقاً.</p>
               </div>
-            )}
+              );
+            })()}
           </div>
         </div>
       </div>
