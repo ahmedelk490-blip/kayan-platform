@@ -3,7 +3,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { publicProduct, publicColors, siteWhatsApp } from '@/lib/catalog';
-import { OrderForm } from './OrderForm';
+import { ProductBuy } from './ProductBuy';
 
 export const dynamic = 'force-dynamic';
 
@@ -137,70 +137,39 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
             <p className="mt-6 text-lg leading-[2] text-body-muted">{description}</p>
 
-            {/* الألوان */}
-            {colors.length > 0 && (
-              <div className="mt-9">
-                <h2 className="mb-4 text-base font-semibold text-body">
-                  الألوان المتوفّرة
-                  {colorsAreGeneral && (
-                    <span className="ms-2 text-xs font-normal text-body-subtle">— ألوان المصنع القياسية، وأي لون آخر حسب الطلب</span>
-                  )}
-                </h2>
-                <ul className="flex flex-wrap gap-4">
-                  {colors.map((c) => (
-                    <li key={c.nameAr} className="flex flex-col items-center gap-2">
-                      <span
-                        aria-hidden
-                        className="h-11 w-11 rounded-full border border-black/10 shadow-[inset_0_2px_6px_rgba(0,0,0,0.15)]"
-                        style={{ backgroundColor: c.hex ?? 'transparent' }}
-                      />
-                      <span className="text-[0.72rem] text-body-muted">{c.nameAr}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            {/* اختيار اللون والمقاس والكمية + السعر + الإضافة للسلّة. */}
+            <ProductBuy
+              productId={product.id}
+              productName={product.nameAr}
+              image={cover}
+              colors={colors}
+              sizes={product.sizes}
+              tiers={product.tiers.map((t) => ({
+                service: t.service,
+                minQty: t.minQty,
+                maxQty: t.maxQty,
+                price: Number(t.price),
+                currency: t.currency,
+                color: t.color,
+              }))}
+            />
+            {colorsAreGeneral && (
+              <p className="mt-3 text-xs text-body-subtle">الألوان المعروضة هي ألوان المصنع القياسية، وأي لون آخر حسب الطلب.</p>
             )}
 
-            {/* المقاسات */}
-            {product.sizes.length > 0 && (
-              <div className="mt-8">
-                <h2 className="mb-3 text-base font-semibold text-body">المقاسات</h2>
-                <ul className="flex flex-wrap gap-2">
-                  {product.sizes.map((s) => (
-                    <li key={s} className="grid h-11 min-w-11 place-items-center rounded-xl border border-edge-strong px-3.5 text-sm text-body">
-                      {s}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* الأزرار */}
-            <div className="mt-10 flex flex-wrap gap-3">
-              <Link
-                href="/#quote"
-                className="inline-flex items-center rounded-full bg-brand-fill px-8 py-4 text-sm font-medium text-on-brand transition-opacity hover:opacity-90"
-              >
-                اطلب عرض سعر
-              </Link>
-              {waHref && (
+            {/* تواصل مباشر بديل — لمن يفضّل الواتساب. */}
+            {waHref && (
+              <div className="mt-6">
                 <a
                   href={waHref}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-full border border-edge-strong px-8 py-4 text-sm font-medium text-body transition-colors hover:border-brand hover:text-brand"
+                  className="inline-flex items-center gap-2 rounded-full border border-edge-strong px-7 py-3 text-sm font-medium text-body transition-colors hover:border-brand hover:text-brand"
                 >
-                  اسأل على واتساب
+                  أو اسأل على واتساب
                 </a>
-              )}
-            </div>
-
-            {/* طلب المنتج مباشرة — يصل للـERP كطلب معلّق يحوّله المندوب لفاتورة. */}
-            <OrderForm
-              productId={product.id}
-              colors={colors.map((c) => c.nameAr)}
-              sizes={product.sizes}
-            />
+              </div>
+            )}
 
             {/* الأسعار — أسفل, للمهتمّ. عمود «اللون» يظهر فقط حين يختلف السعر
                 حسب اللون، فلا نُثقل الجدول بعمود «كل الألوان» بلا داعٍ. */}

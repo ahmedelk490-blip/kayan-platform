@@ -4,56 +4,81 @@ import { prisma } from './prisma';
 import { setCurrentTenant } from './tenant-context';
 
 /**
- * استقبال طلب منتج من الموقع العام.
+ * استقبال طلب سلّة من الموقع العام.
  *
- * كالـleads تماماً: مسار كتابة عامّ مقيّد، بلا جلسة، يُنشئ **طلباً معلّقاً
- * فقط** (WebOrder بحالة PENDING) — لا فاتورة ولا وصولاً لأي كيان آخر. المندوب
- * يراجعه في الـERP ويحوّله لفاتورة، فعندها تُخصَّص الأسعار والأرقام. لا نثق
- * بمعرّف مستأجر من العميل: المستأجر يُشتقّ من المنتج نفسه.
+ * كالـleads: مسار كتابة عامّ مقيّد، بلا جلسة، يُنشئ **طلباً معلّقاً فقط**
+ * (WebOrder بحالة PENDING) بعدّة أصناف — لا فاتورة ولا وصولاً لأي كيان آخر.
+ * المندوب يراجعه في الـERP ويحوّله لفاتورة. لا نثق بمعرّف مستأجر من العميل:
+ * المستأجر ثابت للموقع، وكل منتج يُتحقّق أنه يخصّه.
  */
 
 const PUBLIC_TENANT = process.env.PUBLIC_TENANT_ID ?? 'kayan';
 
-export interface WebOrderInput {
+export interface WebOrderItem {
   productId: string;
   color?: string;
   size?: string;
   quantity: number;
+}
+
+export interface WebOrderInput {
   name: string;
   phone: string;
   company?: string;
   note?: string;
+  items: WebOrderItem[];
 }
 
 export type WebOrderResult =
   | { ok: true; number: string }
-  | { ok: false; reason: 'product' };
+  | { ok: false; reason: 'items' };
 
 export async function createWebOrder(input: WebOrderInput): Promise<WebOrderResult> {
   setCurrentTenant(PUBLIC_TENANT);
 
-  // المنتج لازم يكون موجوداً ومعروضاً لهذا المستأجر — لا نثق بأي معرّف وارد.
-  const product = await prisma.product.findFirst({
-    where: { id: input.productId, tenantId: PUBLIC_TENANT, isDeleted: false, status: 'ACTIVE' },
-    select: { id: true, nameAr: true },
-  });
-  if (!product) return { ok: false, reason: 'product' };
+  // نبني سطراً لكل صنف تُطابق منتجه مستأجرَ الموقع. المتغيّر يُحلّ من اللون
+  // والمقاس إن أمكن (ليُسعَّر تلقائياً)، وإلا يبقى نصّاً يحلّه المندوب.
+  const lines: {
+    productId: string;
+    variantId: string | null;
+    productLabel: string;
+    colorLabel: string | null;
+    sizeLabel: string | null;
+    quantity: number;
+  }[] = [];
 
-  // نحاول مطابقة المتغيّر من اللون والمقاس المختارين — إن طابق خزّنا معرّفه
-  // ليُسعَّر تلقائياً عند التحويل؛ وإلا نخزّن النصوص فقط ويحلّه المندوب.
-  let variantId: string | null = null;
-  if (input.color || input.size) {
-    const variant = await prisma.productVariant.findFirst({
-      where: {
-        productId: product.id,
-        isDeleted: false,
-        ...(input.color ? { color: { nameAr: input.color } } : {}),
-        ...(input.size ? { size: { code: input.size } } : {}),
-      },
-      select: { id: true },
+  for (const item of input.items) {
+    const product = await prisma.product.findFirst({
+      where: { id: item.productId, tenantId: PUBLIC_TENANT, isDeleted: false, status: 'ACTIVE' },
+      select: { id: true, nameAr: true },
     });
-    variantId = variant?.id ?? null;
+    if (!product) continue;
+
+    let variantId: string | null = null;
+    if (item.color || item.size) {
+      const variant = await prisma.productVariant.findFirst({
+        where: {
+          productId: product.id,
+          isDeleted: false,
+          ...(item.color ? { color: { nameAr: item.color } } : {}),
+          ...(item.size ? { size: { code: item.size } } : {}),
+        },
+        select: { id: true },
+      });
+      variantId = variant?.id ?? null;
+    }
+
+    lines.push({
+      productId: product.id,
+      variantId,
+      productLabel: product.nameAr,
+      colorLabel: item.color || null,
+      sizeLabel: item.size || null,
+      quantity: Math.max(1, Math.round(item.quantity)),
+    });
   }
+
+  if (lines.length === 0) return { ok: false, reason: 'items' };
 
   const number = `WO-${Date.now().toString(36).toUpperCase()}`;
 
@@ -66,16 +91,7 @@ export async function createWebOrder(input: WebOrderInput): Promise<WebOrderResu
       company: input.company || null,
       note: input.note || null,
       status: 'PENDING',
-      lines: {
-        create: {
-          productId: product.id,
-          variantId,
-          productLabel: product.nameAr,
-          colorLabel: input.color || null,
-          sizeLabel: input.size || null,
-          quantity: input.quantity,
-        },
-      },
+      lines: { create: lines },
     },
   });
 

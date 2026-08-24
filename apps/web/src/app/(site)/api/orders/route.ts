@@ -1,21 +1,22 @@
 import { NextResponse } from 'next/server';
-import { createWebOrder } from '@/lib/orders';
+import { createWebOrder, type WebOrderItem } from '@/lib/orders';
 
 export const runtime = 'nodejs';
 
 /**
- * استقبال طلب منتج من الموقع العام — ثاني مسار كتابة بلا جلسة، مقيّد كالـleads.
+ * استقبال طلب سلّة من الموقع العام — مسار كتابة بلا جلسة، مقيّد كالـleads.
  *
- * يُنشئ طلباً معلّقاً فقط (WebOrder). لا فاتورة، لا وصول لأي كيان آخر، تحقّق
- * صارم، وحدّ معدّل أشدّ من أي مسار موثّق.
+ * يُنشئ طلباً معلّقاً فقط (WebOrder بعدّة أصناف). لا فاتورة، لا وصول لأي كيان
+ * آخر، تحقّق صارم، وحدّ معدّل.
  */
 
 const PHONE = /^[+\d][\d\s()+.-]{6,}$/;
+const MAX_ITEMS = 40;
 
 type Rejection = { field: string; reason: string };
 
 function validate(body: unknown):
-  | { ok: true; value: { productId: string; color?: string; size?: string; quantity: number; name: string; phone: string; company?: string; note?: string } }
+  | { ok: true; value: { name: string; phone: string; company?: string; note?: string; items: WebOrderItem[] } }
   | { ok: false; errors: Rejection[] } {
   const errors: Rejection[] = [];
   if (typeof body !== 'object' || body === null) {
@@ -41,29 +42,37 @@ function validate(body: unknown):
     return t;
   };
 
-  const productId = text('productId', true, 40);
   const name = text('name', true, 120);
   const phone = text('phone', true, 40);
   const company = text('company', false, 160);
-  const color = text('color', false, 60);
-  const size = text('size', false, 30);
   const note = text('note', false, 2000);
-
   if (phone && !PHONE.test(phone)) {
     errors.push({ field: 'phone', reason: 'Does not look like a phone number.' });
   }
 
-  let quantity = 1;
-  const q = raw.quantity;
-  const n = typeof q === 'number' ? q : Number(q);
-  if (!Number.isFinite(n) || n < 1 || n > 100000) {
-    errors.push({ field: 'quantity', reason: 'Must be a whole number of 1 or more.' });
+  const items: WebOrderItem[] = [];
+  const rawItems = raw.items;
+  if (!Array.isArray(rawItems) || rawItems.length === 0) {
+    errors.push({ field: 'items', reason: 'Required.' });
+  } else if (rawItems.length > MAX_ITEMS) {
+    errors.push({ field: 'items', reason: `At most ${MAX_ITEMS} items.` });
   } else {
-    quantity = Math.floor(n);
+    for (const it of rawItems) {
+      if (typeof it !== 'object' || it === null) continue;
+      const r = it as Record<string, unknown>;
+      const productId = typeof r.productId === 'string' ? r.productId.trim() : '';
+      if (!productId || productId.length > 40) continue;
+      const color = typeof r.color === 'string' ? r.color.trim().slice(0, 60) : undefined;
+      const size = typeof r.size === 'string' ? r.size.trim().slice(0, 30) : undefined;
+      const n = typeof r.quantity === 'number' ? r.quantity : Number(r.quantity);
+      const quantity = Number.isFinite(n) && n >= 1 && n <= 100000 ? Math.floor(n) : 1;
+      items.push({ productId, color: color || undefined, size: size || undefined, quantity });
+    }
+    if (items.length === 0) errors.push({ field: 'items', reason: 'No valid items.' });
   }
 
   if (errors.length) return { ok: false, errors };
-  return { ok: true, value: { productId, color: color || undefined, size: size || undefined, quantity, name, phone, company: company || undefined, note: note || undefined } };
+  return { ok: true, value: { name, phone, company: company || undefined, note: note || undefined, items } };
 }
 
 const WINDOW_MS = 60_000;
@@ -111,7 +120,7 @@ export async function POST(request: Request) {
   try {
     const created = await createWebOrder(result.value);
     if (!created.ok) {
-      return NextResponse.json({ ok: false, errors: [{ field: 'productId', reason: 'Product not found.' }] }, { status: 422 });
+      return NextResponse.json({ ok: false, errors: [{ field: 'items', reason: 'No valid products.' }] }, { status: 422 });
     }
     return NextResponse.json({ ok: true, number: created.number }, { status: 201 });
   } catch (error) {

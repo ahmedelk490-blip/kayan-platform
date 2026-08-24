@@ -6,6 +6,7 @@ import { IntroMount } from '@/components/site/IntroMount';
 import { Navigation } from '@/components/site/Navigation';
 import { SiteFooter } from '@/components/site/SiteFooter';
 import { WhatsAppButton } from '@/components/site/WhatsAppButton';
+import { CartWidget } from '@/components/site/CartWidget';
 import { SITE_URL, whatsappHref } from '@/site';
 import { siteWhatsApp } from '@/lib/catalog';
 import './site.css';
@@ -134,6 +135,8 @@ document.documentElement.setAttribute('data-theme', stored || system);
           {/* يُحسب على الخادم فيصل للعميل رابطاً جاهزاً أو لا شيء —
               ولا يصل الرقم إلى الحزمة حين لا يكون مضبوطاً. */}
           <WhatsAppButton href={whatsappHref(whatsapp)} />
+          {/* سلّة الطلب العائمة — فوق زرّ الواتساب، تظهر حين تحوي أصنافاً. */}
+          <CartWidget />
         </SmoothScroller>
       </body>
     </html>
