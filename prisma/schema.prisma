@@ -117,6 +117,7 @@ model Tenant {
   employeePayments EmployeePayment[]
   productBundles ProductBundle[]
   webOrders WebOrder[]
+  recurringExpenses RecurringExpense[]
 }
 
 model Company {
@@ -395,6 +396,25 @@ model ProductBundle {
   lines   ProductBundleLine[]
 
   @@index([tenantId, productId])
+}
+
+/// مصروف ثابت متكرّر — إيجار، رواتب، إنترنت… يُعرّف مرة، ويُسجَّل بضغطة كل
+/// فترة (شهر). ليس مصروفاً فعلياً بذاته؛ قالبٌ يولّد مصروفاً معتمداً حين
+/// «يُخصَم» للشهر، فيدخل في صافي الربح كأيّ مصروف.
+model RecurringExpense {
+  id       String  @id @default(cuid())
+  tenantId String
+  nameAr   String
+  category String
+  amount   Decimal @db.Decimal(19, 4)
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, isActive])
 }
 
 /// طلب وارد من الموقع العام — العميل اختار منتجاً بمقاسه ولونه وكميته.

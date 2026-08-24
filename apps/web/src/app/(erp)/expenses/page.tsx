@@ -6,18 +6,24 @@ import {
   dec,
   formatMoney,
   netProfit,
+  monthlySeries,
   EXPENSE_CATEGORY_AR,
+  EXPENSE_CATEGORIES,
   APPROVAL_STATUS_AR,
+  type ExpenseCategory,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Pager, Badge } from '@/components/crud/Shell';
+import { BarChartInteractive } from '@/components/dashboard/BarChartInteractive';
+import { DonutChartInteractive } from '@/components/dashboard/DonutChartInteractive';
 import { Toolbar } from '@/components/crud/Toolbar';
 import { parseListQuery, skipTake, type SearchParams } from '@/lib/query';
 import { monthRange, dateInput } from '@/lib/ops';
 import { ExpenseForm } from './ExpenseForm';
-import { createExpense, setExpenseStatus, deleteExpense } from './actions';
+import { RecurringForm } from './RecurringForm';
+import { createExpense, setExpenseStatus, deleteExpense, deleteRecurring, postRecurring, addRecurring } from './actions';
 
 export const metadata: Metadata = { title: 'المصروفات الثانوية' };
 
@@ -79,7 +85,7 @@ export default async function ExpensesPage({
     ...(query.q ? { OR: [{ number: { contains: query.q } }, { notes: { contains: query.q } }] } : {}),
   };
 
-  const [rows, count, employees, monthExpenses, monthDamage, monthPenalties, categoryChips, rangeTotal] = await Promise.all([
+  const [rows, count, employees, monthExpenses, monthDamage, monthPenalties, categoryChips, rangeTotal, approvedForChart, pendingAgg, recurring] = await Promise.all([
     prisma.secondaryExpense.findMany({
       where,
       orderBy: { [query.sort]: query.dir },
@@ -124,13 +130,13 @@ export default async function ExpensesPage({
       },
       _sum: { amount: true },
     }),
-    // شرايح التصنيفات: كل المصروفات في المدى (بكل الحالات) — عدد وإجمالي لكل بند.
+    // شرايح التصنيفات: المصروفات المعتمدة فقط في المدى — ما صُرِف فعلاً.
     prisma.secondaryExpense.groupBy({
       by: ['category'],
       where: {
         tenantId: user.tenantId,
         isDeleted: false,
-        ...(statusFilter ? { status: statusFilter } : {}),
+        status: 'APPROVED',
         expenseDate: { gte: range.from, lte: range.to },
       },
       _sum: { amount: true },
@@ -140,11 +146,37 @@ export default async function ExpensesPage({
       where: {
         tenantId: user.tenantId,
         isDeleted: false,
-        ...(statusFilter ? { status: statusFilter } : {}),
+        status: 'APPROVED',
         expenseDate: { gte: range.from, lte: range.to },
       },
       _sum: { amount: true },
       _count: { _all: true },
+    }),
+    // المعتمد شهرياً للرسم البياني.
+    prisma.secondaryExpense.findMany({
+      where: {
+        tenantId: user.tenantId,
+        isDeleted: false,
+        status: 'APPROVED',
+        expenseDate: { gte: range.from, lte: range.to },
+      },
+      select: { amount: true, expenseDate: true },
+    }),
+    // بانتظار الاعتماد في المدى — لعرضه منفصلاً (ليس صرفاً بعد).
+    prisma.secondaryExpense.aggregate({
+      where: {
+        tenantId: user.tenantId,
+        isDeleted: false,
+        status: 'PENDING',
+        expenseDate: { gte: range.from, lte: range.to },
+      },
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+    // قوالب المصروفات الثابتة.
+    prisma.recurringExpense.findMany({
+      where: { tenantId: user.tenantId },
+      orderBy: [{ isActive: 'desc' }, { createdAt: 'asc' }],
     }),
   ]);
 
@@ -165,6 +197,30 @@ export default async function ExpensesPage({
     damageCost: damageTotal,
     penaltiesRecovered: recovered,
   });
+
+  // المعتمد (ما صُرِف فعلاً) والمعلّق (بانتظار الاعتماد) — منفصلان فلا يختلطان.
+  const approvedTotal = dec(rangeTotal._sum.amount ?? 0);
+  const pendingTotal = dec(pendingAgg._sum.amount ?? 0);
+
+  // سلسلة شهرية للمعتمد + دائرة التوزيع حسب البند — تفاعلية.
+  const series = monthlySeries(
+    approvedForChart.map((e) => ({ date: e.expenseDate as Date, amount: e.amount })),
+    range.from,
+    range.to,
+  );
+  const chartPoints = series.map((p) => ({ label: p.key, value: p.value.toNumber(), display: formatMoney(p.value) }));
+  const donutPoints = categoryChips
+    .slice()
+    .sort((a, b) => Number(b._sum.amount ?? 0) - Number(a._sum.amount ?? 0))
+    .map((g) => ({
+      label: (EXPENSE_CATEGORY_AR as Record<string, string>)[g.category] ?? g.category,
+      value: Number(g._sum.amount ?? 0),
+      display: formatMoney(g._sum.amount ?? 0),
+    }));
+
+  const thisMonthKey = new Date().toISOString().slice(0, 7);
+  const categoryOptions = EXPENSE_CATEGORIES.map((c) => ({ value: c, label: EXPENSE_CATEGORY_AR[c as ExpenseCategory] }));
+  const recurringTotal = recurring.filter((r) => r.isActive).reduce((s, r) => s.plus(dec(r.amount)), dec(0));
 
   return (
     <AppShell user={user} title="المصروفات الثانوية">
@@ -192,24 +248,89 @@ export default async function ExpensesPage({
         <span className="self-center text-[0.7rem] text-brand">المدى: {range.label}</span>
       </form>
 
-      {/* شرايح التصنيفات — إجمالي + كل بند بعدده ومبلغه، بسيطة كالمرجع. */}
-      <div className="mb-6 flex flex-wrap gap-2.5">
-        <div className="rounded-xl border border-brand/40 bg-brand-soft px-4 py-2.5">
-          <p className="text-[0.7rem] text-txt-3">إجمالي المصاريف ({rangeTotal._count._all})</p>
-          <p className="tnum text-base font-bold text-brand">{formatMoney(rangeTotal._sum.amount ?? 0)}</p>
-        </div>
-        {categoryChips
-          .slice()
-          .sort((a, b) => Number(b._sum.amount ?? 0) - Number(a._sum.amount ?? 0))
-          .map((g) => (
-            <div key={g.category} className="rounded-xl border border-line bg-card px-4 py-2.5">
-              <p className="text-[0.7rem] text-txt-3">
-                {(EXPENSE_CATEGORY_AR as Record<string, string>)[g.category] ?? g.category} ({g._count._all})
-              </p>
-              <p className="tnum text-sm font-semibold text-txt">{formatMoney(g._sum.amount ?? 0)}</p>
-            </div>
-          ))}
+      {/* مربعات كبيرة تفاعلية بالأرقام الصحيحة (المعتمد فقط = ما صُرِف فعلاً). */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <BigFigure label="إجمالي المصروفات المعتمدة" value={formatMoney(approvedTotal)} hint={`${rangeTotal._count._all} مصروف · ${range.label}`} strong />
+        <BigFigure label="بانتظار الاعتماد" value={formatMoney(pendingTotal)} hint={`${pendingAgg._count._all} مصروف — لا يُخصَم قبل الاعتماد`} tone={pendingTotal.gt(0) ? 'warn' : undefined} />
+        <BigFigure label="المصروفات الثابتة الشهرية" value={formatMoney(recurringTotal)} hint={`${recurring.filter((r) => r.isActive).length} بند ثابت نشط`} />
       </div>
+
+      {approvedTotal.gt(0) && (
+        <div className="mb-6 grid gap-4 lg:grid-cols-2">
+          <section className="erp-card p-6">
+            <h3 className="mb-4 text-sm font-semibold text-brand">المصروفات المعتمدة شهرياً</h3>
+            {chartPoints.every((p) => p.value === 0) ? (
+              <p className="py-8 text-center text-sm text-txt-3">لا مصروفات معتمدة في المدى.</p>
+            ) : (
+              <BarChartInteractive points={chartPoints} />
+            )}
+          </section>
+          <section className="erp-card p-6">
+            <h3 className="mb-4 text-sm font-semibold text-brand">التوزيع حسب البند</h3>
+            {donutPoints.length > 0 ? <DonutChartInteractive points={donutPoints} /> : <p className="py-8 text-center text-sm text-txt-3">لا بيانات.</p>}
+          </section>
+        </div>
+      )}
+
+      {/* شرايح التصنيفات — كل بند بعدده ومبلغه (معتمد)، بسيطة كالمرجع. */}
+      {categoryChips.length > 0 && (
+        <div className="mb-6 flex flex-wrap gap-2.5">
+          {categoryChips
+            .slice()
+            .sort((a, b) => Number(b._sum.amount ?? 0) - Number(a._sum.amount ?? 0))
+            .map((g) => (
+              <div key={g.category} className="rounded-xl border border-line bg-card px-4 py-2.5">
+                <p className="text-[0.7rem] text-txt-3">
+                  {(EXPENSE_CATEGORY_AR as Record<string, string>)[g.category] ?? g.category} ({g._count._all})
+                </p>
+                <p className="tnum text-sm font-semibold text-txt">{formatMoney(g._sum.amount ?? 0)}</p>
+              </div>
+            ))}
+        </div>
+      )}
+
+      {/* المصروفات الثابتة — تُعرّف مرة، وتُسجَّل بضغطة كل شهر. */}
+      {canWrite && (
+        <section className="erp-card mb-6 p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-brand">المصروفات الثابتة (تُخصَم كل شهر)</h3>
+            {recurring.some((r) => r.isActive) && (
+              <form action={postRecurring.bind(null, thisMonthKey)}>
+                <button type="submit" className="erp-btn py-2 text-xs">سجّل مصروفات هذا الشهر ({thisMonthKey})</button>
+              </form>
+            )}
+          </div>
+
+          {recurring.length > 0 && (
+            <ul className="mb-4 space-y-2">
+              {recurring.map((r) => (
+                <li key={r.id} className={`flex items-center justify-between gap-3 rounded-lg border border-line px-4 py-2.5 ${r.isActive ? 'bg-card-2' : 'opacity-55'}`}>
+                  <span className="text-sm text-txt">
+                    {r.nameAr}
+                    <span className="ms-2 text-[0.7rem] text-txt-4">
+                      {(EXPENSE_CATEGORY_AR as Record<string, string>)[r.category] ?? r.category}
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-4">
+                    <span className="tnum text-sm font-semibold text-brand">{formatMoney(r.amount)}</span>
+                    <form action={deleteRecurring.bind(null, r.id)}>
+                      <button type="submit" className="text-[0.7rem] text-bad hover:underline">حذف</button>
+                    </form>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="border-t border-line pt-4">
+            <RecurringForm action={addRecurring} categories={categoryOptions} />
+          </div>
+          <p className="mt-2 text-[0.7rem] leading-[1.8] text-txt-4">
+            «سجّل مصروفات هذا الشهر» يُنشئ مصروفاً لكل بند ثابت نشط، مرة واحدة للشهر (لا يتكرّر لو
+            ضغطته مرتين). يُخصَم فور تسجيله لأنك تملك اعتماد المصروفات.
+          </p>
+        </section>
+      )}
 
       <section className="erp-card mb-6 p-5">
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
@@ -344,6 +465,31 @@ function Figure({ label, value, strong }: { label: string; value: string; strong
       <p className={`tnum mt-1 ${strong ? 'text-lg font-semibold text-brand' : 'text-base text-txt'}`}>
         {value}
       </p>
+    </div>
+  );
+}
+
+/** مربّع كبير للأرقام — أوضح وأكبر من Figure، للوحة المصروفات العلوية. */
+function BigFigure({
+  label,
+  value,
+  hint,
+  strong,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  strong?: boolean;
+  tone?: 'warn';
+}) {
+  return (
+    <div className="erp-card p-6 transition-colors hover:border-brand/40">
+      <p className="text-xs text-txt-3">{label}</p>
+      <p className={`tnum mt-2 text-3xl font-bold ${tone === 'warn' ? 'text-warn' : 'text-brand'} ${strong ? '' : ''}`}>
+        {value}
+      </p>
+      {hint && <p className="mt-2 text-[0.7rem] text-txt-4">{hint}</p>}
     </div>
   );
 }
