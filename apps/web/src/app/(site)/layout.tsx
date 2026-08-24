@@ -84,6 +84,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html
       lang="ar"
       dir="rtl"
+      // السكربت أعلاه يضبط data-theme قبل الترطيب، فيختلف عن HTML الخادم —
+      // وهذا متوقّع لا خطأ. suppressHydrationWarning يُسكت تحذير الترطيب على
+      // هذا العنصر وحده (النمط القياسي لثيم بلا وميض في Next).
+      suppressHydrationWarning
       className={`${spaceGrotesk.variable} ${inter.variable} ${kufiArabic.variable}`}
     >
       <head>

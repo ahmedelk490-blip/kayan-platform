@@ -3,7 +3,7 @@
 
 /* Tailwind v4 scans the app by default; the shared cinematic package needs
    declaring explicitly or its utility classes are stripped from the build. */
-@source '../../../../packages/ui-market/src';
+@source '../../../../../packages/ui-market/src';
 
 /* ---------- Theme-aware utilities (Phase 9.2) -----------------
    The raw scales in @erp/brand are fixed values; the SEMANTIC tokens
