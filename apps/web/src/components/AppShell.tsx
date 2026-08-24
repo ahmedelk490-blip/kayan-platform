@@ -1,10 +1,12 @@
 import { Logo } from '@erp/brand/logo';
-import { can, type PermissionKey } from '@erp/domain';
+import { can, dec, type PermissionKey } from '@erp/domain';
 import type { SessionUser } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 import { logoutAction } from '@/app/(erp)/login/actions';
 import { MobileNav } from '@/components/NavLinks';
 import { AreaTabs } from '@/components/AreaTabs';
 import { GroupNav } from '@/components/GroupNav';
+import { NotificationBell, type Alert } from '@/components/NotificationBell';
 
 /**
  * ERP chrome — sidebar + header.
@@ -94,7 +96,7 @@ const GROUP_ORDER = [
   'الإدارة',
 ];
 
-export function AppShell({
+export async function AppShell({
   user,
   title,
   children,
@@ -116,6 +118,48 @@ export function AppShell({
 
   // آمن ضد الاسم الفارغ: لو الاسمان فارغان لا نستدعي split على null فيسقط
   // الشِّل كله (كل صفحات ERP). نرجع حرفاً بديلاً بدل الانهيار.
+  // تنبيهات نقص المخزون والمستلزمات — تُحسب لمن يرى المخزون فقط. تبقى القائمة
+  // فارغة (بلا استعلام) لغيره، فلا تُثقل صفحاته.
+  const seeInventory = can(user.role, 'inventory.read');
+  let alerts: Alert[] = [];
+  if (seeInventory) {
+    const [lowStock, lowSupplies] = await Promise.all([
+      prisma.stock.findMany({
+        where: { minStock: { gt: 0 }, warehouse: { tenantId: user.tenantId, isDeleted: false } },
+        include: {
+          variant: {
+            include: {
+              product: { select: { nameAr: true } },
+              color: { select: { nameAr: true } },
+              size: { select: { code: true } },
+            },
+          },
+        },
+      }),
+      prisma.supply.findMany({
+        where: { tenantId: user.tenantId, isDeleted: false, minStock: { gt: 0 } },
+        select: { id: true, nameAr: true, onHand: true, minStock: true, unit: true },
+      }),
+    ]);
+    const stockAlerts: Alert[] = lowStock
+      .filter((s) => dec(s.onHand).lte(dec(s.minStock)))
+      .map((s) => ({
+        id: `stock-${s.id}`,
+        label: [s.variant.product.nameAr, s.variant.color?.nameAr, s.variant.size?.code].filter(Boolean).join(' · '),
+        detail: `الرصيد ${dec(s.onHand).toNumber()} ≤ الحد الأدنى ${dec(s.minStock).toNumber()}`,
+        href: '/inventory',
+      }));
+    const supplyAlerts: Alert[] = lowSupplies
+      .filter((s) => dec(s.onHand).lte(dec(s.minStock)))
+      .map((s) => ({
+        id: `supply-${s.id}`,
+        label: s.nameAr,
+        detail: `الرصيد ${dec(s.onHand).toNumber()} ${s.unit ?? ''} ≤ الحد ${dec(s.minStock).toNumber()}`,
+        href: '/supplies',
+      }));
+    alerts = [...stockAlerts, ...supplyAlerts];
+  }
+
   const initials =
     (user.nameAr ?? user.name ?? '')
       .split(/\s+/)
@@ -195,6 +239,9 @@ export function AppShell({
         <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-line bg-card px-5 lg:px-8">
           <h1 className="truncate text-base font-semibold text-brand">{title}</h1>
 
+          <div className="flex items-center gap-3">
+            {seeInventory && <NotificationBell alerts={alerts} />}
+
           {/* هوية المستخدم والخروج في الترويسة للموبايل والتابلت حيث يختفي
               الشريط الجانبي؛ على الديسكتوب تظهر في أسفل الشريط بدلاً منها. */}
           <div className="flex items-center gap-4 lg:hidden">
@@ -207,6 +254,7 @@ export function AppShell({
                 خروج
               </button>
             </form>
+          </div>
           </div>
         </header>
 
