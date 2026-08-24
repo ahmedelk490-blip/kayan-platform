@@ -11,6 +11,7 @@ import { PERIODS, PERIOD_AR, type Period } from '@erp/domain';
 
 export const REPORTS = [
   { href: '/reports/financial', title: 'التقرير المالي', body: 'المبيعات والمصروفات والصافي والتدفّق النقدي.' },
+  { href: '/reports/clients', title: 'تحليل العملاء', body: 'لكل عميل: الفواتير والتحصيل والمتبقّي والربح.' },
   { href: '/reports/sales', title: 'المبيعات', body: 'الإيراد والفواتير عبر الفترة.' },
   { href: '/reports/inventory', title: 'تقييم المخزون', body: 'الرصيد الحالي بالتكلفة.' },
   { href: '/reports/production', title: 'إنتاجية التصنيع', body: 'أوامر الإنتاج وزمن الدورة.' },
