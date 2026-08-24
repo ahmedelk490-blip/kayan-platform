@@ -31,14 +31,16 @@ export function SectionShell({
   label,
   size = 'base',
 }: SectionShellProps) {
+  // إيقاع رأسيّ مضمون: صفوف padding مكتوبة inline لأن أصناف Tailwind
+  // (py-32/py-48) تُولَّد من مسح ملفات التطبيق لا حزمة ui-market، فكانت لا
+  // تُطبَّق — القسمان يتلامسان بلا فاصل. clamp يعطي فاصلاً متجاوباً بلا media.
+  const padY = size === 'tall' ? 'clamp(5rem, 12vw, 10rem)' : 'clamp(3.5rem, 9vw, 7rem)';
+
   return (
     <section
       id={id}
-      className={cn(
-        'relative w-full px-6 md:px-10 lg:px-16',
-        size === 'tall' ? 'py-32 md:py-48' : 'py-24 md:py-32',
-        className,
-      )}
+      className={cn('relative w-full px-6 md:px-10 lg:px-16', className)}
+      style={{ paddingTop: padY, paddingBottom: padY }}
     >
       {(act || label) && (
         <motion.div
