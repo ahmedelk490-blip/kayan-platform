@@ -180,8 +180,8 @@ export default async function ProductsPage({
                       }}
                     />
                   )}
-                  <Link href={`/catalog/products/${row.id}`} className="text-xs text-brand hover:underline">
-                    عرض
+                  <Link href={`/catalog/products/${row.id}`} className="text-xs font-medium text-brand hover:underline">
+                    الألوان والمقاسات والصور
                   </Link>
                 </div>
               </td>

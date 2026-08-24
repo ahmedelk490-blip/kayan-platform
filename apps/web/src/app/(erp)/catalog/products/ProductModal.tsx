@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { FormModal, EditModal } from '@/components/crud/FormModal';
 import { ProductForm, type Option, type ProductValues } from './ProductForm';
 import { createProductInline, updateProduct } from './actions';
@@ -62,7 +63,18 @@ export function EditProductModal({
   return (
     <EditModal label="تعديل" title={`تعديل المنتج ${sku}`} wide>
       {(onSuccess) => (
-        <ProductForm
+        <>
+          {/* هذا المودال للبيانات الأساسية فقط. الألوان والمقاسات وأسعار البيع
+              ورفع الصور تُدار من صفحة المنتج الكاملة — رابط واضح إليها هنا لأن
+              المستخدم كان يتوقّع كل ذلك داخل «تعديل». */}
+          <Link
+            href={`/catalog/products/${id}`}
+            className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-brand/40 bg-brand/5 px-4 py-3 text-sm text-brand transition-colors hover:bg-brand/10"
+          >
+            <span className="font-medium">الألوان والمقاسات وأسعار البيع ورفع الصور</span>
+            <span aria-hidden="true">افتح صفحة المنتج ←</span>
+          </Link>
+          <ProductForm
           action={updateProduct.bind(null, id)}
           values={values}
           categories={options.categories}
@@ -72,7 +84,8 @@ export function EditProductModal({
           selected={selected}
           submitLabel="حفظ التعديلات"
           onSuccess={onSuccess}
-        />
+          />
+        </>
       )}
     </EditModal>
   );
