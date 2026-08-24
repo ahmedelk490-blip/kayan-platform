@@ -170,6 +170,7 @@ export function DocumentForm({
   labels,
   submitLabel,
   instantIssue = false,
+  instantDefault = false,
   bundles = [],
   webOrderId,
 }: {
@@ -181,6 +182,8 @@ export function DocumentForm({
   submitLabel?: string;
   /** يُتيح «إصدار وتحصيل فوري» — خاص بالفاتورة المباشرة فقط. */
   instantIssue?: boolean;
+  /** يبدأ «إصدار وتحصيل فوري» مفعّلاً — للوحة الكاشير. */
+  instantDefault?: boolean;
   /** السيريات/الأطقم المتاحة — لإضافة توزيع مقاسات دفعة واحدة. */
   bundles?: BundleOption[];
   /** طلب موقع مصدر هذه الفاتورة — يُوسَم «تحوّل» عند الإنشاء. */
@@ -192,7 +195,7 @@ export function DocumentForm({
   );
   const [docDiscount, setDocDiscount] = useState(values?.discountAmount ?? 0);
   const [docDiscountPct, setDocDiscountPct] = useState(values?.discountPercent ?? 0);
-  const [issueNow, setIssueNow] = useState(false);
+  const [issueNow, setIssueNow] = useState(instantDefault);
   const [payMethod, setPayMethod] = useState('CASH');
   const [payAmount, setPayAmount] = useState(0);
 

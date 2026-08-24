@@ -34,7 +34,7 @@ export interface FormState {
  * صلاحيات لا تفويض. الحد هنا في الخادم لا في الواجهة — إخفاء خيار من قائمة
  * ليس منعاً.
  */
-const GRANTABLE = ['MANAGER', 'SALES', 'CUSTOMER'] as const;
+const GRANTABLE = ['MANAGER', 'SALES', 'CASHIER', 'CUSTOMER'] as const;
 
 const UserSchema = z.object({
   email: z.string().trim().toLowerCase().email('بريد إلكتروني غير صحيح.'),

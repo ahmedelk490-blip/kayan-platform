@@ -6,7 +6,7 @@
  * is the point of Article 1.
  */
 
-export const ROLE_KEYS = ['ADMIN', 'MANAGER', 'SALES', 'CUSTOMER'] as const;
+export const ROLE_KEYS = ['ADMIN', 'MANAGER', 'SALES', 'CASHIER', 'CUSTOMER'] as const;
 export type RoleKey = (typeof ROLE_KEYS)[number];
 
 export interface RoleDefinition {
@@ -35,6 +35,12 @@ export const ROLES: Record<RoleKey, RoleDefinition> = {
     name: 'Sales Representative',
     nameAr: 'مندوب المبيعات',
     landingPath: '/sales',
+  },
+  CASHIER: {
+    key: 'CASHIER',
+    name: 'Cashier',
+    nameAr: 'كاشير',
+    landingPath: '/cashier',
   },
   CUSTOMER: {
     key: 'CUSTOMER',
@@ -218,6 +224,23 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     // Deliberately NOT formula.view either — the cost is what they need to
     // quote; the recipe that produces it is manufacturing know-how.
     // Deliberately NOT damage or penalties — those concern staff conduct.
+  ],
+
+  // الكاشير: البيع اليومي فقط. ينشئ ويُصدر الفواتير ويحصّل الدفعات، ويرى
+  // المنتجات والعملاء والمخزون والتكلفة ليبيع — لا تقارير ولا تصنيع ولا
+  // مصروفات ولا إدارة مستخدمين. أضيق من المندوب في كل شيء عدا الإصدار
+  // والتحصيل، وهما جوهر عمله.
+  CASHIER: [
+    'sales.view',
+    'products.read',
+    'customers.read',
+    'customers.write',
+    'inventory.read',
+    'cost.view',
+    'invoices.view',
+    'invoices.write',
+    'invoices.issue',
+    'payments.record',
   ],
 
   CUSTOMER: ['portal.view', 'products.read'],
