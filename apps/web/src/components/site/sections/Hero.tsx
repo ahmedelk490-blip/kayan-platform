@@ -182,34 +182,61 @@ export function Hero({ slides }: { slides: HeroSlide[] }) {
 
       <div className="relative z-10 mx-auto w-full max-w-[1400px] px-6 md:px-10 lg:px-16">
         {/* ── النص ── */}
-        <div className="mx-auto max-w-[46rem] text-center">
+        <div className="mx-auto flex max-w-[48rem] flex-col items-center text-center">
+          {/* شارة العلامة — متّسقة مع رؤوس الأقسام. */}
+          <motion.span
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: EASE.outExpo }}
+            className="mb-6 inline-flex items-center gap-2.5 rounded-full bg-brand-fill/15 px-5 py-2 text-sm font-bold text-brand shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-brand-fill)_30%,transparent)]"
+          >
+            <span className="h-2 w-2 rounded-full bg-brand-fill" />
+            مصنع الزي الموحّد · طباعة وتطريز
+          </motion.span>
+
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: EASE.outExpo }}
+            transition={{ duration: 0.7, ease: EASE.outExpo, delay: 0.06 }}
             className="flex justify-center"
           >
             <Logo height={52} className="rounded-lg" />
           </motion.div>
 
-          <h1 className="mt-7 text-[clamp(1.9rem,4.6vw,3.4rem)] font-semibold leading-[1.3] text-body">
-            {WORDS.map((word, index) => (
-              <span key={word}>
-                {index > 0 ? ' ' : ''}
-                <motion.span
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, ease: EASE.outExpo, delay: 0.16 + index * 0.075 }}
-                  className={
-                    word === 'بكيان'
-                      ? 'inline-block text-brand'
-                      : 'inline-block'
-                  }
-                >
-                  {word}
-                </motion.span>
-              </span>
-            ))}
+          <h1
+            className="mt-7 font-display font-bold text-body"
+            style={{ fontSize: 'clamp(2.3rem, 6vw, 4.4rem)', lineHeight: 1.15, letterSpacing: 'normal' }}
+          >
+            {WORDS.map((word, index) => {
+              const isBrand = word === 'بكيان';
+              return (
+                <span key={word}>
+                  {index > 0 ? ' ' : ''}
+                  <motion.span
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.8, ease: EASE.outExpo, delay: 0.16 + index * 0.075 }}
+                    className="inline-block"
+                    // «بكيان» بتدرّج نبيتيّ معدنيّ — التوقيع البصريّ نفسه في
+                    // أرقام «ليش كيان» وألواح الخدمات.
+                    style={
+                      isBrand
+                        ? {
+                            backgroundImage:
+                              'linear-gradient(160deg, var(--color-primary-300), var(--color-brand-fill) 55%, var(--color-primary-800))',
+                            WebkitBackgroundClip: 'text',
+                            backgroundClip: 'text',
+                            color: 'transparent',
+                            filter: 'drop-shadow(0 10px 26px rgba(92,35,52,0.4))',
+                          }
+                        : undefined
+                    }
+                  >
+                    {word}
+                  </motion.span>
+                </span>
+              );
+            })}
           </h1>
 
           <motion.p
@@ -242,6 +269,15 @@ export function Hero({ slides }: { slides: HeroSlide[] }) {
           className="relative mt-10 h-[400px] outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-4 sm:h-[480px] lg:mt-12 lg:h-[580px]"
           style={{ perspective: 1400 }}
         >
+          {/* توهّج نبيتيّ خلف المنتج المركزيّ — عمق فاخر بلا صندوق. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute left-1/2 top-1/2 h-[70%] w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{
+              background:
+                'radial-gradient(closest-side, color-mix(in srgb, var(--color-brand-fill) 22%, transparent), transparent)',
+            }}
+          />
           <motion.div
             drag={reduced ? false : 'x'}
             dragConstraints={{ left: 0, right: 0 }}
