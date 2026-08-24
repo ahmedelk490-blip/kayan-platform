@@ -34,6 +34,7 @@ export default async function NewInvoicePage() {
           action={createSalesInvoice}
           customers={options.customers}
           variants={options.variants}
+          bundles={options.bundles}
           labels={{ dateA: 'تاريخ الإصدار', dateB: 'تاريخ الاستحقاق' }}
           submitLabel="إنشاء الفاتورة"
           instantIssue

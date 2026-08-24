@@ -115,6 +115,7 @@ model Tenant {
   siteContent SiteContent[]
   heroSlides HeroSlide[]
   employeePayments EmployeePayment[]
+  productBundles ProductBundle[]
 }
 
 model Company {
@@ -361,11 +362,46 @@ model Size {
   deletedAt DateTime?
   createdAt DateTime  @default(now())
 
-  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  variants ProductVariant[]
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  variants    ProductVariant[]
+  bundleLines ProductBundleLine[]
 
   @@unique([tenantId, code])
   @@index([tenantId, isDeleted])
+}
+
+/// طقم/سيريه/درزن — توزيع مقاسات جاهز للمنتج. بدل إدخال كل مقاس بكميته
+/// يدوياً، يعرّف المدير السيريه مرة (مثلاً: قطعتان L، ٣ XL…) فتتوسّع في
+/// الفاتورة بضغطة. اللون يُختار وقت البيع؛ السيريه توزيع مقاسات لا لون.
+model ProductBundle {
+  id        String  @id @default(cuid())
+  tenantId  String
+  productId String
+  /// اسم السيريه كما يراه المستخدم: «سيريه»، «درزن»…
+  nameAr    String
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  lines   ProductBundleLine[]
+
+  @@index([tenantId, productId])
+}
+
+/// سطر في السيريه: مقاس وكميته داخل الطقم الواحد.
+model ProductBundleLine {
+  id       String @id @default(cuid())
+  bundleId String
+  sizeId   String
+  quantity Int    @default(1)
+
+  bundle ProductBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  size   Size          @relation(fields: [sizeId], references: [id])
+
+  @@unique([bundleId, sizeId])
 }
 
 model Material {
@@ -496,6 +532,7 @@ model Product {
   costCalculations  CostCalculation[]
   damageRecords     DamageRecord[]
   invoiceLines      InvoiceLine[]
+  bundles           ProductBundle[]
 
   @@unique([tenantId, sku])
   @@index([tenantId, isDeleted])

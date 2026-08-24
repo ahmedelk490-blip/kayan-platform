@@ -767,3 +767,88 @@ export async function setShowOnSite(productId: string, show: boolean): Promise<v
   revalidatePath('/products');
   revalidatePath('/');
 }
+
+// ── الأطقم/السيريات (توزيع مقاسات جاهز) ─────────────────────
+
+/**
+ * إنشاء سيريه/طقم للمنتج: اسم + كمية لكل مقاس.
+ *
+ * الحقول: bundleName، وحقل qty_<sizeId> لكل مقاس. المقاسات بكمية أكبر من صفر
+ * تصير سطور الطقم. اللون لا يُخزَّن هنا — السيريه توزيع مقاسات، واللون يُختار
+ * وقت البيع.
+ */
+export async function addBundle(
+  productId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requirePermission('products.write');
+
+  const product = await prisma.product.findFirst({
+    where: { id: productId, tenantId: user.tenantId, isDeleted: false },
+    select: { id: true },
+  });
+  if (!product) return { error: 'المنتج غير موجود.' };
+
+  const nameAr = String(formData.get('bundleName') ?? '').trim();
+  if (nameAr.length < 2) return { fieldErrors: { bundleName: 'اسم السيريه مطلوب.' } };
+
+  // اجمع كميات المقاسات من حقول qty_<sizeId>.
+  const lines: { sizeId: string; quantity: number }[] = [];
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith('qty_')) continue;
+    const qty = Math.max(0, Math.round(Number(value) || 0));
+    if (qty > 0) lines.push({ sizeId: key.slice(4), quantity: qty });
+  }
+  if (lines.length === 0) return { error: 'أدخل كمية لمقاس واحد على الأقل.' };
+
+  // تأكّد أن المقاسات تخصّ هذا المستأجر — لا نثق بمعرّفات واردة من النموذج.
+  const validSizes = await prisma.size.findMany({
+    where: { id: { in: lines.map((l) => l.sizeId) }, tenantId: user.tenantId, isDeleted: false },
+    select: { id: true },
+  });
+  const validSet = new Set(validSizes.map((s) => s.id));
+  const goodLines = lines.filter((l) => validSet.has(l.sizeId));
+  if (goodLines.length === 0) return { error: 'المقاسات المختارة غير صالحة.' };
+
+  const bundle = await prisma.productBundle.create({
+    data: {
+      tenantId: user.tenantId,
+      productId: product.id,
+      nameAr,
+      lines: { create: goodLines },
+    },
+  });
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'bundle.create',
+    entityType: 'ProductBundle',
+    entityId: bundle.id,
+    detail: `${nameAr} — ${goodLines.reduce((s, l) => s + l.quantity, 0)} قطعة`,
+  });
+
+  revalidatePath(`/catalog/products/${productId}`);
+  return { ok: `أُنشئت السيريه «${nameAr}».` };
+}
+
+/** حذف سيريه — مع سطورها (Cascade). */
+export async function deleteBundle(productId: string, bundleId: string): Promise<void> {
+  const user = await requirePermission('products.write');
+  const bundle = await prisma.productBundle.findFirst({
+    where: { id: bundleId, tenantId: user.tenantId, product: { id: productId } },
+    select: { id: true, nameAr: true },
+  });
+  if (!bundle) return;
+  await prisma.productBundle.delete({ where: { id: bundle.id } });
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'bundle.delete',
+    entityType: 'ProductBundle',
+    entityId: bundle.id,
+    detail: bundle.nameAr,
+  });
+  revalidatePath(`/catalog/products/${productId}`);
+}

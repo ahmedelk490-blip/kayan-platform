@@ -28,6 +28,7 @@ export default async function NewOrderPage() {
           action={createOrder}
           customers={options.customers}
           variants={options.variants}
+          bundles={options.bundles}
           labels={{ dateA: 'تاريخ الأمر', dateB: 'تاريخ التسليم المطلوب' }}
           submitLabel="إنشاء أمر البيع"
         />

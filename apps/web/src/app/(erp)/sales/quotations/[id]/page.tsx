@@ -143,6 +143,7 @@ export default async function QuotationDetailPage({
             action={update}
             customers={options.customers}
             variants={options.variants}
+            bundles={options.bundles}
             labels={{ dateA: 'تاريخ الإصدار', dateB: 'تاريخ الانتهاء' }}
             submitLabel="حفظ التعديلات"
             // Decimal is not serialisable across the server/client boundary,

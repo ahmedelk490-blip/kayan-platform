@@ -40,6 +40,14 @@ export interface VariantOption {
   tiers: VariantTier[];
 }
 
+/** سيريه/طقم: توزيع مقاسات جاهز لمنتج، يتوسّع إلى سطور بضغطة. */
+export interface BundleOption {
+  id: string;
+  productId: string;
+  nameAr: string;
+  lines: { sizeId: string; sizeCode: string; quantity: number }[];
+}
+
 export interface DocLine {
   /** اختيار متسلسل: المنتج ثم اللون ثم المقاس يحدّدون المتغيّر. */
   productId: string;
@@ -162,6 +170,7 @@ export function DocumentForm({
   labels,
   submitLabel,
   instantIssue = false,
+  bundles = [],
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   customers: { value: string; label: string }[];
@@ -171,6 +180,8 @@ export function DocumentForm({
   submitLabel?: string;
   /** يُتيح «إصدار وتحصيل فوري» — خاص بالفاتورة المباشرة فقط. */
   instantIssue?: boolean;
+  /** السيريات/الأطقم المتاحة — لإضافة توزيع مقاسات دفعة واحدة. */
+  bundles?: BundleOption[];
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const [lines, setLines] = useState<DocLine[]>(() =>
@@ -182,7 +193,73 @@ export function DocumentForm({
   const [payMethod, setPayMethod] = useState('CASH');
   const [payAmount, setPayAmount] = useState(0);
 
+  // منتقي السيريه: منتج ← لون ← سيريه ← عدد الأطقم، يتوسّع إلى سطور.
+  const [seriesProductId, setSeriesProductId] = useState('');
+  const [seriesColorId, setSeriesColorId] = useState('');
+  const [seriesBundleId, setSeriesBundleId] = useState('');
+  const [seriesCount, setSeriesCount] = useState(1);
+  const [seriesMsg, setSeriesMsg] = useState<string | null>(null);
+
   const products = productsOf(variants);
+
+  // منتجات لها سيريات فقط، بأسمائها؛ وألوان وسيريات المنتج المختار.
+  const bundleProductIds = new Set(bundles.map((b) => b.productId));
+  const seriesProducts = products.filter((p) => bundleProductIds.has(p.id));
+  const seriesColors = seriesProductId ? colorsOf(variants, seriesProductId) : [];
+  const seriesBundles = bundles.filter((b) => b.productId === seriesProductId);
+
+  /**
+   * يوسّع السيريه المختارة إلى سطور: لكل مقاس في الطقم متغيّرٌ (منتج×لون×مقاس)
+   * بكمية = كمية المقاس × عدد الأطقم. المقاسات التي لا متغيّر لها بهذا اللون
+   * تُتجاهل ويُنبَّه عليها — لا نخترع متغيّراً غير موجود.
+   */
+  function addSeries() {
+    const bundle = bundles.find((b) => b.id === seriesBundleId);
+    if (!bundle || !seriesColorId) {
+      setSeriesMsg('اختر المنتج واللون والسيريه أولاً.');
+      return;
+    }
+    const count = Math.max(1, Math.round(seriesCount) || 1);
+    const added: DocLine[] = [];
+    const missing: string[] = [];
+    for (const bl of bundle.lines) {
+      const variant = resolveVariant(variants, bundle.productId, seriesColorId, bl.sizeId);
+      if (!variant) {
+        missing.push(bl.sizeCode);
+        continue;
+      }
+      const services = servicesOf(variant);
+      added.push(
+        reprice({
+          productId: bundle.productId,
+          colorId: seriesColorId,
+          sizeId: bl.sizeId,
+          variantId: variant.value,
+          service: services[0] ?? '',
+          quantity: bl.quantity * count,
+          unitPrice: 0,
+          discountAmount: 0,
+          taxRate: 0,
+          notes: '',
+        }),
+      );
+    }
+    if (added.length === 0) {
+      setSeriesMsg('لا يوجد متغيّر لأي مقاس في هذه السيريه باللون المختار — أنشئ المتغيّرات أولاً.');
+      return;
+    }
+    setLines((prev) => {
+      // استبدل السطر الافتراضي الفارغ الوحيد بدل تركه فوق السيريه.
+      const base = prev.length === 1 && !prev[0].variantId ? [] : prev;
+      return [...base, ...added];
+    });
+    const seriesName = `${bundle.nameAr}${count > 1 ? ` ×${count}` : ''}`;
+    setSeriesMsg(
+      missing.length
+        ? `أُضيفت «${seriesName}». المقاسات ${missing.join('، ')} بلا متغيّر بهذا اللون — تُجوهلت.`
+        : `أُضيفت «${seriesName}» — ${added.length} سطر.`,
+    );
+  }
 
   /**
    * يعيد تسعير السطر من شريحة الخدمة والكمية — هذا هو الحساب الصحيح.
@@ -275,6 +352,98 @@ export function DocumentForm({
         defaultValue={values?.customerId}
         errors={state.fieldErrors}
       />
+
+      {/* ١.٥ السيريه/الطقم — إضافة توزيع مقاسات دفعة واحدة. يظهر فقط حين توجد
+          سيريات معرّفة. لا يمنع الإدخال اليدوي؛ يضيف سطوره فوقه. */}
+      {seriesProducts.length > 0 && (
+        <section className="rounded-xl border border-brand/30 bg-brand/5 p-4">
+          <h3 className="mb-3 text-sm font-semibold text-brand">إضافة سيريه / طقم</h3>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="block">
+              <span className="mb-1.5 block text-xs text-txt-2">المنتج</span>
+              <select
+                value={seriesProductId}
+                onChange={(e) => {
+                  const pid = e.target.value;
+                  setSeriesProductId(pid);
+                  const colors = colorsOf(variants, pid);
+                  setSeriesColorId(colors.length === 1 ? colors[0].id : '');
+                  const bs = bundles.filter((b) => b.productId === pid);
+                  setSeriesBundleId(bs.length === 1 ? bs[0].id : '');
+                  setSeriesMsg(null);
+                }}
+                className="erp-input py-2.5"
+              >
+                <option value="">اختر…</option>
+                {seriesProducts.map((p) => (
+                  <option key={p.id} value={p.id}>{p.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs text-txt-2">اللون</span>
+              <select
+                value={seriesColorId}
+                onChange={(e) => setSeriesColorId(e.target.value)}
+                disabled={seriesColors.length === 0}
+                className="erp-input py-2.5 disabled:opacity-50"
+              >
+                <option value="">{seriesColors.length ? 'اختر…' : '—'}</option>
+                {seriesColors.map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs text-txt-2">السيريه</span>
+              <select
+                value={seriesBundleId}
+                onChange={(e) => setSeriesBundleId(e.target.value)}
+                disabled={seriesBundles.length === 0}
+                className="erp-input py-2.5 disabled:opacity-50"
+              >
+                <option value="">{seriesBundles.length ? 'اختر…' : '—'}</option>
+                {seriesBundles.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.nameAr} ({b.lines.reduce((s, l) => s + l.quantity, 0)} قطعة)
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-end gap-2">
+              <label className="block flex-1">
+                <span className="mb-1.5 block text-xs text-txt-2">عدد الأطقم</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  dir="ltr"
+                  value={seriesCount}
+                  onChange={(e) => setSeriesCount(Math.max(1, Math.round(Number(e.target.value) || 1)))}
+                  className="erp-input py-2.5 text-start"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={addSeries}
+                disabled={!seriesBundleId || !seriesColorId}
+                className="h-[42px] shrink-0 rounded-lg bg-brand px-4 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+              >
+                أضف
+              </button>
+            </div>
+          </div>
+          {seriesBundleId && (
+            <p className="mt-2 text-[0.7rem] text-txt-3">
+              {seriesBundles
+                .find((b) => b.id === seriesBundleId)
+                ?.lines.map((l) => `${l.quantity * Math.max(1, seriesCount)}× ${l.sizeCode}`)
+                .join(' · ')}
+            </p>
+          )}
+          {seriesMsg && <p className="mt-2 text-[0.7rem] font-medium text-brand">{seriesMsg}</p>}
+        </section>
+      )}
 
       {/* ٢. البنود — لكل بند: المنتج، الخدمة، الكمية، والسعر يظهر محسوباً.
           لا خصم ولا ضريبة ولا سعر وحدة في كل صف: أُزيلت من الواجهة وتُرسل

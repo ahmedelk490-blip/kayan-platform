@@ -2,11 +2,11 @@ import 'server-only';
 
 import { available, dec } from '@erp/domain';
 import { prisma } from '@/lib/prisma';
-import type { VariantOption } from './DocumentForm';
+import type { VariantOption, BundleOption } from './DocumentForm';
 
 /** Customers and sellable variants, with available-to-promise per variant. */
 export async function loadSalesOptions(tenantId: string) {
-  const [customers, variants, tiers] = await Promise.all([
+  const [customers, variants, tiers, bundles] = await Promise.all([
     prisma.customer.findMany({
       where: { tenantId, isDeleted: false },
       orderBy: { contactName: 'asc' },
@@ -32,6 +32,17 @@ export async function loadSalesOptions(tenantId: string) {
       where: { tenantId, isActive: true },
       orderBy: [{ service: 'asc' }, { minQty: 'asc' }],
       select: { productId: true, variantId: true, service: true, minQty: true, maxQty: true, price: true },
+    }),
+    // السيريات/الأطقم النشطة — توزيع مقاسات جاهز لكل منتج، ليتوسّع في الفاتورة.
+    prisma.productBundle.findMany({
+      where: { tenantId, isActive: true, product: { isDeleted: false, status: 'ACTIVE' } },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        productId: true,
+        nameAr: true,
+        lines: { select: { sizeId: true, quantity: true, size: { select: { code: true, sortOrder: true } } } },
+      },
     }),
   ]);
 
@@ -78,11 +89,21 @@ export async function loadSalesOptions(tenantId: string) {
     };
   });
 
+  const bundleOptions: BundleOption[] = bundles.map((b) => ({
+    id: b.id,
+    productId: b.productId,
+    nameAr: b.nameAr,
+    lines: [...b.lines]
+      .sort((a, z) => a.size.sortOrder - z.size.sortOrder)
+      .map((l) => ({ sizeId: l.sizeId, sizeCode: l.size.code, quantity: l.quantity })),
+  }));
+
   return {
     customers: customers.map((c) => ({
       value: c.id,
       label: c.companyName ? `${c.companyName} — ${c.contactName}` : c.contactName,
     })),
     variants: variantOptions,
+    bundles: bundleOptions,
   };
 }

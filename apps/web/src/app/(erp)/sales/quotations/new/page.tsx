@@ -28,6 +28,7 @@ export default async function NewQuotationPage() {
           action={createQuotation}
           customers={options.customers}
           variants={options.variants}
+          bundles={options.bundles}
           labels={{ dateA: 'تاريخ الإصدار', dateB: 'تاريخ الانتهاء' }}
           submitLabel="إنشاء عرض السعر"
         />
