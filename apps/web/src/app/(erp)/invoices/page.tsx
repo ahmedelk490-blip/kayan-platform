@@ -3,6 +3,7 @@ import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
 import {
   can,
+  userCan,
   dec,
   formatMoney,
   balance,
@@ -53,9 +54,14 @@ export default async function InvoicesPage({
   });
   const statusFilter = Array.isArray(params.status) ? params.status[0] : params.status;
 
+  // من لا يملك «عرض فواتير كل الموظفين» يرى فواتيره هو فقط. المدير يرى الكل.
+  const seeAll = userCan(user.role, user.overrides, 'invoices.viewAll');
+  const ownerScope: Prisma.InvoiceWhereInput = seeAll ? {} : { createdById: user.id };
+
   const where: Prisma.InvoiceWhereInput = {
     tenantId: user.tenantId,
     isDeleted: false,
+    ...ownerScope,
     ...(statusFilter ? { status: statusFilter } : {}),
     ...(query.q
       ? {
@@ -82,7 +88,7 @@ export default async function InvoicesPage({
     // Only issued and part-paid invoices are money anyone owes. A draft is
     // not a claim, and a void one never was.
     prisma.invoice.findMany({
-      where: { tenantId: user.tenantId, isDeleted: false, status: { in: RECEIVABLE_STATUSES } },
+      where: { tenantId: user.tenantId, isDeleted: false, ...ownerScope, status: { in: RECEIVABLE_STATUSES } },
       select: { total: true, paidAmount: true, dueDate: true },
     }),
   ]);
@@ -140,7 +146,7 @@ export default async function InvoicesPage({
   return (
     <AppShell user={user} title="الفواتير">
       <ModuleHeader
-        title="الفواتير"
+        title={seeAll ? 'الفواتير' : 'فواتيري'}
         count={count}
         action={
           canWrite ? (
@@ -150,6 +156,9 @@ export default async function InvoicesPage({
           ) : null
         }
       />
+      {!seeAll && (
+        <p className="mb-4 text-xs text-txt-3">تعرض فواتيرك التي أنشأتها فقط. المدير يرى فواتير كل الموظفين.</p>
+      )}
 
       <section className="erp-card mb-6 p-5">
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">

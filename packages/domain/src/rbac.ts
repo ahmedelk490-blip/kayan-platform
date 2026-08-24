@@ -123,6 +123,8 @@ export const PERMISSIONS = {
   // Phase 10. Issuing is separated from drafting because issuing burns a
   // gapless tax number, and recording money is separate again.
   'invoices.view': { nameAr: 'عرض الفواتير', group: 'الفواتير' },
+  /// من يملكها يرى فواتير كل الموظفين؛ ومن لا يملكها يرى فواتيره هو فقط.
+  'invoices.viewAll': { nameAr: 'عرض فواتير كل الموظفين', group: 'الفواتير' },
   'invoices.write': { nameAr: 'إنشاء مسودات الفواتير', group: 'الفواتير' },
   'invoices.issue': { nameAr: 'إصدار وإلغاء الفواتير', group: 'الفواتير' },
   'payments.record': { nameAr: 'تسجيل وعكس الدفعات', group: 'الفواتير' },
@@ -182,6 +184,7 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'purchasing.confirm',
     'purchasing.receive',
     'invoices.view',
+    'invoices.viewAll',
     'invoices.write',
     'invoices.issue',
     'payments.record',

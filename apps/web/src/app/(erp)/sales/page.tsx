@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import {
   can,
+  userCan,
   dec,
   formatMoney,
   balance,
@@ -43,6 +44,9 @@ export default async function SalesDashboard() {
   const seeDocs = can(user.role, 'sales.documents');
   const seeMoney = can(user.role, 'invoices.view');
   const seeCustomers = can(user.role, 'customers.read');
+  // من لا يملك «عرض فواتير كل الموظفين» ترى لوحته مبيعاته هو فقط.
+  const seeAll = userCan(user.role, user.overrides, 'invoices.viewAll');
+  const ownerScope = seeAll ? {} : { createdById: user.id };
 
   const [quotationRows, orderRows, invoiceRows, customerCount, leadCount, recentAudits] =
     await Promise.all([
@@ -64,7 +68,7 @@ export default async function SalesDashboard() {
         : [],
       seeMoney
         ? prisma.invoice.findMany({
-            where: { tenantId, isDeleted: false, status: { notIn: ['DRAFT', 'VOID'] } },
+            where: { tenantId, isDeleted: false, ...ownerScope, status: { notIn: ['DRAFT', 'VOID'] } },
             select: { total: true, paidAmount: true, status: true },
           })
         : [],
@@ -117,6 +121,7 @@ export default async function SalesDashboard() {
         where: {
           tenantId,
           isDeleted: false,
+          ...ownerScope,
           status: { notIn: ['DRAFT', 'VOID'] },
           issueDate: { gte: from, lte: to },
         },

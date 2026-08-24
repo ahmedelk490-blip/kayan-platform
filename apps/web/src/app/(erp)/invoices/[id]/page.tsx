@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
   can,
+  userCan,
   dec,
   formatMoney,
   formatQty,
@@ -41,8 +42,10 @@ export default async function InvoicePage({
   const sp = await searchParams;
   const errKey = Array.isArray(sp.err) ? sp.err[0] : sp.err;
 
+  // من لا يملك «عرض فواتير كل الموظفين» لا يفتح إلا فاتورته — لا بالرابط أيضاً.
+  const seeAll = userCan(user.role, user.overrides, 'invoices.viewAll');
   const invoice = await prisma.invoice.findFirst({
-    where: { id, tenantId: user.tenantId, isDeleted: false },
+    where: { id, tenantId: user.tenantId, isDeleted: false, ...(seeAll ? {} : { createdById: user.id }) },
     include: {
       customer: true,
       salesOrder: { select: { id: true, number: true } },
