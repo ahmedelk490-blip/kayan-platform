@@ -17,6 +17,7 @@ import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import { Figure, Empty } from '../Shell';
+import { ReportTabs } from '../ReportTabs';
 
 export const metadata: Metadata = { title: 'تقدّم الديون' };
 
@@ -73,6 +74,8 @@ export default async function AgingReport() {
           </div>
         }
       />
+
+      <ReportTabs />
 
       {rows.length === 0 ? (
         <Empty what="ديون غير مسدّدة" />

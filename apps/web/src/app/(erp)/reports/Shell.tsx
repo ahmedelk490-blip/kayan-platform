@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { PERIODS, PERIOD_AR, type Period } from '@erp/domain';
+import { ReportTabs } from './ReportTabs';
 
 /**
  * Shared furniture for the reports.
@@ -14,6 +15,7 @@ export const REPORTS = [
   { href: '/reports/clients', title: 'تحليل العملاء', body: 'لكل عميل: الفواتير والتحصيل والمتبقّي والربح.' },
   { href: '/reports/client', title: 'تقرير عميل', body: 'اختر عميلاً لعرض تقريره الكامل وفواتيره.' },
   { href: '/reports/aging', title: 'تقدّم الديون', body: 'المستحقات موزّعة حسب مدى تأخّرها.' },
+  { href: '/reports/comparison', title: 'مقارنة الفترة', body: 'الفترة الحالية مقابل السابقة ونسبة التغيّر.' },
   { href: '/reports/cashflow', title: 'التدفق النقدي', body: 'الداخل مقابل الخارج والرصيد التراكمي.' },
   { href: '/reports/sales', title: 'المبيعات', body: 'الإيراد والفواتير عبر الفترة.' },
   { href: '/reports/inventory', title: 'تقييم المخزون', body: 'الرصيد الحالي بالتكلفة.' },
@@ -42,6 +44,7 @@ export function ReportFilter({
 }) {
   return (
     <div className="mb-6 space-y-3">
+      <ReportTabs />
       <PeriodTabs basePath={basePath} active={period ?? ('' as Period)} />
       <form method="get" action={basePath} className="flex flex-wrap items-end gap-2 rounded-xl border border-line bg-card-2 p-3">
         <label className="block">
