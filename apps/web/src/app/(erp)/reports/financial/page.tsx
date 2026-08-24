@@ -4,6 +4,7 @@ import {
   formatMoney,
   dec,
   balance,
+  monthlySeries,
   RECEIVABLE_STATUSES,
   EXPENSE_CATEGORY_AR,
   type ExpenseCategory,
@@ -12,6 +13,8 @@ import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
+import { DonutChartInteractive } from '@/components/dashboard/DonutChartInteractive';
+import { BarChartInteractive } from '@/components/dashboard/BarChartInteractive';
 import type { SearchParams } from '@/lib/query';
 import { ReportFilter, Figure, Empty } from '../Shell';
 import { resolveRange } from '../range';
@@ -43,7 +46,7 @@ export default async function FinancialReport({
         status: { notIn: ['DRAFT', 'VOID'] },
         issueDate: { gte: from, lte: to },
       },
-      select: { total: true, paidAmount: true },
+      select: { total: true, paidAmount: true, issueDate: true },
     }),
     prisma.invoice.findMany({
       where: { tenantId: user.tenantId, isDeleted: false, status: { in: RECEIVABLE_STATUSES } },
@@ -56,7 +59,7 @@ export default async function FinancialReport({
         status: 'APPROVED',
         expenseDate: { gte: from, lte: to },
       },
-      select: { amount: true, category: true },
+      select: { amount: true, category: true, expenseDate: true },
     }),
   ]);
 
@@ -73,6 +76,27 @@ export default async function FinancialReport({
     byCategory.set(e.category, (byCategory.get(e.category) ?? dec(0)).plus(dec(e.amount)));
   }
   const categoryRows = [...byCategory.entries()].sort((a, b) => b[1].minus(a[1]).toNumber());
+
+  // نقاط الدائرة: المصروفات حسب البند، بالاسم العربي والمبلغ المنسّق.
+  const donutPoints = categoryRows.map(([cat, amount]) => ({
+    label: EXPENSE_CATEGORY_AR[cat as ExpenseCategory] ?? cat,
+    value: amount.toNumber(),
+    display: formatMoney(amount),
+  }));
+
+  // سلاسل شهرية للمبيعات المفوترة والمصروفات — لرسمها كأعمدة تفاعلية.
+  const revSeries = monthlySeries(
+    invoices.map((i) => ({ date: i.issueDate as Date, amount: i.total })),
+    from,
+    to,
+  );
+  const expSeries = monthlySeries(
+    expenses.map((e) => ({ date: e.expenseDate as Date, amount: e.amount })),
+    from,
+    to,
+  );
+  const revPoints = revSeries.map((p) => ({ label: p.key, value: p.value.toNumber(), display: formatMoney(p.value) }));
+  const expPoints = expSeries.map((p) => ({ label: p.key, value: p.value.toNumber(), display: formatMoney(p.value) }));
 
   const empty = invoices.length === 0 && expenses.length === 0;
 
@@ -126,6 +150,32 @@ export default async function FinancialReport({
               tone={cashFlow.lt(0) ? 'bad' : undefined}
             />
           </div>
+
+          <div className="mb-8 grid gap-4 lg:grid-cols-2">
+            <section className="erp-card p-6">
+              <h3 className="mb-4 text-sm font-semibold text-brand">المبيعات المفوترة شهرياً</h3>
+              {revPoints.every((p) => p.value === 0) ? (
+                <p className="py-8 text-center text-sm text-txt-3">لا مبيعات في هذه الفترة.</p>
+              ) : (
+                <BarChartInteractive points={revPoints} />
+              )}
+            </section>
+            <section className="erp-card p-6">
+              <h3 className="mb-4 text-sm font-semibold text-brand">المصروفات شهرياً</h3>
+              {expPoints.every((p) => p.value === 0) ? (
+                <p className="py-8 text-center text-sm text-txt-3">لا مصروفات في هذه الفترة.</p>
+              ) : (
+                <BarChartInteractive points={expPoints} />
+              )}
+            </section>
+          </div>
+
+          {donutPoints.length > 0 && (
+            <section className="erp-card mb-8 p-6">
+              <h3 className="mb-4 text-sm font-semibold text-brand">توزيع المصروفات حسب البند</h3>
+              <DonutChartInteractive points={donutPoints} />
+            </section>
+          )}
 
           <section>
             <h3 className="mb-3 text-sm font-semibold text-brand">المصروفات حسب البند</h3>
