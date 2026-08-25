@@ -10,6 +10,9 @@ import {
   PENALTY_TRANSITIONS,
   isDamageStatus,
   isPenaltyStatus,
+  isPriceService,
+  PRICE_SERVICE_AR,
+  dec,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
@@ -19,81 +22,69 @@ import { nextOpsNumber, parseDateOr, type FormState } from '@/lib/ops';
 // ── Damage records ──────────────────────────────────────────
 
 const Schema = z.object({
-  damageDate: z.string().optional(),
-  employeeId: z.string().optional(),
-  department: z.string().trim().max(120).optional().or(z.literal('')),
-  machine: z.string().trim().max(120).optional().or(z.literal('')),
-  variantId: z.string().optional(),
-  productLabel: z.string().trim().max(200).optional().or(z.literal('')),
-  productionOrderId: z.string().optional(),
-  quantity: z.coerce.number().positive('الكمية يجب أن تكون أكبر من صفر.'),
-  // Required by validation, not merely by convention — a damage record with
-  // no reason is an unexplained loss, which is the thing this table exists
-  // to prevent.
-  reason: z.string().trim().min(5, 'السبب مطلوب — لا يُقبل محضر هالك بلا سبب.').max(1000),
-  materialCost: z.coerce.number().min(0, 'التكلفة لا يمكن أن تكون سالبة.'),
-  laborCost: z.coerce.number().min(0, 'التكلفة لا يمكن أن تكون سالبة.'),
+  productId: z.string().trim().min(1, 'اختر المنتج.'),
+  colorId: z.string().trim().optional().or(z.literal('')),
+  service: z.string().trim().optional().or(z.literal('')),
+  quantity: z.coerce.number().positive('العدد يجب أن يكون أكبر من صفر.'),
 });
 
 function read(formData: FormData) {
   return {
-    damageDate: String(formData.get('damageDate') ?? ''),
-    employeeId: String(formData.get('employeeId') ?? ''),
-    department: String(formData.get('department') ?? ''),
-    machine: String(formData.get('machine') ?? ''),
-    variantId: String(formData.get('variantId') ?? ''),
-    productLabel: String(formData.get('productLabel') ?? ''),
-    productionOrderId: String(formData.get('productionOrderId') ?? ''),
+    productId: String(formData.get('productId') ?? ''),
+    colorId: String(formData.get('colorId') ?? ''),
+    service: String(formData.get('service') ?? ''),
     quantity: String(formData.get('quantity') ?? ''),
-    reason: String(formData.get('reason') ?? ''),
-    materialCost: String(formData.get('materialCost') ?? '0'),
-    laborCost: String(formData.get('laborCost') ?? '0'),
   };
 }
 
+/**
+ * محضر هالك مبسّط: نوع المنتج، اللون، نوع الخدمة، والعدد فقط.
+ *
+ * التكلفة تُحسب تلقائياً من تكلفة قطعة المنتج × العدد (لا يدخلها المستخدم)،
+ * والسبب يُبنى من اللون والخدمة فيبقى السجل مُفسَّراً بلا حقول زائدة.
+ */
 export async function createDamage(_prev: FormState, formData: FormData): Promise<FormState> {
   const user = await requirePermission('damage.write');
   const parsed = Schema.safeParse(read(formData));
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
 
-  let productId: string | null = null;
-  if (parsed.data.variantId) {
-    const variant = await prisma.productVariant.findFirst({
-      where: { id: parsed.data.variantId, isDeleted: false },
-      include: { product: { select: { id: true, tenantId: true } } },
-    });
-    if (!variant || variant.product.tenantId !== user.tenantId) {
-      return { fieldErrors: { variantId: 'المتغيّر غير موجود.' } };
-    }
-    productId = variant.product.id;
-  }
+  const product = await prisma.product.findFirst({
+    where: { id: parsed.data.productId, tenantId: user.tenantId, isDeleted: false },
+    select: { id: true, nameAr: true, cost: true },
+  });
+  if (!product) return { fieldErrors: { productId: 'المنتج غير موجود.' } };
 
-  if (parsed.data.productionOrderId) {
-    const order = await prisma.productionOrder.findFirst({
-      where: { id: parsed.data.productionOrderId, tenantId: user.tenantId, isDeleted: false },
+  // اللون (اختياري) — نتحقّق أنه لهذا المستأجر ونأخذ اسمه للسبب.
+  let colorName: string | null = null;
+  if (parsed.data.colorId) {
+    const color = await prisma.color.findFirst({
+      where: { id: parsed.data.colorId, tenantId: user.tenantId, isDeleted: false },
+      select: { nameAr: true },
     });
-    if (!order) return { fieldErrors: { productionOrderId: 'أمر الإنتاج غير موجود.' } };
+    colorName = color?.nameAr ?? null;
   }
+  const serviceName = parsed.data.service && isPriceService(parsed.data.service)
+    ? PRICE_SERVICE_AR[parsed.data.service]
+    : null;
 
-  const total = damageTotal(parsed.data.materialCost, parsed.data.laborCost);
+  // السبب من اللون والخدمة — يبقى مُفسَّراً بلا حقل سبب منفصل.
+  const reason = [colorName, serviceName].filter(Boolean).join(' · ') || product.nameAr;
+
+  // التكلفة تلقائياً: تكلفة قطعة المنتج × العدد.
+  const pieceCost = product.cost ? dec(product.cost) : dec(0);
+  const total = damageTotal(pieceCost.times(dec(parsed.data.quantity)), 0);
 
   const damage = await prisma.damageRecord.create({
     data: {
       tenantId: user.tenantId,
       number: await nextOpsNumber('damageRecord', 'DMG', user.tenantId),
-      damageDate: parseDateOr(parsed.data.damageDate),
-      employeeId: parsed.data.employeeId || null,
-      department: parsed.data.department || null,
-      machine: parsed.data.machine || null,
-      productId,
-      variantId: parsed.data.variantId || null,
-      // اسم المنتج اليدوي يُحفظ فقط حين لا يُختار منتج من النظام — لا نُكرّر.
-      productLabel: !parsed.data.variantId ? parsed.data.productLabel || null : null,
-      productionOrderId: parsed.data.productionOrderId || null,
+      damageDate: new Date(),
+      productId: product.id,
+      productLabel: [product.nameAr, colorName].filter(Boolean).join(' · '),
       quantity: parsed.data.quantity,
-      reason: parsed.data.reason,
-      materialCost: parsed.data.materialCost,
-      laborCost: parsed.data.laborCost,
+      reason,
+      materialCost: total.toString(),
+      laborCost: '0',
       totalCost: total.toString(),
       status: 'DRAFT',
       createdById: user.id,

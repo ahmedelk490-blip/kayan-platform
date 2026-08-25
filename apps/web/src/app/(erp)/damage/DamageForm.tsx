@@ -1,7 +1,7 @@
 'use client';
 
-import { useActionState } from 'react';
-import { Field, Select, TextArea, SubmitButton, FormError } from '@/components/crud/Form';
+import { useActionState, useState } from 'react';
+import { Select, SubmitButton, FormError } from '@/components/crud/Form';
 import type { FormState } from '@/lib/ops';
 
 export interface Option {
@@ -9,108 +9,89 @@ export interface Option {
   label: string;
 }
 
+export interface DamageProduct {
+  id: string;
+  nameAr: string;
+  colors: Option[];
+}
+
+/**
+ * محضر هالك — مبسّط لأربع خانات فقط بطلب المالك: نوع المنتج، اللون، نوع
+ * الخدمة، والعدد. التكلفة تُحسب تلقائياً من تكلفة قطعة المنتج × العدد،
+ * والسبب يُبنى من اللون والخدمة — فلا حقول زائدة يملؤها المستخدم.
+ */
 export function DamageForm({
   action,
-  employees,
-  variants,
-  productionOrders,
-  today,
+  products,
+  services,
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
-  employees: Option[];
-  variants: Option[];
-  productionOrders: Option[];
-  today: string;
+  products: DamageProduct[];
+  services: Option[];
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
+  const [productId, setProductId] = useState('');
+
+  const colors = products.find((p) => p.id === productId)?.colors ?? [];
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} className="space-y-5" noValidate>
       <FormError message={state.error} />
+      {state.ok && (
+        <p role="status" className="rounded-lg border border-ok bg-ok-soft px-4 py-2.5 text-xs text-ok">{state.ok}</p>
+      )}
 
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        <Field
-          name="damageDate"
-          label="التاريخ"
-          type="date"
-          dir="ltr"
-          defaultValue={today}
-          errors={state.fieldErrors}
-        />
-        <Select
-          name="employeeId"
-          label="الموظف"
-          options={employees}
-          placeholder="غير محدَّد"
-          errors={state.fieldErrors}
-        />
-        <Field
-          name="department"
-          label="القسم"
-          placeholder="طباعة · تطريز · خياطة"
-          errors={state.fieldErrors}
-        />
-        <Field name="machine" label="الماكينة" placeholder="رقم أو اسم الماكينة" errors={state.fieldErrors} />
-        <Select
-          name="variantId"
-          label="المنتج / المتغيّر (من النظام)"
-          options={variants}
-          placeholder="غير مرتبط بمنتج"
-          errors={state.fieldErrors}
-        />
-        <Field
-          name="productLabel"
-          label="أو اكتب المنتج يدويًا"
-          placeholder="اسم المنتج/الصنف التالف"
-          hint="لِما لا يوجد في النظام — خامة أو صنف غير مسجَّل"
-          errors={state.fieldErrors}
-        />
-        <Select
-          name="productionOrderId"
-          label="أمر الإنتاج"
-          options={productionOrders}
-          placeholder="غير مرتبط بأمر إنتاج"
-          errors={state.fieldErrors}
-        />
-        <Field
-          name="quantity"
-          label="الكمية التالفة"
-          type="number"
-          required
-          dir="ltr"
-          errors={state.fieldErrors}
-        />
-        <Field
-          name="materialCost"
-          label="تكلفة الخامات (د.ع)"
-          type="number"
-          required
-          dir="ltr"
-          defaultValue="0"
-          errors={state.fieldErrors}
-        />
-        <Field
-          name="laborCost"
-          label="تكلفة العمالة (د.ع)"
-          type="number"
-          required
-          dir="ltr"
-          defaultValue="0"
-          hint="ما دُفع مرتين — الشغل الضائع"
-          errors={state.fieldErrors}
-        />
+      <div className="grid gap-5 sm:grid-cols-2">
+        {/* ١) نوع المنتج */}
+        <label className="block">
+          <span className="mb-1.5 block text-xs text-txt-2">نوع المنتج</span>
+          <select
+            value={productId}
+            onChange={(e) => setProductId(e.target.value)}
+            className="erp-input py-2.5"
+          >
+            <option value="">اختر المنتج…</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>{p.nameAr}</option>
+            ))}
+          </select>
+          <input type="hidden" name="productId" value={productId} />
+          {state.fieldErrors?.productId && (
+            <span className="mt-1 block text-[0.7rem] text-bad">{state.fieldErrors.productId}</span>
+          )}
+        </label>
+
+        {/* ٢) اللون — من ألوان المنتج المختار */}
+        <label className="block">
+          <span className="mb-1.5 block text-xs text-txt-2">اللون</span>
+          <select name="colorId" disabled={colors.length === 0} className="erp-input py-2.5 disabled:opacity-50">
+            <option value="">{colors.length ? 'اختر اللون…' : '—'}</option>
+            {colors.map((c) => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </select>
+        </label>
+
+        {/* ٣) نوع الخدمة */}
+        <Select name="service" label="نوع الخدمة" options={services} placeholder="اختر الخدمة" errors={state.fieldErrors} />
+
+        {/* ٤) العدد */}
+        <label className="block">
+          <span className="mb-1.5 block text-xs text-txt-2">العدد</span>
+          <input name="quantity" type="number" min="1" step="1" dir="ltr" className="erp-input py-2.5 text-start" />
+          {state.fieldErrors?.quantity && (
+            <span className="mt-1 block text-[0.7rem] text-bad">{state.fieldErrors.quantity}</span>
+          )}
+        </label>
       </div>
-
-      <TextArea name="reason" label="السبب (مطلوب)" rows={3} errors={state.fieldErrors} />
 
       <div className="flex items-center gap-3">
-        <SubmitButton label="إنشاء المحضر" />
+        <SubmitButton label="تسجيل الهالك" />
         {state.ok && <span className="text-xs text-ok">{state.ok}</span>}
       </div>
-
-      <p className="text-[0.7rem] text-txt-4">
-        السبب حقل إلزامي بالتحقق لا بالعُرف — محضر هالك بلا سبب هو خسارة غير مُفسَّرة،
-        وهي بالضبط ما يوجد هذا السجل لمنعه.
+      <p className="text-[0.7rem] leading-[1.8] text-txt-4">
+        التكلفة تُحسب تلقائياً من تكلفة قطعة المنتج × العدد. يُسجَّل الهالك بانتظار الاعتماد،
+        ويظهر في «الهالك» بالبيان المالي بعد اعتماده.
       </p>
     </form>
   );
