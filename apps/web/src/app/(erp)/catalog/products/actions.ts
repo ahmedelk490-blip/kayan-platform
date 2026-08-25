@@ -244,6 +244,10 @@ export async function updateProduct(
 
   revalidatePath('/catalog/products');
   revalidatePath(`/catalog/products/${id}`);
+  // الصفحات العامة أيضاً — فالتعديل يظهر على الموقع فوراً بلا انتظار أي كاش.
+  revalidatePath('/');
+  revalidatePath('/products');
+  revalidatePath(`/products/${id}`);
   return { ok: 'تم حفظ التعديلات.' };
 }
 
@@ -269,6 +273,8 @@ export async function deleteProduct(id: string): Promise<void> {
   });
 
   revalidatePath('/catalog/products');
+  revalidatePath('/');
+  revalidatePath('/products');
   redirect('/catalog/products');
 }
 

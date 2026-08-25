@@ -124,7 +124,27 @@ export async function AppShell({
   // تنبيهات نقص المخزون والمستلزمات — تُحسب لمن يرى المخزون فقط. تبقى القائمة
   // فارغة (بلا استعلام) لغيره، فلا تُثقل صفحاته.
   const seeInventory = userCan(user.role, user.overrides, 'inventory.read');
+  const seeWebOrders = userCan(user.role, user.overrides, 'invoices.write');
   let alerts: Alert[] = [];
+
+  // طلبات الموقع المعلّقة — تُعرض أولاً في الجرس لأنها تنتظر تصرّفاً (تحويل
+  // لفاتورة). فالطلب الجديد يظهر للمدير أينما كان، لا في تبويب واحد فقط.
+  if (seeWebOrders) {
+    const pending = await prisma.webOrder.findMany({
+      where: { tenantId: user.tenantId, status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+      take: 15,
+      include: { lines: { select: { productLabel: true, quantity: true } } },
+    });
+    const orderAlerts: Alert[] = pending.map((o) => ({
+      id: `weborder-${o.id}`,
+      label: `طلب جديد من الموقع — ${o.customerName}`,
+      detail: o.lines.map((l) => `${l.productLabel} ×${l.quantity}`).join('، ') || o.number,
+      href: '/sales/web-orders',
+    }));
+    alerts = [...orderAlerts];
+  }
+
   if (seeInventory) {
     const [lowStock, lowSupplies] = await Promise.all([
       prisma.stock.findMany({
@@ -160,7 +180,7 @@ export async function AppShell({
         detail: `الرصيد ${dec(s.onHand).toNumber()} ${s.unit ?? ''} ≤ الحد ${dec(s.minStock).toNumber()}`,
         href: '/supplies',
       }));
-    alerts = [...stockAlerts, ...supplyAlerts];
+    alerts = [...alerts, ...stockAlerts, ...supplyAlerts];
   }
 
   const initials =
@@ -243,7 +263,7 @@ export async function AppShell({
           <h1 className="truncate text-base font-semibold text-brand">{title}</h1>
 
           <div className="flex items-center gap-3">
-            {seeInventory && <NotificationBell alerts={alerts} />}
+            {(seeInventory || seeWebOrders) && <NotificationBell alerts={alerts} />}
 
           {/* هوية المستخدم والخروج في الترويسة للموبايل والتابلت حيث يختفي
               الشريط الجانبي؛ على الديسكتوب تظهر في أسفل الشريط بدلاً منها. */}
