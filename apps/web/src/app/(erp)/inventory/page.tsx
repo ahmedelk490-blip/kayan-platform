@@ -210,7 +210,7 @@ export default async function InventoryPage() {
         action={
           canWrite ? (
             <MovementModal
-              variants={variants.map((v) => ({ value: v.id, label: variantLabel(v) }))}
+              variants={variants.map((v) => ({ value: v.id, label: variantLabel(v), perDozen: v.product.piecesPerDozen || 12 }))}
               warehouses={warehouses.map((w) => ({ value: w.id, label: w.nameAr }))}
               locations={locations.map((l) => ({ value: l.id, label: l.code }))}
             />

@@ -1,7 +1,7 @@
 'use client';
 
 import { FormModal } from '@/components/crud/FormModal';
-import { MovementForm } from './MovementForm';
+import { MovementForm, type VariantChoice } from './MovementForm';
 
 /**
  * تسجيل حركة مخزون — modal.
@@ -16,7 +16,7 @@ export function MovementModal({
   warehouses,
   locations,
 }: {
-  variants: { value: string; label: string }[];
+  variants: VariantChoice[];
   warehouses: { value: string; label: string }[];
   locations: { value: string; label: string }[];
 }) {
