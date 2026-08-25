@@ -573,6 +573,12 @@ model Product {
   /// Storage only until the Cost Engine exists — see header note on money.
   cost          Decimal?  @db.Decimal(19, 4)
   sellingPrice  Decimal?  @db.Decimal(19, 4)
+
+  /// نظام الدستة: كم قطعة في الدستة (متغيّر لكل منتج — دستة قد تكون 6 أو 8 أو
+  /// 12 قطعة)، وتكلفة الدستة وسعرها. تكلفة/سعر القطعة يُشتقّان بالقسمة.
+  piecesPerDozen Int      @default(12)
+  dozenCost      Decimal? @db.Decimal(19, 4)
+  dozenPrice     Decimal? @db.Decimal(19, 4)
   /// ACTIVE | DRAFT | DISCONTINUED
   status        String    @default("ACTIVE")
   /// معروض على الموقع العام؟ محور مستقل عن status: منتج قد يكون ACTIVE

@@ -1,6 +1,7 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
+import { formatMoney } from '@erp/domain';
 import {
   Field,
   TextArea,
@@ -27,6 +28,9 @@ export interface ProductValues {
   cost?: number | null;
   sellingPrice?: number | null;
   status?: string | null;
+  piecesPerDozen?: number | null;
+  dozenCost?: number | null;
+  dozenPrice?: number | null;
 }
 
 const STATUSES: Option[] = [
@@ -97,6 +101,10 @@ export function ProductForm({
         />
       </div>
 
+      {/* نظام الدستة — قطع الدستة (متغيّر) وتكلفتها وسعرها، وتكلفة/سعر القطعة
+          يُحسبان تلقائياً. */}
+      <DozenSection values={values} />
+
       {/* الألوان والمقاسات — تُنشئ المتغيّرات وتظهر في المخزون. عند الإنشاء فقط. */}
       {showVariants && (colors.length > 0 || sizes.length > 0) && (
         <div className="space-y-4 rounded-xl border border-line bg-card-2 p-4">
@@ -160,5 +168,47 @@ export function ProductForm({
         {state.ok && !onSuccess && <span className="text-xs text-ok">{state.ok}</span>}
       </div>
     </form>
+  );
+}
+
+/** قسم الدستة: القطع في الدستة + تكلفتها وسعرها، وتكلفة/سعر القطعة تلقائياً. */
+function DozenSection({ values }: { values?: ProductValues }) {
+  const [pieces, setPieces] = useState(values?.piecesPerDozen ?? 12);
+  const [dozenCost, setDozenCost] = useState(values?.dozenCost ?? 0);
+  const [dozenPrice, setDozenPrice] = useState(values?.dozenPrice ?? 0);
+  const per = pieces > 0 ? pieces : 1;
+  const pieceCost = dozenCost / per;
+  const piecePrice = dozenPrice / per;
+
+  return (
+    <div className="rounded-xl border border-brand/30 bg-brand-soft/40 p-4">
+      <h3 className="mb-1 text-sm font-semibold text-brand">نظام الدستة</h3>
+      <p className="mb-4 text-[0.7rem] leading-[1.8] text-txt-4">
+        كل منتج قد تختلف دستته: اكتب كم قطعة في الدستة، وتكلفة الدستة وسعرها — وتُحسب
+        تكلفة/سعر القطعة تلقائياً. المخزون يُعرض بالدست والقطعة على هذا الأساس.
+      </p>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <label className="block">
+          <span className="mb-1.5 block text-xs text-txt-2">قطع الدستة</span>
+          <input name="piecesPerDozen" type="number" min="1" step="1" dir="ltr" value={pieces}
+            onChange={(e) => setPieces(Math.max(1, Math.round(Number(e.target.value) || 1)))}
+            className="erp-input py-2.5 text-start" />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-xs text-txt-2">تكلفة الدستة</span>
+          <input name="dozenCost" type="number" min="0" step="0.01" dir="ltr" value={dozenCost}
+            onChange={(e) => setDozenCost(Math.max(0, Number(e.target.value) || 0))}
+            className="erp-input py-2.5 text-start" />
+          <span className="mt-1 block text-[0.7rem] text-txt-4">تكلفة القطعة: <span className="tnum font-semibold text-brand">{formatMoney(pieceCost)}</span></span>
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-xs text-txt-2">سعر الدستة</span>
+          <input name="dozenPrice" type="number" min="0" step="0.01" dir="ltr" value={dozenPrice}
+            onChange={(e) => setDozenPrice(Math.max(0, Number(e.target.value) || 0))}
+            className="erp-input py-2.5 text-start" />
+          <span className="mt-1 block text-[0.7rem] text-txt-4">سعر القطعة: <span className="tnum font-semibold text-brand">{formatMoney(piecePrice)}</span></span>
+        </label>
+      </div>
+    </div>
   );
 }

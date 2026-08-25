@@ -194,6 +194,8 @@ export default async function ProductDetailPage({
               cost: product.cost === null ? null : dec(product.cost).toNumber(),
               sellingPrice:
                 product.sellingPrice === null ? null : dec(product.sellingPrice).toNumber(),
+              dozenCost: product.dozenCost === null ? null : dec(product.dozenCost).toNumber(),
+              dozenPrice: product.dozenPrice === null ? null : dec(product.dozenPrice).toNumber(),
             }}
             categories={options.categories}
             materials={options.materials}

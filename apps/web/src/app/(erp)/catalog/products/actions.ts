@@ -25,6 +25,9 @@ const ProductSchema = z.object({
   descriptionAr: z.string().trim().max(2000).optional().or(z.literal('')),
   cost: z.string().trim().optional(),
   sellingPrice: z.string().trim().optional(),
+  piecesPerDozen: z.string().trim().optional(),
+  dozenCost: z.string().trim().optional(),
+  dozenPrice: z.string().trim().optional(),
   status: z.enum(['ACTIVE', 'DRAFT', 'DISCONTINUED']),
 });
 
@@ -44,7 +47,33 @@ function read(formData: FormData) {
     descriptionAr: String(formData.get('descriptionAr') ?? ''),
     cost: String(formData.get('cost') ?? ''),
     sellingPrice: String(formData.get('sellingPrice') ?? ''),
+    piecesPerDozen: String(formData.get('piecesPerDozen') ?? ''),
+    dozenCost: String(formData.get('dozenCost') ?? ''),
+    dozenPrice: String(formData.get('dozenPrice') ?? ''),
     status: String(formData.get('status') ?? 'ACTIVE'),
+  };
+}
+
+/**
+ * حقول الدستة المحسوبة: قطع الدستة وتكلفتها وسعرها، وتكلفة/سعر القطعة مشتقّان
+ * بالقسمة (إن أُدخلت الدستة)، وإلا تُستعمل التكلفة/السعر المباشران كما هما.
+ */
+function dozenFields(d: {
+  piecesPerDozen?: string;
+  dozenCost?: string;
+  dozenPrice?: string;
+  cost?: string;
+  sellingPrice?: string;
+}) {
+  const pieces = Math.max(1, Math.round(Number(d.piecesPerDozen) || 12));
+  const dc = num(d.dozenCost);
+  const dp = num(d.dozenPrice);
+  return {
+    piecesPerDozen: pieces,
+    dozenCost: dc,
+    dozenPrice: dp,
+    cost: dc !== null ? dc / pieces : num(d.cost),
+    sellingPrice: dp !== null ? dp / pieces : num(d.sellingPrice),
   };
 }
 
@@ -141,8 +170,7 @@ async function createProductCore(
       nameEn: parsed.data.nameEn || null,
       barcode: parsed.data.barcode || null,
       descriptionAr: parsed.data.descriptionAr || null,
-      cost: num(parsed.data.cost),
-      sellingPrice: num(parsed.data.sellingPrice),
+      ...dozenFields(parsed.data),
       status: parsed.data.status,
       variants: { create: variantData },
     },
@@ -226,8 +254,7 @@ export async function updateProduct(
       nameEn: parsed.data.nameEn || null,
       barcode: parsed.data.barcode || null,
       descriptionAr: parsed.data.descriptionAr || null,
-      cost: num(parsed.data.cost),
-      sellingPrice: num(parsed.data.sellingPrice),
+      ...dozenFields(parsed.data),
       status: parsed.data.status,
     },
   });

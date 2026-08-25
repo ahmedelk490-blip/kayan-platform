@@ -29,7 +29,7 @@ export default async function InventoryPage() {
 
   const seeSupplies = can(user.role, 'supplies.view');
 
-  const [stock, variants, warehouses, locations, movements, supplies, supplyTx, reorderStock] = await Promise.all([
+  const [stock, variants, warehouses, locations, movements, supplies, supplyTx, reorderStock, fullStock] = await Promise.all([
     prisma.stock.findMany({
       where: { variant: { product: { tenantId: user.tenantId } } },
       include: {
@@ -95,6 +95,16 @@ export default async function InventoryPage() {
         variant: { include: { product: true, color: true, size: true } },
         warehouse: { select: { nameAr: true } },
       },
+    }),
+
+    // الجرد الكامل: كل رصيد بلا استثناء — بالدست والقطعة، والتكلفة والقيمة.
+    prisma.stock.findMany({
+      where: { variant: { product: { tenantId: user.tenantId } } },
+      include: {
+        variant: { include: { product: true, color: true, size: true } },
+        warehouse: { select: { nameAr: true } },
+      },
+      orderBy: { variant: { sku: 'asc' } },
     }),
   ]);
 
@@ -166,6 +176,32 @@ export default async function InventoryPage() {
     })),
   ].sort((a, b) => b.shortfall.minus(a.shortfall).toNumber());
 
+  // الجرد الكامل: كل رصيد بالدست والقطعة، حسب قطع دستة كل منتج.
+  const stocktakeRows = fullStock.map((s) => {
+    const ppd = s.variant.product.piecesPerDozen || 12;
+    const onHandNum = Math.max(0, Math.trunc(dec(s.onHand).toNumber()));
+    const dozens = Math.floor(onHandNum / ppd);
+    const looseP = onHandNum - dozens * ppd;
+    const unitCost = s.variant.cost ?? s.variant.product.cost ?? null;
+    const value = unitCost !== null ? dec(s.onHand).times(dec(unitCost)) : null;
+    const isOut = dec(s.onHand).lte(0);
+    const isLow = !isOut && dec(s.minStock).gt(0) && dec(s.onHand).lte(dec(s.minStock));
+    return {
+      id: s.id,
+      label: variantLabel(s.variant),
+      warehouse: s.warehouse.nameAr,
+      ppd,
+      dozens,
+      looseP,
+      onHand: s.onHand,
+      unitCost,
+      value,
+      status: isOut ? ('نفد' as const) : isLow ? ('قارب على النفاد' as const) : ('متوفّر' as const),
+      tone: isOut ? ('bad' as const) : isLow ? ('bad' as const) : ('ok' as const),
+    };
+  });
+  const stocktakeValue = stocktakeRows.reduce((sum, r) => (r.value ? sum.plus(r.value) : sum), dec(0));
+
   return (
     <AppShell user={user} title="المخزون">
       <ModuleHeader
@@ -202,6 +238,46 @@ export default async function InventoryPage() {
           والخامات، وسجل الحركات، كلٌّ بضغطة. */}
       <SegmentedTabs
         tabs={[
+          {
+            key: 'stocktake',
+            label: 'الجرد الكامل',
+            content: (
+              <section>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-brand">جرد المخزن كاملاً — بالدست والقطعة</h3>
+                  <span className="text-[0.7rem] text-txt-4">
+                    {stocktakeRows.length} صنف · القيمة الإجمالية <span className="tnum font-semibold text-brand">{formatMoney(stocktakeValue)}</span>
+                  </span>
+                </div>
+                <Table
+                  headers={['المنتج / المتغيّر', 'المخزن', 'الدست', 'قطعة زيادة', 'إجمالي القطع', 'قطع الدستة', 'تكلفة القطعة', 'القيمة', 'الحالة']}
+                  empty={stocktakeRows.length === 0}
+                >
+                  {stocktakeRows.map((r) => (
+                    <tr key={r.id} className="hover:bg-card-2">
+                      <td className="px-4 py-3 text-txt">{r.label}</td>
+                      <td className="px-4 py-3 text-txt-3">{r.warehouse}</td>
+                      <td className="tnum px-4 py-3 font-semibold text-txt">{r.dozens}</td>
+                      <td className="tnum px-4 py-3 text-txt-2">{r.looseP}</td>
+                      <td className="tnum px-4 py-3 text-txt-2">{formatQty(r.onHand)}</td>
+                      <td className="tnum px-4 py-3 text-txt-4">{r.ppd}</td>
+                      <td className="tnum px-4 py-3 text-txt-3">
+                        {r.unitCost === null ? <span className="text-warn">—</span> : formatMoney(r.unitCost)}
+                      </td>
+                      <td className="tnum px-4 py-3 font-medium text-brand">
+                        {r.value === null ? '—' : formatMoney(r.value)}
+                      </td>
+                      <td className="px-4 py-3"><Badge tone={r.tone}>{r.status}</Badge></td>
+                    </tr>
+                  ))}
+                </Table>
+                <p className="mt-2 text-[0.7rem] leading-[1.8] text-txt-4">
+                  «الدست» و«قطعة زيادة» محسوبان من إجمالي القطع على أساس قطع دستة كل منتج
+                  (تُضبط من صفحة المنتج). القيمة = إجمالي القطع × تكلفة القطعة.
+                </p>
+              </section>
+            ),
+          },
           {
             key: 'reorder',
             label: 'نواقص وإعادة الطلب',

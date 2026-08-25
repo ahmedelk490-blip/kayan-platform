@@ -171,6 +171,9 @@ export default async function ProductsPage({
                         cost: row.cost === null ? null : Number(row.cost.toString()),
                         sellingPrice:
                           row.sellingPrice === null ? null : Number(row.sellingPrice.toString()),
+                        piecesPerDozen: row.piecesPerDozen,
+                        dozenCost: row.dozenCost === null ? null : Number(row.dozenCost.toString()),
+                        dozenPrice: row.dozenPrice === null ? null : Number(row.dozenPrice.toString()),
                         status: row.status,
                       }}
                       selected={{
