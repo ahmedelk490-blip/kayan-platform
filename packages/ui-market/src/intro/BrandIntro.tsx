@@ -5,35 +5,26 @@ import { AnimatePresence, motion } from 'motion/react';
 import { BRAND } from '@erp/brand';
 import { Logo } from '@erp/brand/logo';
 import { EASE, usePrefersReducedMotion } from '@erp/motion';
-import { useSceneStore } from '../canvas/scene-store';
-import { introClock } from './intro-clock';
-import { INTRO_DURATION, PHASES } from './intro-phases';
 
 const SEEN_KEY = 'kayan-intro-seen';
 
+/** كم تبقى المقدمة قبل أن تنسحب تلقائياً (ثوانٍ). قصيرة عمداً. */
+const HOLD_MS = 1300;
+
 /**
- * The permanent opening signature.
+ * مقدمة العلامة — كشفٌ سريع للّوجو، خفيف بلا ثلاثيّ أبعاد.
  *
- * Light → thread → fabric → printing → uniform → digital → ERP network →
- * the official KAYAN logo → the homepage.
+ * كانت تشغّل مشهد WebGL جسيماً (ضوء ← خيط ← قماش…) يظهر شاشةً سوداء ثوانيَ
+ * وهو يُحمّل قبل أن يبين اللوجو — وهو ما شكا منه المالك. صارت الآن كشفاً
+ * بسيطاً: خلفية داكنة، يظهر عليها اللوجو والشعار في أقل من ثانية، ثم تنسحب
+ * كاشفةً الصفحة. لا كانفس، لا شيدرات تُترجَم، فلا شاشة سوداء ولا انتظار.
  *
- * ⚠ This component owns NO canvas. It drives the single shared canvas via the
- * scene store — a second <Canvas> ran two WebGL contexts at once and produced
- * `THREE.WebGLRenderer: Context Lost`. One persistent canvas, always.
- *
- * The logo is never animated as geometry, never redrawn, never distorted. It
- * is the supplied asset, revealed: the particle field dissolves outward and
- * the mark scales from 0.92. <Logo/> fixes the aspect ratio, so no keyframe
- * here can stretch it.
- *
- * Plays once per browser session and is always skippable — a signature that
- * traps a returning visitor is an obstacle, not a signature.
+ * تُعرض مرة واحدة لكل جلسة، وتُتخطّى بأول لمسة، وتُلغى تماماً مع «تقليل الحركة».
  */
 export function BrandIntro() {
   const [playing, setPlaying] = useState(false);
   const [mounted, setMounted] = useState(false);
   const reducedMotion = usePrefersReducedMotion();
-  const setIntroActive = useSceneStore((s) => s.setIntroActive);
 
   const finish = useCallback(() => {
     try {
@@ -42,12 +33,8 @@ export function BrandIntro() {
       /* private mode */
     }
     document.body.style.overflow = '';
-    introClock.elapsed = 0;
-    // Release the canvas. Whichever SceneAnchor is in view already recorded
-    // itself as the desired scene, so it takes over on the next render.
-    setIntroActive(false);
     setPlaying(false);
-  }, [setIntroActive]);
+  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -55,47 +42,29 @@ export function BrandIntro() {
     try {
       seen = sessionStorage.getItem(SEEN_KEY) === '1';
     } catch {
-      seen = false; // private mode — play it rather than crash
+      seen = false;
     }
     if (!seen) setPlaying(true);
   }, []);
 
   useEffect(() => {
     if (!playing) return;
-
-    // Reduced motion: no sequence at all. Mark seen, let the page through.
     if (reducedMotion) {
       finish();
       return;
     }
-
     document.body.style.overflow = 'hidden';
-    introClock.elapsed = 0;
-    setIntroActive(true);
-
-    let raf = 0;
-    const start = performance.now();
-    const tick = (now: number) => {
-      introClock.elapsed = (now - start) / 1000;
-      if (introClock.elapsed >= INTRO_DURATION) {
-        finish();
-        return;
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-
+    const timer = window.setTimeout(finish, HOLD_MS);
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') finish();
     };
     window.addEventListener('keydown', onKey);
-
     return () => {
-      cancelAnimationFrame(raf);
+      window.clearTimeout(timer);
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
     };
-  }, [playing, reducedMotion, finish, setIntroActive]);
+  }, [playing, reducedMotion, finish]);
 
   if (!mounted) return null;
 
@@ -108,49 +77,40 @@ export function BrandIntro() {
           aria-label={`${BRAND.name} introduction`}
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.7, ease: EASE.outExpo }}
-          className="fixed inset-0 z-[99]"
+          transition={{ duration: 0.6, ease: EASE.outExpo }}
+          className="fixed inset-0 z-[99] grid place-items-center bg-ink-950"
         >
-          {/* Backdrop sits BELOW the shared canvas (z-100) so the sequence
-              shows through; the logo layer sits above it. */}
-          <div className="absolute inset-0 bg-ink-950" />
-
-          {/* المس أيّ مكان للتخطّي. طبقة شفّافة فوق كل شيء (z-102، أعلى من
-              الكانفس z-100) تلتقط أول لمسة فتُنهي المقدمة فوراً — فلا تحبس
-              الزائر ثوانٍ ينتظر زرّاً صغيراً. */}
-          <button
-            type="button"
-            onClick={finish}
-            aria-label="تخطّي المقدمة"
-            className="absolute inset-0 z-[102] cursor-pointer"
+          {/* توهّج نبيتيّ خفيف خلف اللوجو — عمق بلا صورة ثقيلة. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute left-1/2 top-1/2 h-[60vmin] w-[60vmin] -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{ background: 'radial-gradient(closest-side, color-mix(in srgb, var(--color-brand-fill) 24%, transparent), transparent)' }}
           />
 
           <motion.div
             initial={{ opacity: 0, scale: 0.92 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: PHASES[7].at, duration: 1.0, ease: EASE.outExpo }}
-            className="absolute inset-0 z-[101] flex flex-col items-center justify-center gap-7"
+            transition={{ duration: 0.7, ease: EASE.outExpo }}
+            className="relative z-[101] flex flex-col items-center gap-6"
           >
             <Logo height={132} className="rounded-2xl shadow-2xl" />
             <motion.p
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: PHASES[7].at + 0.45, duration: 0.8, ease: EASE.outExpo }}
+              transition={{ delay: 0.35, duration: 0.6, ease: EASE.outExpo }}
               className="px-6 text-center text-xs uppercase tracking-[0.28em] text-accent"
             >
               {BRAND.slogan.en}
             </motion.p>
           </motion.div>
 
-          {/* تلميح مرئي فوق طبقة اللمس (z-103). النقر عليه أو على أيّ مكان
-              يُنهي المقدمة. */}
+          {/* أيّ لمسة تتخطّى المقدمة فوراً. */}
           <button
             type="button"
             onClick={finish}
-            className="absolute bottom-8 end-8 z-[103] rounded-full border border-ink-700 bg-ink-950/60 px-5 py-2 text-xs tracking-[0.16em] text-neutral-300 backdrop-blur transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            تخطّي · المس للدخول
-          </button>
+            aria-label="تخطّي المقدمة"
+            className="absolute inset-0 z-[102] cursor-pointer"
+          />
         </motion.div>
       )}
     </AnimatePresence>
