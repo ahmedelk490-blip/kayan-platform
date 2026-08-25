@@ -21,6 +21,7 @@ import {
   moveProductImage,
   setShowOnSite,
   addBundle,
+  updateBundle,
   deleteBundle,
 } from '../actions';
 import { loadProductOptions } from '../options';
@@ -29,6 +30,7 @@ import { AddColorsForm } from './AddColorsForm';
 import { ProductImages } from './ProductImages';
 import { PriceTierForm } from './PriceTierForm';
 import { BundleForm } from './BundleForm';
+import { BundleEditForm } from './BundleEditForm';
 
 export const metadata: Metadata = { title: 'بيانات المنتج' };
 
@@ -333,33 +335,41 @@ export default async function ProductDetailPage({
             </p>
 
             {product.bundles.length > 0 && (
-              <ul className="mb-5 space-y-2">
-                {product.bundles.map((b) => {
-                  const lines = [...b.lines].sort((a, z) => a.size.sortOrder - z.size.sortOrder);
-                  const total = lines.reduce((s, l) => s + l.quantity, 0);
-                  return (
+              <ul className="mb-5 space-y-3">
+                {product.bundles.map((b) =>
+                  canWrite ? (
+                    <BundleEditForm
+                      key={b.id}
+                      action={updateBundle.bind(null, product.id, b.id)}
+                      remove={deleteBundle.bind(null, product.id, b.id)}
+                      sizes={productSizes}
+                      initial={{
+                        nameAr: b.nameAr,
+                        cost: b.cost === null ? 0 : dec(b.cost).toNumber(),
+                        price: b.price === null ? 0 : dec(b.price).toNumber(),
+                        quantities: Object.fromEntries(b.lines.map((l) => [l.sizeId, l.quantity])),
+                      }}
+                    />
+                  ) : (
                     <li key={b.id} className="rounded-lg border border-line bg-card-2 px-4 py-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-medium text-txt">
-                          {b.nameAr}
-                          <span className="ms-2 text-[0.7rem] text-txt-4">{total} قطعة</span>
+                      <div className="text-sm font-medium text-txt">
+                        {b.nameAr}
+                        <span className="ms-2 text-[0.7rem] text-txt-4">
+                          {b.lines.reduce((s, l) => s + l.quantity, 0)} قطعة
                         </span>
-                        {canWrite && (
-                          <form action={deleteBundle.bind(null, product.id, b.id)}>
-                            <button type="submit" className="text-[0.7rem] text-bad hover:underline">حذف</button>
-                          </form>
-                        )}
                       </div>
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {lines.map((l) => (
-                          <span key={l.id} className="tnum rounded-full bg-card px-2.5 py-0.5 text-[0.7rem] text-txt-2">
-                            {l.quantity}× {l.size.code}
-                          </span>
-                        ))}
+                        {[...b.lines]
+                          .sort((a, z) => a.size.sortOrder - z.size.sortOrder)
+                          .map((l) => (
+                            <span key={l.id} className="tnum rounded-full bg-card px-2.5 py-0.5 text-[0.7rem] text-txt-2">
+                              {l.quantity}× {l.size.code}
+                            </span>
+                          ))}
                       </div>
                     </li>
-                  );
-                })}
+                  ),
+                )}
               </ul>
             )}
 

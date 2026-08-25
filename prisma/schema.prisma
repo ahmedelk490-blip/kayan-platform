@@ -386,6 +386,10 @@ model ProductBundle {
   productId String
   /// اسم السيريه كما يراه المستخدم: «سيريه»، «درزن»…
   nameAr    String
+  /// تكلفة/سعر الدست لهذه السيريه (اختياري) — يُدخَلان ويُعدَّلان من صفحة
+  /// المنتج. تكلفة/سعر القطعة يُشتقّان بالقسمة على مجموع قطع السيريه.
+  cost      Decimal? @db.Decimal(19, 4)
+  price     Decimal? @db.Decimal(19, 4)
   isActive  Boolean @default(true)
 
   createdAt DateTime @default(now())

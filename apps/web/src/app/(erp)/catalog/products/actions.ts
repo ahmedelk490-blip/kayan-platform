@@ -6,7 +6,7 @@ import { z } from 'zod';
 import sharp from 'sharp';
 import { isPriceService } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
-import { prisma } from '@/lib/prisma';
+import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 
 export interface FormState {
@@ -826,29 +826,17 @@ export async function addBundle(
   const nameAr = String(formData.get('bundleName') ?? '').trim();
   if (nameAr.length < 2) return { fieldErrors: { bundleName: 'اسم السيريه مطلوب.' } };
 
-  // اجمع كميات المقاسات من حقول qty_<sizeId>.
-  const lines: { sizeId: string; quantity: number }[] = [];
-  for (const [key, value] of formData.entries()) {
-    if (!key.startsWith('qty_')) continue;
-    const qty = Math.max(0, Math.round(Number(value) || 0));
-    if (qty > 0) lines.push({ sizeId: key.slice(4), quantity: qty });
-  }
-  if (lines.length === 0) return { error: 'أدخل كمية لمقاس واحد على الأقل.' };
-
-  // تأكّد أن المقاسات تخصّ هذا المستأجر — لا نثق بمعرّفات واردة من النموذج.
-  const validSizes = await prisma.size.findMany({
-    where: { id: { in: lines.map((l) => l.sizeId) }, tenantId: user.tenantId, isDeleted: false },
-    select: { id: true },
-  });
-  const validSet = new Set(validSizes.map((s) => s.id));
-  const goodLines = lines.filter((l) => validSet.has(l.sizeId));
-  if (goodLines.length === 0) return { error: 'المقاسات المختارة غير صالحة.' };
+  const goodLines = await readBundleLines(formData, user.tenantId);
+  if (goodLines === 'invalid') return { error: 'المقاسات المختارة غير صالحة.' };
+  if (goodLines.length === 0) return { error: 'أدخل كمية لمقاس واحد على الأقل.' };
 
   const bundle = await prisma.productBundle.create({
     data: {
       tenantId: user.tenantId,
       productId: product.id,
       nameAr,
+      cost: num(String(formData.get('bundleCost') ?? '')),
+      price: num(String(formData.get('bundlePrice') ?? '')),
       lines: { create: goodLines },
     },
   });
@@ -864,6 +852,84 @@ export async function addBundle(
 
   revalidatePath(`/catalog/products/${productId}`);
   return { ok: `أُنشئت السيريه «${nameAr}».` };
+}
+
+/**
+ * تعديل سيريه قائمة: الاسم، تكلفة/سعر الدست، وتوزيع المقاسات — كلّها من داخل
+ * صفحة المنتج بلا حذف وإعادة إنشاء. السطور تُستبدَل بالكامل بالمُدخَل الجديد
+ * داخل معاملة، فيبقى المخزّن مطابقاً لما يراه المستخدم بالضبط.
+ */
+export async function updateBundle(
+  productId: string,
+  bundleId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requirePermission('products.write');
+
+  const bundle = await prisma.productBundle.findFirst({
+    where: { id: bundleId, tenantId: user.tenantId, product: { id: productId } },
+    select: { id: true },
+  });
+  if (!bundle) return { error: 'السيريه غير موجودة.' };
+
+  const nameAr = String(formData.get('bundleName') ?? '').trim();
+  if (nameAr.length < 2) return { fieldErrors: { bundleName: 'اسم السيريه مطلوب.' } };
+
+  const goodLines = await readBundleLines(formData, user.tenantId);
+  if (goodLines === 'invalid') return { error: 'المقاسات المختارة غير صالحة.' };
+  if (goodLines.length === 0) return { error: 'أدخل كمية لمقاس واحد على الأقل.' };
+
+  await tenantTransaction(async (tx) => {
+    await tx.productBundleLine.deleteMany({ where: { bundleId: bundle.id } });
+    await tx.productBundle.update({
+      where: { id: bundle.id },
+      data: {
+        nameAr,
+        cost: num(String(formData.get('bundleCost') ?? '')),
+        price: num(String(formData.get('bundlePrice') ?? '')),
+        lines: { create: goodLines },
+      },
+    });
+  });
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'bundle.update',
+    entityType: 'ProductBundle',
+    entityId: bundle.id,
+    detail: `${nameAr} — ${goodLines.reduce((s, l) => s + l.quantity, 0)} قطعة`,
+  });
+
+  revalidatePath(`/catalog/products/${productId}`);
+  return { ok: `حُفظت السيريه «${nameAr}».` };
+}
+
+/**
+ * يجمع سطور السيريه من حقول qty_<sizeId> ويتحقّق أن المقاسات لهذا المستأجر.
+ * يُعيد المصفوفة الصالحة، أو 'invalid' حين لا يصمد أيّ مقاس مُدخَل (تلاعب في
+ * المعرّفات) — نميّزها عن «لم يُدخَل شيء» (مصفوفة فارغة).
+ */
+async function readBundleLines(
+  formData: FormData,
+  tenantId: string,
+): Promise<{ sizeId: string; quantity: number }[] | 'invalid'> {
+  const lines: { sizeId: string; quantity: number }[] = [];
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith('qty_')) continue;
+    const qty = Math.max(0, Math.round(Number(value) || 0));
+    if (qty > 0) lines.push({ sizeId: key.slice(4), quantity: qty });
+  }
+  if (lines.length === 0) return [];
+
+  const validSizes = await prisma.size.findMany({
+    where: { id: { in: lines.map((l) => l.sizeId) }, tenantId, isDeleted: false },
+    select: { id: true },
+  });
+  const validSet = new Set(validSizes.map((s) => s.id));
+  const goodLines = lines.filter((l) => validSet.has(l.sizeId));
+  return goodLines.length === 0 ? 'invalid' : goodLines;
 }
 
 /** حذف سيريه — مع سطورها (Cascade). */
