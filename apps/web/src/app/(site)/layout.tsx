@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, Space_Grotesk, Noto_Kufi_Arabic } from 'next/font/google';
 import { BRAND } from '@erp/brand';
 import { SmoothScroller, ScrollProgress } from '@erp/ui-market';
-import { IntroMount } from '@/components/site/IntroMount';
 import { Navigation } from '@/components/site/Navigation';
 import { SiteFooter } from '@/components/site/SiteFooter';
 import { WhatsAppButton } from '@/components/site/WhatsAppButton';
@@ -121,7 +120,7 @@ document.documentElement.setAttribute('data-theme', stored || system);
           تخطّي إلى المحتوى
         </a>
 
-        <IntroMount />
+        {/* مقدمة اللوجو أُزيلت بطلب المالك — الموقع يفتح على المحتوى مباشرة. */}
 
         <SmoothScroller>
           <ScrollProgress />
