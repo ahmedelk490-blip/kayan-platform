@@ -55,6 +55,7 @@ const NAV: NavItem[] = [
   { href: '/sales/purchase-invoices', label: 'فواتير الشراء', permission: 'purchasing.view', built: true, group: 'المبيعات' },
 
   { href: '/inventory', label: 'المخزون', permission: 'inventory.read', built: true, group: 'المخزون' },
+  { href: '/inventory/products', label: 'المنتجات', permission: 'products.read', built: true, group: 'المخزون' },
   { href: '/supplies', label: 'المستلزمات', permission: 'supplies.view', built: true, group: 'المخزون' },
   { href: '/formulas', label: 'المعادلات والتكلفة', permission: 'formula.view', built: true, group: 'المخزون' },
   { href: '/damage', label: 'الهالك والجزاءات', permission: 'damage.view', built: true, group: 'المخزون' },
