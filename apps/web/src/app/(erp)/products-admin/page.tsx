@@ -84,9 +84,9 @@ export default async function ProductsAdminPage() {
   ];
 
   const productCards: Shortcut[] = [
-    { href: '/inventory/products', title: 'المنتجات', desc: 'قائمة المنتجات، بحث وفلترة، وتعديل (مع الدست والأسعار).', show: true },
+    { href: '/catalog/products', title: 'المنتجات', desc: 'قائمة المنتجات، بحث وفلترة، وتعديل (مع الدست والأسعار).', show: true },
     { href: '/catalog/products/new', title: '+ منتج جديد', desc: 'أضِف منتجاً بنظام الدست، وحدّد قطع الدستة وتكلفتها وسعرها.', show: canWrite },
-    { href: '/inventory/products', title: 'السيريات والأسعار', desc: 'توزيع مقاسات السيريه وسعر الدست — من داخل صفحة المنتج.', show: canWrite },
+    { href: '/catalog/products', title: 'السيريات والأسعار', desc: 'توزيع مقاسات السيريه وسعر الدست — من داخل صفحة المنتج.', show: canWrite },
     { href: '/catalog/categories', title: 'التصنيفات والقوائم', desc: 'أصناف المنتجات وترتيبها.', show: true },
     { href: '/catalog/review', title: 'مراجعة عرض الموقع', desc: 'المنتجات المعروضة على الموقع والموافقة عليها.', show: true },
   ];

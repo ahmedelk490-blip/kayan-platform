@@ -54,11 +54,15 @@ const NAV: NavItem[] = [
   { href: '/sales/web-orders', label: 'طلبات الموقع', permission: 'invoices.write', built: true, group: 'المبيعات' },
   { href: '/sales/purchase-invoices', label: 'فواتير الشراء', permission: 'purchasing.view', built: true, group: 'المبيعات' },
 
-  // لوحة إدارة المنتجات — قسم مستقل يجمع المنتجات والمخزون في بوابة واحدة.
+  // إدارة المنتجات — قسم مستقل يجمع كل ما يخصّ المنتجات: اللوحة، قائمة
+  // المنتجات وإدخالها، التصنيفات، ومراجعة عرض الموقع. لا شيء منها في القائمة
+  // العامة ولا في المخزون — بطلب المالك، كله في مكان واحد.
   { href: '/products-admin', label: 'لوحة إدارة المنتجات', permission: 'products.read', built: true, group: 'إدارة المنتجات' },
+  { href: '/catalog/products', label: 'المنتجات', permission: 'products.read', built: true, group: 'إدارة المنتجات' },
+  { href: '/catalog/categories', label: 'التصنيفات والقوائم', permission: 'products.read', built: true, group: 'إدارة المنتجات' },
+  { href: '/catalog/review', label: 'مراجعة عرض الموقع', permission: 'products.read', built: true, group: 'إدارة المنتجات' },
 
   { href: '/inventory', label: 'المخزون', permission: 'inventory.read', built: true, group: 'المخزون' },
-  { href: '/inventory/products', label: 'المنتجات', permission: 'products.read', built: true, group: 'المخزون' },
   { href: '/supplies', label: 'المستلزمات', permission: 'supplies.view', built: true, group: 'المخزون' },
   { href: '/formulas', label: 'المعادلات والتكلفة', permission: 'formula.view', built: true, group: 'المخزون' },
   { href: '/damage', label: 'الهالك والجزاءات', permission: 'damage.view', built: true, group: 'المخزون' },
@@ -68,10 +72,6 @@ const NAV: NavItem[] = [
 
   // المصروفات قسم مستقل بذاته — بطلب المالك لمتابعتها منعزلة عن المشتريات.
   { href: '/expenses', label: 'المصروفات', permission: 'expenses.view', built: true, group: 'المصروفات' },
-
-  { href: '/catalog/products', label: 'المنتجات', permission: 'products.read', built: true, group: 'المنتجات' },
-  { href: '/catalog/review', label: 'مراجعة عرض الموقع', permission: 'products.read', built: true, group: 'المنتجات' },
-  { href: '/catalog/categories', label: 'التصنيفات والقوائم', permission: 'products.read', built: true, group: 'المنتجات' },
 
   { href: '/customers', label: 'العملاء', permission: 'customers.read', built: true, group: 'العملاء' },
   { href: '/portal', label: 'بوابة العميل', permission: 'portal.view', built: true, group: 'العملاء' },
@@ -97,7 +97,6 @@ const GROUP_ORDER = [
   'المشتريات',
   'المصروفات',
   'الرواتب',
-  'المنتجات',
   'العملاء',
   'التقارير',
   'الإدارة',
