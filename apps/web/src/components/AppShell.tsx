@@ -54,6 +54,9 @@ const NAV: NavItem[] = [
   { href: '/sales/web-orders', label: 'طلبات الموقع', permission: 'invoices.write', built: true, group: 'المبيعات' },
   { href: '/sales/purchase-invoices', label: 'فواتير الشراء', permission: 'purchasing.view', built: true, group: 'المبيعات' },
 
+  // لوحة إدارة المنتجات — قسم مستقل يجمع المنتجات والمخزون في بوابة واحدة.
+  { href: '/products-admin', label: 'لوحة إدارة المنتجات', permission: 'products.read', built: true, group: 'إدارة المنتجات' },
+
   { href: '/inventory', label: 'المخزون', permission: 'inventory.read', built: true, group: 'المخزون' },
   { href: '/inventory/products', label: 'المنتجات', permission: 'products.read', built: true, group: 'المخزون' },
   { href: '/supplies', label: 'المستلزمات', permission: 'supplies.view', built: true, group: 'المخزون' },
@@ -89,6 +92,7 @@ const NAV: NavItem[] = [
 const GROUP_ORDER = [
   '',
   'المبيعات',
+  'إدارة المنتجات',
   'المخزون',
   'المشتريات',
   'المصروفات',
