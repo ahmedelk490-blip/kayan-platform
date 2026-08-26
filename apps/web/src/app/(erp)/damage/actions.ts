@@ -26,14 +26,18 @@ const Schema = z.object({
   colorId: z.string().trim().optional().or(z.literal('')),
   service: z.string().trim().optional().or(z.literal('')),
   quantity: z.coerce.number().positive('العدد يجب أن يكون أكبر من صفر.'),
+  manualCost: z.coerce.number().nonnegative('التكلفة لا تكون سالبة.').optional(),
 });
 
 function read(formData: FormData) {
+  const manual = String(formData.get('manualCost') ?? '').trim();
   return {
     productId: String(formData.get('productId') ?? ''),
     colorId: String(formData.get('colorId') ?? ''),
     service: String(formData.get('service') ?? ''),
     quantity: String(formData.get('quantity') ?? ''),
+    // فارغ ⇒ تلقائي. نمرّره undefined لا 0 حتى لا يُفهم صفراً مقصوداً.
+    manualCost: manual === '' ? undefined : manual,
   };
 }
 
@@ -70,9 +74,11 @@ export async function createDamage(_prev: FormState, formData: FormData): Promis
   // السبب من اللون والخدمة — يبقى مُفسَّراً بلا حقل سبب منفصل.
   const reason = [colorName, serviceName].filter(Boolean).join(' · ') || product.nameAr;
 
-  // التكلفة تلقائياً: تكلفة قطعة المنتج × العدد.
-  const pieceCost = product.cost ? dec(product.cost) : dec(0);
-  const total = damageTotal(pieceCost.times(dec(parsed.data.quantity)), 0);
+  // التكلفة: يدوية إن كُتبت، وإلا تلقائياً = تكلفة قطعة المنتج × العدد.
+  const total =
+    parsed.data.manualCost !== undefined
+      ? damageTotal(dec(parsed.data.manualCost), 0)
+      : damageTotal((product.cost ? dec(product.cost) : dec(0)).times(dec(parsed.data.quantity)), 0);
 
   const damage = await prisma.damageRecord.create({
     data: {

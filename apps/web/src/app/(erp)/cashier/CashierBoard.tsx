@@ -198,7 +198,7 @@ function VariantPicker({
   return (
     <div className="fixed inset-0 z-[60] grid place-items-center p-4" role="dialog">
       <button type="button" aria-label="إغلاق" onClick={onClose} className="absolute inset-0 bg-black/50" />
-      <div className="relative w-full max-w-md rounded-2xl border border-line bg-panel p-5">
+      <div className="relative w-full max-w-md rounded-2xl border border-line bg-card p-5 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-base font-bold text-txt">{product.name}</h3>
           <button type="button" onClick={onClose} className="text-txt-3">✕</button>

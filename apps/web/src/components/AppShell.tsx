@@ -262,6 +262,22 @@ export async function AppShell({
           <h1 className="truncate text-base font-semibold text-brand">{title}</h1>
 
           <div className="flex items-center gap-3">
+            {/* زيارة الموقع العام — يفتح واجهة الزبون في تبويب جديد ليبقى
+                النظام مفتوحاً. متاح للجميع: أي مستخدم قد يريد رؤية ما يراه الزبون. */}
+            <a
+              href="/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-txt-2 transition-colors hover:border-brand hover:text-brand"
+              title="زيارة الموقع العام"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+              <span className="hidden sm:inline">زيارة الموقع</span>
+            </a>
             {(seeInventory || seeWebOrders) && <NotificationBell alerts={alerts} />}
 
           {/* هوية المستخدم والخروج في الترويسة للموبايل والتابلت حيث يختفي

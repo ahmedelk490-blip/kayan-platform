@@ -16,23 +16,23 @@ export interface DamageProduct {
 }
 
 /**
- * محضر هالك — مبسّط لأربع خانات فقط بطلب المالك: نوع المنتج، اللون، نوع
- * الخدمة، والعدد. التكلفة تُحسب تلقائياً من تكلفة قطعة المنتج × العدد،
- * والسبب يُبنى من اللون والخدمة — فلا حقول زائدة يملؤها المستخدم.
+ * محضر هالك — نوع المنتج، اللون، نوع الخدمة، والعدد. الألوان كلها متاحة دائماً
+ * (لا تعتمد على متغيّرات المنتج) فلا تبقى القائمة مقفولة. التكلفة تُحسب تلقائياً
+ * من تكلفة قطعة المنتج × العدد، أو تُكتب يدوياً إن تركها التلقائي غير مناسب.
  */
 export function DamageForm({
   action,
   products,
+  colors,
   services,
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
   products: DamageProduct[];
+  colors: Option[];
   services: Option[];
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const [productId, setProductId] = useState('');
-
-  const colors = products.find((p) => p.id === productId)?.colors ?? [];
 
   return (
     <form action={formAction} className="space-y-5" noValidate>
@@ -61,11 +61,11 @@ export function DamageForm({
           )}
         </label>
 
-        {/* ٢) اللون — من ألوان المنتج المختار */}
+        {/* ٢) اللون — كل الألوان متاحة دائماً */}
         <label className="block">
           <span className="mb-1.5 block text-xs text-txt-2">اللون</span>
-          <select name="colorId" disabled={colors.length === 0} className="erp-input py-2.5 disabled:opacity-50">
-            <option value="">{colors.length ? 'اختر اللون…' : '—'}</option>
+          <select name="colorId" className="erp-input py-2.5">
+            <option value="">{colors.length ? 'اختر اللون…' : 'لا ألوان معرّفة'}</option>
             {colors.map((c) => (
               <option key={c.value} value={c.value}>{c.label}</option>
             ))}
@@ -83,6 +83,15 @@ export function DamageForm({
             <span className="mt-1 block text-[0.7rem] text-bad">{state.fieldErrors.quantity}</span>
           )}
         </label>
+
+        {/* ٥) التكلفة اليدوية (اختياري) — تتجاوز الحساب التلقائي إن مُلئت */}
+        <label className="block">
+          <span className="mb-1.5 block text-xs text-txt-2">التكلفة (يدوي — اختياري)</span>
+          <input name="manualCost" type="number" min="0" step="0.01" dir="ltr" placeholder="تلقائي" className="erp-input py-2.5 text-start" />
+          {state.fieldErrors?.manualCost && (
+            <span className="mt-1 block text-[0.7rem] text-bad">{state.fieldErrors.manualCost}</span>
+          )}
+        </label>
       </div>
 
       <div className="flex items-center gap-3">
@@ -90,8 +99,8 @@ export function DamageForm({
         {state.ok && <span className="text-xs text-ok">{state.ok}</span>}
       </div>
       <p className="text-[0.7rem] leading-[1.8] text-txt-4">
-        التكلفة تُحسب تلقائياً من تكلفة قطعة المنتج × العدد. يُسجَّل الهالك بانتظار الاعتماد،
-        ويظهر في «الهالك» بالبيان المالي بعد اعتماده.
+        التكلفة تُحسب تلقائياً من تكلفة قطعة المنتج × العدد — أو اكتبها يدوياً في خانة «التكلفة»
+        لتتجاوز الحساب التلقائي. يُسجَّل الهالك بانتظار الاعتماد، ويظهر في «الهالك» بالبيان المالي بعد اعتماده.
       </p>
     </form>
   );

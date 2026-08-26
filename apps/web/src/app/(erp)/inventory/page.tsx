@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { can, available, dec, formatQty, formatMoney, type Numeric } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
@@ -26,6 +27,10 @@ function variantLabel(v: {
 export default async function InventoryPage() {
   const user = await requirePermission('inventory.read');
   const canWrite = can(user.role, 'inventory.write');
+  // إدخال المنتجات يعيش في الكتالوج، لكنه موصولٌ من هنا ليبقى المخزون
+  // والمنتجات في مكان واحد — بطلب المالك.
+  const canSeeProducts = can(user.role, 'products.read');
+  const canAddProduct = can(user.role, 'products.write');
 
   const seeSupplies = can(user.role, 'supplies.view');
 
@@ -200,11 +205,19 @@ export default async function InventoryPage() {
         title="المخزون"
         count={stock.length}
         action={
-          canWrite ? (
-            <MovementModal
-              variants={variants.map((v) => ({ value: v.id, label: variantLabel(v), perDozen: v.product.piecesPerDozen || 12 }))}
-            />
-          ) : null
+          <div className="flex flex-wrap items-center gap-2">
+            {canSeeProducts && (
+              <Link href="/catalog/products" className="erp-btn-ghost">المنتجات</Link>
+            )}
+            {canAddProduct && (
+              <Link href="/catalog/products/new" className="erp-btn-ghost">+ منتج جديد</Link>
+            )}
+            {canWrite && (
+              <MovementModal
+                variants={variants.map((v) => ({ value: v.id, label: variantLabel(v), perDozen: v.product.piecesPerDozen || 12 }))}
+              />
+            )}
+          </div>
         }
       />
 

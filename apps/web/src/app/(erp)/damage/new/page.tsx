@@ -13,26 +13,22 @@ export const metadata: Metadata = { title: 'محضر هالك جديد' };
 export default async function NewDamagePage() {
   const user = await requirePermission('damage.write');
 
-  const products = await prisma.product.findMany({
-    where: { tenantId: user.tenantId, isDeleted: false, status: 'ACTIVE' },
-    select: {
-      id: true,
-      nameAr: true,
-      variants: {
-        where: { isDeleted: false },
-        select: { color: { select: { id: true, nameAr: true } } },
-      },
-    },
-    orderBy: { nameAr: 'asc' },
-  });
+  const [products, colorRows] = await Promise.all([
+    prisma.product.findMany({
+      where: { tenantId: user.tenantId, isDeleted: false, status: 'ACTIVE' },
+      select: { id: true, nameAr: true },
+      orderBy: { nameAr: 'asc' },
+    }),
+    // كل ألوان المستأجر — متاحة دائماً في الفورم، لا تعتمد على متغيّرات المنتج.
+    prisma.color.findMany({
+      where: { tenantId: user.tenantId, isDeleted: false },
+      select: { id: true, nameAr: true },
+      orderBy: { sortOrder: 'asc' },
+    }),
+  ]);
 
-  // ألوان كل منتج (بلا تكرار) — للاختيار المتسلسل في الفورم.
-  const productList: DamageProduct[] = products.map((p) => {
-    const seen = new Map<string, string>();
-    for (const v of p.variants) if (v.color && !seen.has(v.color.id)) seen.set(v.color.id, v.color.nameAr);
-    return { id: p.id, nameAr: p.nameAr, colors: [...seen].map(([value, label]) => ({ value, label })) };
-  });
-
+  const productList: DamageProduct[] = products.map((p) => ({ id: p.id, nameAr: p.nameAr, colors: [] }));
+  const colors = colorRows.map((c) => ({ value: c.id, label: c.nameAr }));
   const services = PRICE_SERVICES.filter((s) => s !== 'NONE').map((s) => ({ value: s, label: PRICE_SERVICE_AR[s] }));
 
   return (
@@ -42,7 +38,7 @@ export default async function NewDamagePage() {
         action={<Link href="/damage" className="erp-btn-ghost">رجوع</Link>}
       />
       <div className="erp-card max-w-2xl p-6">
-        <DamageForm action={createDamage} products={productList} services={services} />
+        <DamageForm action={createDamage} products={productList} colors={colors} services={services} />
       </div>
     </AppShell>
   );
