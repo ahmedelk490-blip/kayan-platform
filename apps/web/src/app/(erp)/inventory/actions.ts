@@ -52,13 +52,24 @@ async function applyStockDelta(
 
 const MovementSchema = z.object({
   variantId: z.string().min(1, 'المتغيّر مطلوب.'),
-  warehouseId: z.string().min(1, 'المخزن مطلوب.'),
-  locationId: z.string().optional(),
   type: z.enum(Object.keys(TYPES) as [MovementType, ...MovementType[]]),
   quantity: z.coerce.number().positive('الكمية يجب أن تكون أكبر من صفر.'),
   reference: z.string().trim().max(120).optional().or(z.literal('')),
   reason: z.string().trim().max(400).optional().or(z.literal('')),
 });
+
+/**
+ * المخزن الافتراضي للمستأجر. المخزن واحد بطلب المالك — فلا يُختار في الفورم،
+ * بل يُحسم هنا. أوّل مخزن غير محذوف مرتّباً بالرمز.
+ */
+async function defaultWarehouseId(tenantId: string): Promise<string | null> {
+  const wh = await prisma.warehouse.findFirst({
+    where: { tenantId, isDeleted: false },
+    orderBy: { code: 'asc' },
+    select: { id: true },
+  });
+  return wh?.id ?? null;
+}
 
 /**
  * Post a stock movement and update the projection in one transaction.
@@ -72,8 +83,6 @@ export async function postMovement(_prev: FormState, formData: FormData): Promis
 
   const parsed = MovementSchema.safeParse({
     variantId: String(formData.get('variantId') ?? ''),
-    warehouseId: String(formData.get('warehouseId') ?? ''),
-    locationId: String(formData.get('locationId') ?? ''),
     type: String(formData.get('type') ?? 'RECEIPT'),
     quantity: String(formData.get('quantity') ?? ''),
     reference: String(formData.get('reference') ?? ''),
@@ -81,8 +90,11 @@ export async function postMovement(_prev: FormState, formData: FormData): Promis
   });
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
 
-  const { variantId, warehouseId, type, quantity } = parsed.data;
-  const locationId = parsed.data.locationId || null;
+  const { variantId, type, quantity } = parsed.data;
+  // المخزن واحد — يُحسم تلقائياً بلا اختيار، والموقع بلا رفوف (null).
+  const warehouseId = await defaultWarehouseId(user.tenantId);
+  if (!warehouseId) return { error: 'لا يوجد مخزن معرّف بعد. أضِف مخزناً أولاً.' };
+  const locationId = null;
   const meta = TYPES[type];
   const delta = meta.sign * quantity;
 

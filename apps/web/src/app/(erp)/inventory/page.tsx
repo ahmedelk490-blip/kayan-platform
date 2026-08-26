@@ -29,7 +29,7 @@ export default async function InventoryPage() {
 
   const seeSupplies = can(user.role, 'supplies.view');
 
-  const [stock, variants, warehouses, locations, movements, supplies, supplyTx, reorderStock, fullStock] = await Promise.all([
+  const [stock, variants, movements, supplies, supplyTx, reorderStock, fullStock] = await Promise.all([
     prisma.stock.findMany({
       where: { variant: { product: { tenantId: user.tenantId } } },
       include: {
@@ -44,14 +44,6 @@ export default async function InventoryPage() {
       where: { isDeleted: false, product: { tenantId: user.tenantId, isDeleted: false } },
       include: { product: true, color: true, size: true },
       orderBy: { sku: 'asc' },
-    }),
-    prisma.warehouse.findMany({
-      where: { tenantId: user.tenantId, isDeleted: false },
-      orderBy: { code: 'asc' },
-    }),
-    prisma.warehouseLocation.findMany({
-      where: { warehouse: { tenantId: user.tenantId }, isDeleted: false },
-      orderBy: { code: 'asc' },
     }),
     prisma.stockMovement.findMany({
       where: { tenantId: user.tenantId },
@@ -211,8 +203,6 @@ export default async function InventoryPage() {
           canWrite ? (
             <MovementModal
               variants={variants.map((v) => ({ value: v.id, label: variantLabel(v), perDozen: v.product.piecesPerDozen || 12 }))}
-              warehouses={warehouses.map((w) => ({ value: w.id, label: w.nameAr }))}
-              locations={locations.map((l) => ({ value: l.id, label: l.code }))}
             />
           ) : null
         }

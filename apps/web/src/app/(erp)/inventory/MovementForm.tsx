@@ -15,13 +15,9 @@ export interface VariantChoice {
 
 export function MovementForm({
   variants,
-  warehouses,
-  locations,
   onSuccess,
 }: {
   variants: VariantChoice[];
-  warehouses: { value: string; label: string }[];
-  locations: { value: string; label: string }[];
   /** Supplied by the modal only. The full page leaves it undefined. */
   onSuccess?: () => void;
 }) {
@@ -102,16 +98,7 @@ export function MovementForm({
           defaultValue="RECEIPT"
           errors={state.fieldErrors}
         />
-        <Select
-          name="warehouseId"
-          label="المخزن"
-          required
-          options={warehouses}
-          placeholder="اختر المخزن"
-          errors={state.fieldErrors}
-        />
-        <Select name="locationId" label="الموقع / الرف" options={locations} placeholder="بدون موقع" />
-        <Field name="reference" label="المرجع" errors={state.fieldErrors} />
+        <Field name="reference" label="المرجع (اختياري)" errors={state.fieldErrors} />
       </div>
 
       <TextArea name="reason" label="السبب" rows={2} errors={state.fieldErrors} />

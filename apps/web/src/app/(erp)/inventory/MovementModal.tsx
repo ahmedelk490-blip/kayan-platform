@@ -13,12 +13,8 @@ import { MovementForm, type VariantChoice } from './MovementForm';
  */
 export function MovementModal({
   variants,
-  warehouses,
-  locations,
 }: {
   variants: VariantChoice[];
-  warehouses: { value: string; label: string }[];
-  locations: { value: string; label: string }[];
 }) {
   return (
     <FormModal
@@ -30,8 +26,6 @@ export function MovementModal({
       {(onSuccess) => (
         <MovementForm
           variants={variants}
-          warehouses={warehouses}
-          locations={locations}
           onSuccess={onSuccess}
         />
       )}
