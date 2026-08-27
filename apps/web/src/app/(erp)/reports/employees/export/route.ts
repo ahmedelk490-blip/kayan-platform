@@ -6,50 +6,72 @@ import { resolveRange } from '../../range';
 
 export const dynamic = 'force-dynamic';
 
-/** تصدير ربحية الموظفين للفترة إلى شيت Excel (CSV). */
+/** تصدير تحليل الموظفين للفترة إلى شيت Excel (CSV). */
 export async function GET(request: Request) {
   const user = await requirePermission('cost.margin');
   const sp = new URL(request.url).searchParams;
   const { from, to } = resolveRange({ from: sp.get('from') ?? undefined, to: sp.get('to') ?? undefined, period: sp.get('period') ?? undefined });
 
-  const invoices = await withTenant(user.tenantId, (tx) =>
-    tx.invoice.findMany({
-      where: {
-        tenantId: user.tenantId,
-        isDeleted: false,
-        status: { notIn: ['DRAFT', 'VOID'] },
-        issueDate: { gte: from, lte: to },
-      },
-      select: {
-        total: true,
-        createdById: true,
-        createdBy: { select: { nameAr: true, name: true } },
-        lines: { select: { quantity: true, variant: { select: { cost: true, product: { select: { cost: true } } } } } },
-      },
-    }),
+  const [invoices, payments, expenses] = await withTenant(user.tenantId, (tx) =>
+    Promise.all([
+      tx.invoice.findMany({
+        where: { tenantId: user.tenantId, isDeleted: false, status: { notIn: ['DRAFT', 'VOID'] }, issueDate: { gte: from, lte: to } },
+        select: {
+          total: true, createdById: true,
+          createdBy: { select: { nameAr: true, name: true } },
+          lines: { select: { quantity: true, variant: { select: { cost: true, product: { select: { cost: true } } } } } },
+        },
+      }),
+      tx.employeePayment.findMany({
+        where: { tenantId: user.tenantId, deletedAt: null, kind: { in: ['SALARY', 'BONUS', 'COMMISSION'] }, paidAt: { gte: from, lte: to } },
+        select: { employeeId: true, kind: true, amount: true, employee: { select: { nameAr: true, name: true } } },
+      }),
+      tx.secondaryExpense.findMany({
+        where: { tenantId: user.tenantId, isDeleted: false, status: 'APPROVED', employeeId: { not: null }, expenseDate: { gte: from, lte: to } },
+        select: { employeeId: true, amount: true, employee: { select: { nameAr: true, name: true } } },
+      }),
+    ]),
   );
 
-  const map = new Map<
-    string,
-    { name: string; invoices: number; revenue: ReturnType<typeof dec>; cost: ReturnType<typeof dec> }
-  >();
+  type Row = { name: string; invoices: number; pieces: ReturnType<typeof dec>; revenue: ReturnType<typeof dec>; cost: ReturnType<typeof dec>; expenses: ReturnType<typeof dec>; salary: ReturnType<typeof dec>; bonus: ReturnType<typeof dec> };
+  const map = new Map<string, Row>();
+  const blank = (name: string): Row => ({ name, invoices: 0, pieces: dec(0), revenue: dec(0), cost: dec(0), expenses: dec(0), salary: dec(0), bonus: dec(0) });
+
   for (const inv of invoices) {
     const id = inv.createdById ?? '—';
     const name = inv.createdBy?.nameAr ?? inv.createdBy?.name ?? 'غير محدَّد';
-    const row = map.get(id) ?? { name, invoices: 0, revenue: dec(0), cost: dec(0) };
+    const row = map.get(id) ?? blank(name);
     row.invoices += 1;
     row.revenue = row.revenue.plus(dec(inv.total));
     for (const l of inv.lines) {
+      row.pieces = row.pieces.plus(dec(l.quantity));
       const unitCost = l.variant?.cost ?? l.variant?.product?.cost ?? null;
       if (unitCost !== null) row.cost = row.cost.plus(dec(l.quantity).times(dec(unitCost)));
     }
     map.set(id, row);
   }
+  for (const p of payments) {
+    if (!p.employeeId) continue;
+    const row = map.get(p.employeeId) ?? blank(p.employee?.nameAr ?? p.employee?.name ?? 'موظف');
+    if (p.kind === 'SALARY') row.salary = row.salary.plus(dec(p.amount));
+    else row.bonus = row.bonus.plus(dec(p.amount));
+    map.set(p.employeeId, row);
+  }
+  for (const e of expenses) {
+    if (!e.employeeId) continue;
+    const row = map.get(e.employeeId) ?? blank(e.employee?.nameAr ?? e.employee?.name ?? 'موظف');
+    row.expenses = row.expenses.plus(dec(e.amount));
+    map.set(e.employeeId, row);
+  }
 
-  const headers = ['الموظف', 'عدد الفواتير', 'الإيراد', 'التكلفة', 'الربح'];
+  const net = (r: Row) => r.revenue.minus(r.cost).minus(r.expenses).minus(r.salary).minus(r.bonus);
+  const headers = ['الموظف', 'عدد الفواتير', 'القطع المباعة', 'المبيعات', 'التكلفة', 'الربح', 'مصروفاته', 'راتبه', 'مكافآته', 'صافي المساهمة'];
   const rows = [...map.values()]
-    .sort((a, b) => b.revenue.minus(b.cost).minus(a.revenue.minus(a.cost)).toNumber())
-    .map((r) => [r.name, r.invoices, r.revenue.toNumber(), r.cost.toNumber(), r.revenue.minus(r.cost).toNumber()]);
+    .sort((a, b) => net(b).minus(net(a)).toNumber())
+    .map((r) => [
+      r.name, r.invoices, r.pieces.toNumber(), r.revenue.toNumber(), r.cost.toNumber(),
+      r.revenue.minus(r.cost).toNumber(), r.expenses.toNumber(), r.salary.toNumber(), r.bonus.toNumber(), net(r).toNumber(),
+    ]);
 
   return csvResponse(stampedName('kayan-employees'), headers, rows);
 }
