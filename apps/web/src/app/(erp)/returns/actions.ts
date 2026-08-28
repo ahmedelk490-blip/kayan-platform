@@ -55,12 +55,27 @@ export async function createReturn(
   });
   if (!invoice) return { error: 'الفاتورة غير موجودة أو غير صالحة للإرجاع.' };
 
+  // المرتجَع سابقاً لكل بند من هذه الفاتورة — لمنع تجاوز المباع عبر عدة مرتجعات.
+  const priorReturns = await prisma.salesReturn.findMany({
+    where: { tenantId: user.tenantId, invoiceId: invoice.id, isDeleted: false },
+    select: { lines: { select: { invoiceLineId: true, quantity: true } } },
+  });
+  const returnedByLine = new Map<string, ReturnType<typeof dec>>();
+  for (const pr of priorReturns) {
+    for (const l of pr.lines) {
+      if (!l.invoiceLineId) continue;
+      returnedByLine.set(l.invoiceLineId, (returnedByLine.get(l.invoiceLineId) ?? dec(0)).plus(dec(l.quantity)));
+    }
+  }
+
   const retLines: { line: (typeof invoice.lines)[number]; qty: number }[] = [];
   for (const l of invoice.lines) {
     const q = Math.max(0, Number(formData.get(`qty_${l.id}`) ?? 0) || 0);
     if (q <= 0) continue;
-    if (dec(q).gt(dec(l.quantity))) {
-      return { error: `الكمية المرتجعة لصنف «${l.description}» تتجاوز المباع (${dec(l.quantity).toString()}).` };
+    const prior = returnedByLine.get(l.id) ?? dec(0);
+    const remaining = dec(l.quantity).minus(prior);
+    if (dec(q).gt(remaining)) {
+      return { error: `الكمية المرتجعة لصنف «${l.description}» تتجاوز المتبقّي للإرجاع (${remaining.toString()} من ${dec(l.quantity).toString()}).` };
     }
     retLines.push({ line: l, qty: q });
   }
@@ -92,6 +107,7 @@ export async function createReturn(
         createdById: user.id,
         lines: {
           create: retLines.map((r) => ({
+            invoiceLineId: r.line.id,
             productId: r.line.productId,
             variantId: r.line.variantId,
             description: r.line.description,

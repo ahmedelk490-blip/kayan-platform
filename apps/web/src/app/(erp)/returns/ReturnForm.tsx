@@ -8,6 +8,8 @@ export interface ReturnLine {
   id: string;
   description: string;
   sold: number;
+  /** ما أُرجِع سابقاً من هذا البند — المتبقّي = المباع − المُرجَع. */
+  returned: number;
   unitPrice: number;
 }
 
@@ -37,6 +39,7 @@ export function ReturnForm({
             <tr className="border-b border-line text-start text-[0.7rem] text-txt-3">
               <th className="px-3 py-2 text-start font-medium">الصنف</th>
               <th className="px-3 py-2 text-start font-medium">المباع</th>
+              <th className="px-3 py-2 text-start font-medium">المتبقّي للإرجاع</th>
               <th className="px-3 py-2 text-start font-medium">سعر الوحدة</th>
               <th className="px-3 py-2 text-start font-medium">المرتجع</th>
               <th className="px-3 py-2 text-start font-medium">قيمة المرتجع</th>
@@ -44,27 +47,35 @@ export function ReturnForm({
           </thead>
           <tbody>
             {lines.map((l) => {
+              const remaining = Math.max(0, l.sold - l.returned);
               const q = qty[l.id] || 0;
               return (
                 <tr key={l.id} className="border-b border-line">
                   <td className="px-3 py-2 text-txt">{l.description}</td>
                   <td className="tnum px-3 py-2 text-txt-3">{l.sold}</td>
+                  <td className={`tnum px-3 py-2 ${remaining === 0 ? 'text-txt-4' : 'text-txt-2'}`}>
+                    {remaining}{l.returned > 0 && <span className="text-[0.7rem] text-txt-4"> (رُجِّع {l.returned})</span>}
+                  </td>
                   <td className="tnum px-3 py-2 text-txt-3">{l.unitPrice.toLocaleString('ar-IQ')}</td>
                   <td className="px-3 py-2">
-                    <input
-                      name={`qty_${l.id}`}
-                      type="number"
-                      min="0"
-                      max={l.sold}
-                      step="1"
-                      dir="ltr"
-                      defaultValue={0}
-                      onChange={(e) => {
-                        const v = Math.max(0, Math.min(l.sold, Math.round(Number(e.target.value) || 0)));
-                        setQty((p) => ({ ...p, [l.id]: v }));
-                      }}
-                      className="erp-input w-24 py-1.5 text-start"
-                    />
+                    {remaining === 0 ? (
+                      <span className="text-[0.7rem] text-txt-4">مُرجَع بالكامل</span>
+                    ) : (
+                      <input
+                        name={`qty_${l.id}`}
+                        type="number"
+                        min="0"
+                        max={remaining}
+                        step="1"
+                        dir="ltr"
+                        defaultValue={0}
+                        onChange={(e) => {
+                          const v = Math.max(0, Math.min(remaining, Math.round(Number(e.target.value) || 0)));
+                          setQty((p) => ({ ...p, [l.id]: v }));
+                        }}
+                        className="erp-input w-24 py-1.5 text-start"
+                      />
+                    )}
                   </td>
                   <td className="tnum px-3 py-2 font-medium text-brand">
                     {q > 0 ? (q * l.unitPrice).toLocaleString('ar-IQ') : '—'}

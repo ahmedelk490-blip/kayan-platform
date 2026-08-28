@@ -36,10 +36,24 @@ export default async function NewReturnPage({
     });
     if (!invoice) notFound();
 
+    // المُرجَع سابقاً لكل بند — ليعرض المتبقّي ويمنع تجاوز المباع.
+    const priorReturns = await prisma.salesReturn.findMany({
+      where: { tenantId: user.tenantId, invoiceId: invoice.id, isDeleted: false },
+      select: { lines: { select: { invoiceLineId: true, quantity: true } } },
+    });
+    const returnedByLine = new Map<string, number>();
+    for (const pr of priorReturns) {
+      for (const l of pr.lines) {
+        if (!l.invoiceLineId) continue;
+        returnedByLine.set(l.invoiceLineId, (returnedByLine.get(l.invoiceLineId) ?? 0) + Number(l.quantity));
+      }
+    }
+
     const lines: ReturnLine[] = invoice.lines.map((l) => ({
       id: l.id,
       description: l.description,
       sold: Number(l.quantity),
+      returned: returnedByLine.get(l.id) ?? 0,
       unitPrice: Number(l.unitPrice),
     }));
 

@@ -504,18 +504,21 @@ model SalesReturn {
 
 /// سطر مرتجع: صنف وكميته المرتجعة وسعره لحظة البيع.
 model SalesReturnLine {
-  id          String  @id @default(cuid())
-  returnId    String
-  productId   String?
-  variantId   String?
-  description String
-  quantity    Decimal @db.Decimal(19, 4)
-  unitPrice   Decimal @db.Decimal(19, 4)
-  lineTotal   Decimal @db.Decimal(19, 4)
+  id            String  @id @default(cuid())
+  returnId      String
+  /// سطر الفاتورة المصدر — لحساب صافي المرتجَع لكل بند ومنع تجاوز المباع.
+  invoiceLineId String?
+  productId     String?
+  variantId     String?
+  description   String
+  quantity      Decimal @db.Decimal(19, 4)
+  unitPrice     Decimal @db.Decimal(19, 4)
+  lineTotal     Decimal @db.Decimal(19, 4)
 
   salesReturn SalesReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
 
   @@index([returnId])
+  @@index([invoiceLineId])
 }
 
 model Material {
