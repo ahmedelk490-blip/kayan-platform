@@ -10,6 +10,7 @@ import { ModuleHeader, Table, Pager, Badge } from '@/components/crud/Shell';
 import { parseListQuery, skipTake, type SearchParams } from '@/lib/query';
 import { loadProductOptions } from './options';
 import { NewProductModal, EditProductModal } from './ProductModal';
+import { DeleteProductButton } from './DeleteProductButton';
 
 const SORTS = [
   { value: 'createdAt', label: 'الأحدث' },
@@ -190,6 +191,7 @@ export async function ProductsArea({
                   <Link href={`/catalog/products/${row.id}`} className="text-xs font-medium text-brand hover:underline">
                     الألوان والمقاسات والصور
                   </Link>
+                  {canWrite && <DeleteProductButton id={row.id} name={row.nameAr} />}
                 </div>
               </td>
             </tr>
