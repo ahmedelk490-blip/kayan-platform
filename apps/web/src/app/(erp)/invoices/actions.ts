@@ -211,6 +211,162 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
   redirect(`/invoices/${invoice.id}`);
 }
 
+/** المخزن الافتراضي للمستأجر — لتسوية المخزون عند تعديل بنود الفاتورة. */
+async function defaultWarehouseId(tenantId: string): Promise<string | null> {
+  const wh = await prisma.warehouse.findFirst({
+    where: { tenantId, isDeleted: false },
+    orderBy: { code: 'asc' },
+    select: { id: true },
+  });
+  return wh?.id ?? null;
+}
+
+/**
+ * تعديل بنود فاتورة قائمة — تغيير الأعداد وإضافة/حذف أصناف على نفس فاتورة
+ * العميل بدل إنشاء فاتورة جديدة.
+ *
+ * تُعاد الحسبة بالكامل (الإجمالي والحالة تُشتقّ من المدفوع مقابل الإجمالي
+ * الجديد)، ويُطبَّق **فرق** المخزون فقط: ما زاد يُصرَف وما نقص يعود — فيبقى
+ * المخزون مطابقاً لما خرج فعلاً (كبيع الكاشير). الفاتورة الملغاة لا تُعدَّل،
+ * والمسوّدة لا تمسّ المخزون (لم تُصرَف بعد).
+ */
+export async function updateInvoiceLines(
+  invoiceId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requirePermission('invoices.write');
+
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: invoiceId, tenantId: user.tenantId, isDeleted: false },
+    include: { lines: { select: { variantId: true, productId: true, quantity: true } } },
+  });
+  if (!invoice) return { error: 'الفاتورة غير موجودة.' };
+  if (invoice.status === 'VOID') return { error: 'الفاتورة ملغاة — لا تُعدَّل.' };
+
+  const rawLines = readLines(formData);
+  if (rawLines.length === 0) return { error: 'أضف صنفاً واحداً على الأقل بكمية أكبر من صفر.' };
+
+  const variants = await prisma.productVariant.findMany({
+    where: { id: { in: rawLines.map((l) => l.variantId) }, product: { tenantId: user.tenantId } },
+    include: {
+      product: { select: { nameAr: true } },
+      color: { select: { nameAr: true } },
+      size: { select: { code: true } },
+    },
+  });
+  const byId = new Map(variants.map((v) => [v.id, v]));
+  if (rawLines.some((l) => !byId.has(l.variantId))) {
+    return { error: 'أحد الأصناف غير صالح. أعد اختيار المنتج.' };
+  }
+
+  const docDiscount = decimal(formData.get('discountAmount'));
+  const docDiscountPct = decimal(formData.get('discountPercent'));
+  const computed = rawLines.map((l) => calcLine(l));
+  const totals = calcDocument(computed, { discountAmount: docDiscount, discountPercent: docDiscountPct });
+
+  const notes = String(formData.get('notes') ?? '').trim() || null;
+  const lineData = rawLines.map((l, i) => {
+    const v = byId.get(l.variantId)!;
+    const t = computed[i];
+    return {
+      lineNo: i + 1,
+      productId: v.productId,
+      variantId: v.id,
+      description: [v.product.nameAr, v.color?.nameAr, v.size?.code].filter(Boolean).join(' · '),
+      quantity: dec(l.quantity).toString(),
+      unitPrice: dec(l.unitPrice).toString(),
+      discountAmount: dec(l.discountAmount).toString(),
+      taxRate: dec(l.taxRate).toString(),
+      taxAmount: t.taxAmount.toString(),
+      lineTotal: t.lineTotal.toString(),
+    };
+  });
+
+  // فرق الكمية لكل متغيّر: الجديد ناقص القديم. موجب ⇒ خرج أكثر (يُخصَم)،
+  // سالب ⇒ رجع (يُضاف). خريطة المنتج للمتغيّر من الجديد والقديم معاً.
+  const productOf = new Map<string, string>();
+  const oldQty = new Map<string, ReturnType<typeof dec>>();
+  for (const l of invoice.lines) {
+    if (!l.variantId) continue;
+    if (l.productId) productOf.set(l.variantId, l.productId);
+    oldQty.set(l.variantId, (oldQty.get(l.variantId) ?? dec(0)).plus(dec(l.quantity)));
+  }
+  const newQty = new Map<string, ReturnType<typeof dec>>();
+  for (const l of rawLines) {
+    const v = byId.get(l.variantId)!;
+    productOf.set(l.variantId, v.productId);
+    newQty.set(l.variantId, (newQty.get(l.variantId) ?? dec(0)).plus(dec(l.quantity)));
+  }
+
+  // المسوّدة لم تُصرَف بعد، فلا تمسّ المخزون؛ غيرها يُسوّى بالفرق.
+  const touchStock = invoice.status !== 'DRAFT';
+  const warehouseId = touchStock ? await defaultWarehouseId(user.tenantId) : null;
+
+  const newStatus =
+    invoice.status === 'DRAFT'
+      ? 'DRAFT'
+      : deriveInvoiceStatus(totals.total, dec(invoice.paidAmount), invoice.status as never);
+
+  await tenantTransaction(async (tx) => {
+    await tx.invoiceLine.deleteMany({ where: { invoiceId } });
+    await tx.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        subtotal: totals.subtotal.toString(),
+        discountAmount: totals.discountAmount.toString(),
+        taxAmount: totals.taxAmount.toString(),
+        total: totals.total.toString(),
+        notes,
+        status: newStatus,
+        lines: { create: lineData },
+      },
+    });
+
+    if (warehouseId) {
+      const variantIds = new Set([...oldQty.keys(), ...newQty.keys()]);
+      for (const vid of variantIds) {
+        const delta = (newQty.get(vid) ?? dec(0)).minus(oldQty.get(vid) ?? dec(0));
+        if (delta.isZero()) continue;
+        const productId = productOf.get(vid);
+        if (!productId) continue; // لا حركة مخزون بلا منتج معروف
+        await tx.stockMovement.create({
+          data: {
+            tenantId: user.tenantId,
+            productId,
+            variantId: vid,
+            warehouseId,
+            type: delta.gt(0) ? 'ISSUE' : 'RECEIPT',
+            quantity: delta.negated().toString(), // خصم موجب ⇒ كمية سالبة
+            reference: invoice.number ?? undefined,
+            reason: 'تعديل بنود الفاتورة',
+            userId: user.id,
+          },
+        });
+        const stock = await tx.stock.findFirst({ where: { variantId: vid, warehouseId, locationId: null } });
+        if (stock) {
+          await tx.stock.update({ where: { id: stock.id }, data: { onHand: dec(stock.onHand).minus(delta).toString() } });
+        } else {
+          await tx.stock.create({ data: { variantId: vid, warehouseId, onHand: delta.negated().toString() } });
+        }
+      }
+    }
+  });
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'invoice.editLines',
+    entityType: 'Invoice',
+    entityId: invoiceId,
+    detail: `${invoice.number ?? 'مسودة'} — ${lineData.length} بند · إجمالي ${totals.total.toString()}`,
+  });
+
+  revalidatePath('/invoices');
+  revalidatePath(`/invoices/${invoiceId}`);
+  redirect(`/invoices/${invoiceId}`);
+}
+
 /**
  * Create a draft invoice from a confirmed sales order.
  *

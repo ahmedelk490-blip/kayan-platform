@@ -66,6 +66,7 @@ export default async function InvoicePage({
 
   const canIssue = can(user.role, 'invoices.issue');
   const canPay = can(user.role, 'payments.record');
+  const canWrite = can(user.role, 'invoices.write');
 
   const status: InvoiceStatus = isInvoiceStatus(invoice.status) ? invoice.status : 'DRAFT';
   const left = balance(invoice.total, invoice.paidAmount);
@@ -83,6 +84,11 @@ export default async function InvoicePage({
             <Link href={`/invoices/${invoice.id}/print`} className="erp-btn-ghost">
               طباعة / PDF
             </Link>
+            {canWrite && status !== 'VOID' && (
+              <Link href={`/invoices/${invoice.id}/edit`} className="erp-btn-ghost">
+                تعديل البنود
+              </Link>
+            )}
             {canIssue && status === 'DRAFT' && (
               <form action={issueInvoice.bind(null, invoice.id)}>
                 <button type="submit" className="erp-btn">
