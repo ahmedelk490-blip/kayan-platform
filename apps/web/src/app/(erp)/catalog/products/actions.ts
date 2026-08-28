@@ -172,6 +172,9 @@ async function createProductCore(
       descriptionAr: parsed.data.descriptionAr || null,
       ...dozenFields(parsed.data),
       status: parsed.data.status,
+      // يظهر على الموقع فور إنشائه (ما دام نشطاً) — بطلب المالك. يبقى قابلاً
+      // للإخفاء لاحقاً من صفحة المنتج إن لزم.
+      showOnSite: true,
       variants: { create: variantData },
     },
     include: { variants: { select: { id: true } } },
@@ -202,6 +205,9 @@ async function createProductCore(
   });
 
   revalidatePath('/catalog/products');
+  // الصفحات العامة أيضاً — فالمنتج الجديد النشط يظهر على الموقع فوراً.
+  revalidatePath('/');
+  revalidatePath('/products');
   return { state: {}, id: created.id, sku: created.sku };
 }
 
