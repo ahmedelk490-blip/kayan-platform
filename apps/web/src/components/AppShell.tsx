@@ -69,7 +69,7 @@ const NAV: NavItem[] = [
 
   // المرتجعات والهالك — قسم مستقل بطلب المالك: مرتجعات المبيعات (ترجع
   // للمخزون وتُخصم من المندوب) مع الهالك والجزاءات، منقولاً من المخزون.
-  { href: '/returns', label: 'المرتجعات', permission: 'invoices.view', built: true, group: 'المرتجعات والهالك' },
+  { href: '/returns', label: 'المرتجعات', permission: 'returns.view', built: true, group: 'المرتجعات والهالك' },
   { href: '/damage', label: 'الهالك والجزاءات', permission: 'damage.view', built: true, group: 'المرتجعات والهالك' },
 
   { href: '/purchasing', label: 'المشتريات', permission: 'purchasing.view', built: true, group: 'المشتريات' },

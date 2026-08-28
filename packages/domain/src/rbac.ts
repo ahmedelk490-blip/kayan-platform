@@ -129,6 +129,9 @@ export const PERMISSIONS = {
   'invoices.issue': { nameAr: 'إصدار وإلغاء الفواتير', group: 'الفواتير' },
   'payments.record': { nameAr: 'تسجيل وعكس الدفعات', group: 'الفواتير' },
 
+  'returns.view': { nameAr: 'عرض مرتجعات المبيعات', group: 'المرتجعات' },
+  'returns.write': { nameAr: 'تسجيل مرتجعات المبيعات', group: 'المرتجعات' },
+
   'reports.view': { nameAr: 'عرض التقارير', group: 'التقارير' },
   'users.manage': { nameAr: 'إدارة المستخدمين', group: 'النظام' },
   'settings.manage': { nameAr: 'إدارة الإعدادات', group: 'النظام' },
@@ -188,6 +191,8 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'invoices.write',
     'invoices.issue',
     'payments.record',
+    'returns.view',
+    'returns.write',
     'reports.view',
     // The company's own financial facts — VAT rate, payment terms, tax
     // number — are the manager's to state. They are printed on tax documents
@@ -222,6 +227,9 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     // A representative needs to see whether their customer has paid, but
     // must not issue a tax document or record money against one.
     'invoices.view',
+    // يرى المرتجعات، لكن لا يسجّلها — المرتجع يردّ مالاً ويعيد بضاعة، فهو
+    // كالإصدار والتحصيل ليس من صلاحيته.
+    'returns.view',
     // Deliberately NOT cost.margin — a representative sees cost to quote
     // sensibly, but company margin is not theirs to see.
     // Deliberately NOT formula.view either — the cost is what they need to
@@ -244,6 +252,9 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'invoices.write',
     'invoices.issue',
     'payments.record',
+    // مرتجعات على الكاونتر — من طبيعة عمله اليومي.
+    'returns.view',
+    'returns.write',
   ],
 
   CUSTOMER: ['portal.view', 'products.read'],

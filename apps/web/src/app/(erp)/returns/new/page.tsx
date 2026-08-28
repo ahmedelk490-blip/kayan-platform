@@ -21,7 +21,7 @@ export default async function NewReturnPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const user = await requirePermission('invoices.write');
+  const user = await requirePermission('returns.write');
   const params = await searchParams;
   const invoiceId = Array.isArray(params.invoice) ? params.invoice[0] : params.invoice;
 

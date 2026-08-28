@@ -44,7 +44,7 @@ export async function createReturn(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const user = await requirePermission('invoices.write');
+  const user = await requirePermission('returns.write');
 
   const invoice = await prisma.invoice.findFirst({
     where: { id: invoiceId, tenantId: user.tenantId, isDeleted: false, status: { notIn: ['DRAFT', 'VOID'] } },
@@ -187,7 +187,7 @@ export async function createReturn(
 
 /** حذف مرتجع (ناعم) — لا يعكس المخزون تلقائياً؛ صُحّح بحركة يدوية إن لزم. */
 export async function deleteReturn(id: string): Promise<void> {
-  const user = await requirePermission('invoices.write');
+  const user = await requirePermission('returns.write');
   const ret = await prisma.salesReturn.findFirst({ where: { id, tenantId: user.tenantId, isDeleted: false }, select: { id: true, number: true } });
   if (!ret) redirect('/returns');
   await prisma.salesReturn.update({ where: { id }, data: { isDeleted: true, deletedAt: new Date() } });

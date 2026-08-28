@@ -12,8 +12,8 @@ export const metadata: Metadata = { title: 'المرتجعات' };
 
 /** قائمة مرتجعات المبيعات — رقم، تاريخ، فاتورة، عميل، قيمة، عدد أصناف. */
 export default async function ReturnsPage() {
-  const user = await requirePermission('invoices.view');
-  const canWrite = can(user.role, 'invoices.write');
+  const user = await requirePermission('returns.view');
+  const canWrite = can(user.role, 'returns.write');
 
   const returns = await prisma.salesReturn.findMany({
     where: { tenantId: user.tenantId, isDeleted: false },
