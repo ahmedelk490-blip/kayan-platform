@@ -61,6 +61,7 @@ const NAV: NavItem[] = [
   { href: '/catalog/products', label: 'المنتجات', permission: 'products.read', built: true, group: 'إدارة المنتجات' },
   { href: '/catalog/categories', label: 'التصنيفات والقوائم', permission: 'products.read', built: true, group: 'إدارة المنتجات' },
   { href: '/catalog/review', label: 'مراجعة عرض الموقع', permission: 'products.read', built: true, group: 'إدارة المنتجات' },
+  { href: '/catalog/products/deleted', label: 'المحذوفات', permission: 'products.write', built: true, group: 'إدارة المنتجات' },
 
   { href: '/inventory', label: 'المخزون', permission: 'inventory.read', built: true, group: 'المخزون' },
   { href: '/supplies', label: 'المستلزمات', permission: 'supplies.view', built: true, group: 'المخزون' },

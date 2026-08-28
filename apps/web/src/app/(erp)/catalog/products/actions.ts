@@ -311,6 +311,36 @@ export async function deleteProduct(id: string): Promise<void> {
   redirect('/catalog/products');
 }
 
+/** استرجاع منتج محذوف — يعيده للنظام (وللموقع إن كان نشطاً ومعروضاً). */
+export async function restoreProduct(id: string): Promise<void> {
+  const user = await requirePermission('products.write');
+  const product = await prisma.product.findFirst({
+    where: { id, tenantId: user.tenantId, isDeleted: true },
+    select: { id: true, sku: true },
+  });
+  if (!product) redirect('/catalog/products/deleted');
+
+  await prisma.product.update({
+    where: { id },
+    data: { isDeleted: false, deletedAt: null },
+  });
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'product.restore',
+    entityType: 'Product',
+    entityId: id,
+    detail: product.sku,
+  });
+
+  revalidatePath('/catalog/products');
+  revalidatePath('/catalog/products/deleted');
+  revalidatePath('/');
+  revalidatePath('/products');
+  redirect(`/catalog/products/${id}`);
+}
+
 // ── Variants ────────────────────────────────────────────────
 
 const VariantSchema = z.object({
