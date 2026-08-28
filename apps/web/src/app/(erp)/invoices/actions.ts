@@ -145,6 +145,13 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
     const settings = await invoiceSettings(user.tenantId);
     const issuedAt = new Date();
     const paymentNumber = wantsPayment ? await nextPaymentNumber(user.tenantId) : null;
+    // فاتورة مباشرة تصرف بضاعتها من المخزون فور إصدارها — كالكاشير.
+    const warehouseId = await defaultWarehouseId(user.tenantId);
+    const stockLines = rawLines.map((l) => ({
+      productId: byId.get(l.variantId)!.productId,
+      variantId: l.variantId,
+      quantity: l.quantity,
+    }));
 
     const created = await tenantTransaction(async (tx) => {
       const number = await allocateInvoiceNumber(tx, user.tenantId, settings.prefix);
@@ -174,6 +181,9 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
             recordedById: user.id,
           },
         });
+      }
+      if (warehouseId) {
+        await issueStockOut(tx, user.tenantId, user.id, warehouseId, number, stockLines);
       }
       return inv;
     });
@@ -219,6 +229,82 @@ async function defaultWarehouseId(tenantId: string): Promise<string | null> {
     select: { id: true },
   });
   return wh?.id ?? null;
+}
+
+type Tx = Parameters<Parameters<typeof tenantTransaction>[0]>[0];
+
+/**
+ * صرف بضاعة فاتورة من المخزون — حركة ISSUE سالبة + نقص onHand لكل بند، كبيع
+ * الكاشير. تُستدعى لحظة إصدار فاتورة مباشرة (بلا أمر بيع) فيبقى الجرد دقيقاً
+ * لكل بيع لا للكاشير وحده. الأصناف بلا متغيّر/منتج أو بكمية صفر تُتجاوز.
+ */
+async function issueStockOut(
+  tx: Tx,
+  tenantId: string,
+  userId: string,
+  warehouseId: string,
+  reference: string | null,
+  lines: { productId: string | null; variantId: string | null; quantity: Parameters<typeof dec>[0] }[],
+): Promise<void> {
+  for (const l of lines) {
+    if (!l.variantId || !l.productId) continue;
+    const qty = dec(l.quantity);
+    if (qty.lte(0)) continue;
+    await tx.stockMovement.create({
+      data: {
+        tenantId,
+        productId: l.productId,
+        variantId: l.variantId,
+        warehouseId,
+        type: 'ISSUE',
+        quantity: qty.negated().toString(),
+        reference,
+        reason: 'صرف بضاعة فاتورة',
+        userId,
+      },
+    });
+    const st = await tx.stock.findFirst({ where: { variantId: l.variantId, warehouseId, locationId: null } });
+    if (st) {
+      await tx.stock.update({ where: { id: st.id }, data: { onHand: dec(st.onHand).minus(qty).toString() } });
+    } else {
+      await tx.stock.create({ data: { variantId: l.variantId, warehouseId, onHand: qty.negated().toString() } });
+    }
+  }
+}
+
+/** عكس الصرف — إرجاع بضاعة فاتورة للمخزون عند إلغائها (حركة RETURN موجبة). */
+async function restockIn(
+  tx: Tx,
+  tenantId: string,
+  userId: string,
+  warehouseId: string,
+  reference: string | null,
+  lines: { productId: string | null; variantId: string | null; quantity: Parameters<typeof dec>[0] }[],
+): Promise<void> {
+  for (const l of lines) {
+    if (!l.variantId || !l.productId) continue;
+    const qty = dec(l.quantity);
+    if (qty.lte(0)) continue;
+    await tx.stockMovement.create({
+      data: {
+        tenantId,
+        productId: l.productId,
+        variantId: l.variantId,
+        warehouseId,
+        type: 'RETURN',
+        quantity: qty.toString(),
+        reference,
+        reason: 'إلغاء فاتورة — إرجاع للمخزون',
+        userId,
+      },
+    });
+    const st = await tx.stock.findFirst({ where: { variantId: l.variantId, warehouseId, locationId: null } });
+    if (st) {
+      await tx.stock.update({ where: { id: st.id }, data: { onHand: dec(st.onHand).plus(qty).toString() } });
+    } else {
+      await tx.stock.create({ data: { variantId: l.variantId, warehouseId, onHand: qty.toString() } });
+    }
+  }
 }
 
 /**
@@ -455,15 +541,18 @@ export async function issueInvoice(id: string): Promise<void> {
 
   const invoice = await prisma.invoice.findFirst({
     where: { id, tenantId: user.tenantId, isDeleted: false },
-    include: { _count: { select: { lines: true } } },
+    include: { lines: { select: { productId: true, variantId: true, quantity: true } } },
   });
   if (!invoice) redirect('/invoices');
   if (invoice.status !== 'DRAFT') redirect(`/invoices/${id}`);
   // An invoice with no lines would burn a sequence number to say nothing.
-  if (invoice._count.lines === 0) redirect(`/invoices/${id}?err=empty`);
+  if (invoice.lines.length === 0) redirect(`/invoices/${id}?err=empty`);
 
   const settings = await invoiceSettings(user.tenantId);
   const issuedAt = new Date();
+  // فاتورة مباشرة (بلا أمر بيع) تصرف بضاعتها الآن — أمّا فواتير الأوامر فمخزونها
+  // محجوز/مُدار عبر الحجز، فلا تُصرَف هنا كي لا يُخصم مرّتين.
+  const warehouseId = invoice.salesOrderId ? null : await defaultWarehouseId(user.tenantId);
 
   const number = await tenantTransaction(async (tx) => {
     const allocated = await allocateInvoiceNumber(tx, user.tenantId, settings.prefix);
@@ -477,6 +566,9 @@ export async function issueInvoice(id: string): Promise<void> {
         issuedById: user.id,
       },
     });
+    if (warehouseId) {
+      await issueStockOut(tx, user.tenantId, user.id, warehouseId, allocated, invoice.lines);
+    }
     return allocated;
   });
 
@@ -515,7 +607,10 @@ export async function voidInvoice(
 
   const invoice = await prisma.invoice.findFirst({
     where: { id, tenantId: user.tenantId, isDeleted: false },
-    include: { payments: { where: { reversesId: null } } },
+    include: {
+      payments: { where: { reversesId: null } },
+      lines: { select: { productId: true, variantId: true, quantity: true } },
+    },
   });
   if (!invoice || !isInvoiceStatus(invoice.status)) return { error: 'الفاتورة غير موجودة.' };
   if (!INVOICE_TRANSITIONS[invoice.status].includes('VOID')) {
@@ -527,9 +622,19 @@ export async function voidInvoice(
     return { error: 'اعكس الدفعات أولاً — لا تُلغى فاتورة استلمت مبالغ.' };
   }
 
-  await prisma.invoice.update({
-    where: { id },
-    data: { status: 'VOID', voidReason: parsed.data.reason, voidedAt: new Date() },
+  // فاتورة مباشرة صُرفت بضاعتها عند الإصدار — إلغاؤها يعيدها للمخزون. المسوّدة
+  // لم تُصرَف، وفاتورة الأمر مخزونها مُدار عبر الحجز، فلا تُرَدّ هنا.
+  const restockWh =
+    invoice.status !== 'DRAFT' && !invoice.salesOrderId ? await defaultWarehouseId(user.tenantId) : null;
+
+  await tenantTransaction(async (tx) => {
+    await tx.invoice.update({
+      where: { id },
+      data: { status: 'VOID', voidReason: parsed.data.reason, voidedAt: new Date() },
+    });
+    if (restockWh) {
+      await restockIn(tx, user.tenantId, user.id, restockWh, invoice.number ?? null, invoice.lines);
+    }
   });
 
   await audit({
