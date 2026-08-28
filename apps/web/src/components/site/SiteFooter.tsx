@@ -82,6 +82,20 @@ export function SiteFooter() {
             </Link>
           </span>
         </div>
+
+        {/* كريدت الجهة المطوّرة — عربي وإنجليزي، يفتح موقع Q Marketing. */}
+        <div className="mt-4 border-t border-edge pt-4 text-center text-[0.7rem] text-body-subtle">
+          <a
+            href="https://qmarketingeg.com/ar"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors hover:text-body-muted"
+          >
+            <span>تصميم وبرمجة شركة Q Marketing © {new Date().getFullYear()} · جميع الحقوق محفوظة</span>
+            <span dir="ltr" className="mx-2 text-body-subtle/70">·</span>
+            <span dir="ltr">Design &amp; development by Q Marketing © {new Date().getFullYear()} · All rights reserved</span>
+          </a>
+        </div>
       </div>
     </footer>
   );
