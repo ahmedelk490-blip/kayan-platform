@@ -41,6 +41,7 @@ export async function loadSalesOptions(tenantId: string) {
         id: true,
         productId: true,
         nameAr: true,
+        price: true,
         lines: { select: { sizeId: true, quantity: true, size: { select: { code: true, sortOrder: true } } } },
       },
     }),
@@ -93,6 +94,7 @@ export async function loadSalesOptions(tenantId: string) {
     id: b.id,
     productId: b.productId,
     nameAr: b.nameAr,
+    price: b.price === null ? null : dec(b.price).toNumber(),
     lines: [...b.lines]
       .sort((a, z) => a.size.sortOrder - z.size.sortOrder)
       .map((l) => ({ sizeId: l.sizeId, sizeCode: l.size.code, quantity: l.quantity })),

@@ -45,6 +45,8 @@ export interface BundleOption {
   id: string;
   productId: string;
   nameAr: string;
+  /** سعر الدست لهذه السيريه (اختياري) — إن وُجد يُطبَّق سعر القطعة = السعر ÷ قطع السيريه. */
+  price: number | null;
   lines: { sizeId: string; sizeCode: string; quantity: number }[];
 }
 
@@ -226,6 +228,10 @@ export function DocumentForm({
       return;
     }
     const count = Math.max(1, Math.round(seriesCount) || 1);
+    // سعر قطعة السيريه = سعر الدست ÷ إجمالي قطع السيريه (إن حُدّد سعر لها).
+    const bundlePieces = bundle.lines.reduce((s, l) => s + l.quantity, 0);
+    const seriesPiecePrice =
+      bundle.price != null && bundlePieces > 0 ? bundle.price / bundlePieces : null;
     const added: DocLine[] = [];
     const missing: string[] = [];
     for (const bl of bundle.lines) {
@@ -235,20 +241,20 @@ export function DocumentForm({
         continue;
       }
       const services = servicesOf(variant);
-      added.push(
-        reprice({
-          productId: bundle.productId,
-          colorId: seriesColorId,
-          sizeId: bl.sizeId,
-          variantId: variant.value,
-          service: services[0] ?? '',
-          quantity: bl.quantity * count,
-          unitPrice: 0,
-          discountAmount: 0,
-          taxRate: 0,
-          notes: '',
-        }),
-      );
+      const base: DocLine = {
+        productId: bundle.productId,
+        colorId: seriesColorId,
+        sizeId: bl.sizeId,
+        variantId: variant.value,
+        service: services[0] ?? '',
+        quantity: bl.quantity * count,
+        unitPrice: 0,
+        discountAmount: 0,
+        taxRate: 0,
+        notes: '',
+      };
+      // سعر السيريه يفوز إن وُجد؛ وإلا نستعمل تسعير القطعة/الشرائح المعتاد.
+      added.push(seriesPiecePrice != null ? { ...base, unitPrice: seriesPiecePrice } : reprice(base));
     }
     if (added.length === 0) {
       setSeriesMsg('لا يوجد متغيّر لأي مقاس في هذه السيريه باللون المختار — أنشئ المتغيّرات أولاً.');
