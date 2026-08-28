@@ -2,11 +2,12 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { dec } from '@erp/domain';
+import { dec, deriveInvoiceStatus, type InvoiceStatus } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import type { FormState } from '@/lib/ops';
+import { nextPaymentNumber } from '@/app/(erp)/invoices/shared';
 
 /** رقم مرتجع متسلسل للسنة: RET-YYYY-N. */
 async function nextReturnNumber(tenantId: string): Promise<string> {
@@ -70,6 +71,13 @@ export async function createReturn(
   const warehouseId = await defaultWarehouseId(user.tenantId);
   const reason = String(formData.get('reason') ?? '').trim() || null;
 
+  // رد المبلغ للعميل (اختياري، افتراضياً نعم) — لا يتجاوز ما دُفع فعلاً على
+  // الفاتورة. يُسجَّل كدفعة سالبة تُنقص المدفوع وتُعيد اشتقاق حالة الفاتورة.
+  const refundWanted = ['1', 'on', 'true'].includes(String(formData.get('refund') ?? ''));
+  const paid = dec(invoice.paidAmount);
+  const refundAmount = refundWanted && paid.gt(0) ? (total.gt(paid) ? paid : total) : dec(0);
+  const paymentNumber = refundAmount.gt(0) ? await nextPaymentNumber(user.tenantId) : null;
+
   await tenantTransaction(async (tx) => {
     await tx.salesReturn.create({
       data: {
@@ -120,6 +128,30 @@ export async function createReturn(
         }
       }
     }
+
+    // رد المبلغ نقداً: دفعة سالبة على الفاتورة تُنقص المدفوع وتُحدّث الحالة.
+    if (refundAmount.gt(0) && paymentNumber) {
+      await tx.payment.create({
+        data: {
+          tenantId: user.tenantId,
+          number: paymentNumber,
+          invoiceId: invoice.id,
+          amount: refundAmount.negated().toString(),
+          method: 'CASH',
+          paidAt: new Date(),
+          notes: `رد مرتجع ${number}`,
+          recordedById: user.id,
+        },
+      });
+      const newPaid = paid.minus(refundAmount);
+      await tx.invoice.update({
+        where: { id: invoice.id },
+        data: {
+          paidAmount: newPaid.toString(),
+          status: deriveInvoiceStatus(invoice.total, newPaid, invoice.status as InvoiceStatus),
+        },
+      });
+    }
   });
 
   await audit({
@@ -128,11 +160,12 @@ export async function createReturn(
     action: 'return.create',
     entityType: 'SalesReturn',
     entityId: invoice.id,
-    detail: `${number} — ${invoice.number ?? ''} · ${total.toString()}`,
+    detail: `${number} — ${invoice.number ?? ''} · ${total.toString()}${refundAmount.gt(0) ? ` · رد ${refundAmount.toString()}` : ''}`,
   });
 
   revalidatePath('/returns');
   revalidatePath('/inventory');
+  revalidatePath(`/invoices/${invoice.id}`);
   redirect('/returns');
 }
 

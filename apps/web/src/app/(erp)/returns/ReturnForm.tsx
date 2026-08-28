@@ -81,6 +81,13 @@ export function ReturnForm({
         <input name="reason" className="erp-input py-2.5" placeholder="مثال: مقاس غير مناسب، عيب تصنيع…" />
       </label>
 
+      <label className="flex items-center gap-2.5 rounded-lg border border-line bg-card-2 px-4 py-3">
+        <input name="refund" type="checkbox" defaultChecked value="1" className="h-4 w-4 accent-[var(--color-brand)]" />
+        <span className="text-xs text-txt-2">
+          رد قيمة المرتجع للعميل نقداً — تُخصم من مدفوع الفاتورة (بحدّ ما دُفع فعلاً). أزِل العلامة لو المرتجع استبدال بلا رد مبلغ.
+        </span>
+      </label>
+
       <div className="flex items-center justify-between gap-3 border-t border-line pt-4">
         <span className="text-sm text-txt-2">
           إجمالي المرتجع: <span className="tnum font-bold text-brand">{total.toLocaleString('ar-IQ')} د.ع</span>
