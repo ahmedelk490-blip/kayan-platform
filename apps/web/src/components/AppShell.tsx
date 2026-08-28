@@ -65,7 +65,11 @@ const NAV: NavItem[] = [
   { href: '/inventory', label: 'المخزون', permission: 'inventory.read', built: true, group: 'المخزون' },
   { href: '/supplies', label: 'المستلزمات', permission: 'supplies.view', built: true, group: 'المخزون' },
   { href: '/formulas', label: 'المعادلات والتكلفة', permission: 'formula.view', built: true, group: 'المخزون' },
-  { href: '/damage', label: 'الهالك والجزاءات', permission: 'damage.view', built: true, group: 'المخزون' },
+
+  // المرتجعات والهالك — قسم مستقل بطلب المالك: مرتجعات المبيعات (ترجع
+  // للمخزون وتُخصم من المندوب) مع الهالك والجزاءات، منقولاً من المخزون.
+  { href: '/returns', label: 'المرتجعات', permission: 'invoices.view', built: true, group: 'المرتجعات والهالك' },
+  { href: '/damage', label: 'الهالك والجزاءات', permission: 'damage.view', built: true, group: 'المرتجعات والهالك' },
 
   { href: '/purchasing', label: 'المشتريات', permission: 'purchasing.view', built: true, group: 'المشتريات' },
   { href: '/suppliers', label: 'الموردون', permission: 'suppliers.read', built: true, group: 'المشتريات' },
@@ -94,6 +98,7 @@ const GROUP_ORDER = [
   'المبيعات',
   'إدارة المنتجات',
   'المخزون',
+  'المرتجعات والهالك',
   'المشتريات',
   'المصروفات',
   'الرواتب',

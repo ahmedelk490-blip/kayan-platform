@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const sp = new URL(request.url).searchParams;
   const { from, to } = resolveRange({ from: sp.get('from') ?? undefined, to: sp.get('to') ?? undefined, period: sp.get('period') ?? undefined });
 
-  const [invoices, payments, expenses] = await withTenant(user.tenantId, (tx) =>
+  const [invoices, payments, expenses, returns] = await withTenant(user.tenantId, (tx) =>
     Promise.all([
       tx.invoice.findMany({
         where: { tenantId: user.tenantId, isDeleted: false, status: { notIn: ['DRAFT', 'VOID'] }, issueDate: { gte: from, lte: to } },
@@ -30,12 +30,31 @@ export async function GET(request: Request) {
         where: { tenantId: user.tenantId, isDeleted: false, status: 'APPROVED', employeeId: { not: null }, expenseDate: { gte: from, lte: to } },
         select: { employeeId: true, amount: true, employee: { select: { nameAr: true, name: true } } },
       }),
+      tx.salesReturn.findMany({
+        where: { tenantId: user.tenantId, isDeleted: false, returnDate: { gte: from, lte: to } },
+        select: { invoiceId: true, totalAmount: true },
+      }),
     ]),
   );
 
-  type Row = { name: string; invoices: number; pieces: ReturnType<typeof dec>; revenue: ReturnType<typeof dec>; cost: ReturnType<typeof dec>; expenses: ReturnType<typeof dec>; salary: ReturnType<typeof dec>; bonus: ReturnType<typeof dec> };
+  const returnsByRep = new Map<string, ReturnType<typeof dec>>();
+  if (returns.length > 0) {
+    const invCreators = await withTenant(user.tenantId, (tx) =>
+      tx.invoice.findMany({
+        where: { id: { in: [...new Set(returns.map((r) => r.invoiceId))] }, tenantId: user.tenantId },
+        select: { id: true, createdById: true },
+      }),
+    );
+    const creatorOf = new Map(invCreators.map((i) => [i.id, i.createdById]));
+    for (const r of returns) {
+      const id = creatorOf.get(r.invoiceId) ?? '—';
+      returnsByRep.set(id, (returnsByRep.get(id) ?? dec(0)).plus(dec(r.totalAmount)));
+    }
+  }
+
+  type Row = { name: string; invoices: number; pieces: ReturnType<typeof dec>; revenue: ReturnType<typeof dec>; cost: ReturnType<typeof dec>; expenses: ReturnType<typeof dec>; salary: ReturnType<typeof dec>; bonus: ReturnType<typeof dec>; returns: ReturnType<typeof dec> };
   const map = new Map<string, Row>();
-  const blank = (name: string): Row => ({ name, invoices: 0, pieces: dec(0), revenue: dec(0), cost: dec(0), expenses: dec(0), salary: dec(0), bonus: dec(0) });
+  const blank = (name: string): Row => ({ name, invoices: 0, pieces: dec(0), revenue: dec(0), cost: dec(0), expenses: dec(0), salary: dec(0), bonus: dec(0), returns: dec(0) });
 
   for (const inv of invoices) {
     const id = inv.createdById ?? '—';
@@ -64,13 +83,19 @@ export async function GET(request: Request) {
     map.set(e.employeeId, row);
   }
 
-  const net = (r: Row) => r.revenue.minus(r.cost).minus(r.expenses).minus(r.salary).minus(r.bonus);
-  const headers = ['الموظف', 'عدد الفواتير', 'القطع المباعة', 'المبيعات', 'التكلفة', 'الربح', 'مصروفاته', 'راتبه', 'مكافآته', 'صافي المساهمة'];
+  for (const [id, amount] of returnsByRep) {
+    const row = map.get(id) ?? blank(id === '—' ? 'غير محدَّد' : 'موظف');
+    row.returns = row.returns.plus(amount);
+    map.set(id, row);
+  }
+
+  const net = (r: Row) => r.revenue.minus(r.cost).minus(r.expenses).minus(r.salary).minus(r.bonus).minus(r.returns);
+  const headers = ['الموظف', 'عدد الفواتير', 'القطع المباعة', 'المبيعات', 'التكلفة', 'الربح', 'مرتجعاته', 'مصروفاته', 'راتبه', 'مكافآته', 'صافي المساهمة'];
   const rows = [...map.values()]
     .sort((a, b) => net(b).minus(net(a)).toNumber())
     .map((r) => [
       r.name, r.invoices, r.pieces.toNumber(), r.revenue.toNumber(), r.cost.toNumber(),
-      r.revenue.minus(r.cost).toNumber(), r.expenses.toNumber(), r.salary.toNumber(), r.bonus.toNumber(), net(r).toNumber(),
+      r.revenue.minus(r.cost).toNumber(), r.returns.toNumber(), r.expenses.toNumber(), r.salary.toNumber(), r.bonus.toNumber(), net(r).toNumber(),
     ]);
 
   return csvResponse(stampedName('kayan-employees'), headers, rows);

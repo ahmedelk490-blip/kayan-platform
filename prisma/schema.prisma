@@ -476,6 +476,48 @@ model ProductBundleLine {
   @@unique([bundleId, sizeId])
 }
 
+/// مرتجع مبيعات — الزبون يرجّع أصنافاً من فاتورة. يرجع للمخزون ويُخصم من
+/// مبيعات المندوب (عبر منشئ الفاتورة). مربوط بالفاتورة بالمعرّف، ومع لقطات
+/// نصية (رقم الفاتورة والعميل) فيبقى مقروءاً ولو تغيّر مصدره.
+model SalesReturn {
+  id            String   @id @default(cuid())
+  tenantId      String
+  number        String
+  invoiceId     String
+  invoiceNumber String?
+  customerId    String
+  customerName  String?
+  reason        String?
+  totalAmount   Decimal  @db.Decimal(19, 4)
+  returnDate    DateTime @default(now())
+  createdById   String?
+  isDeleted     Boolean  @default(false)
+  deletedAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  lines SalesReturnLine[]
+
+  @@index([tenantId, isDeleted])
+  @@index([invoiceId])
+}
+
+/// سطر مرتجع: صنف وكميته المرتجعة وسعره لحظة البيع.
+model SalesReturnLine {
+  id          String  @id @default(cuid())
+  returnId    String
+  productId   String?
+  variantId   String?
+  description String
+  quantity    Decimal @db.Decimal(19, 4)
+  unitPrice   Decimal @db.Decimal(19, 4)
+  lineTotal   Decimal @db.Decimal(19, 4)
+
+  salesReturn SalesReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+
+  @@index([returnId])
+}
+
 model Material {
   id        String    @id @default(cuid())
   tenantId  String

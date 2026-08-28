@@ -32,7 +32,7 @@ export default async function EmployeeReport({
   const range = resolveRange(params);
   const { from, to } = range;
 
-  const [invoices, payments, expenses] = await Promise.all([
+  const [invoices, payments, expenses, returns] = await Promise.all([
     prisma.invoice.findMany({
       where: {
         tenantId: user.tenantId,
@@ -71,7 +71,27 @@ export default async function EmployeeReport({
       },
       select: { employeeId: true, amount: true, employee: { select: { nameAr: true, name: true } } },
     }),
+    prisma.salesReturn.findMany({
+      where: { tenantId: user.tenantId, isDeleted: false, returnDate: { gte: from, lte: to } },
+      select: { invoiceId: true, totalAmount: true },
+    }),
   ]);
+
+  // مرتجع كل مندوب — عبر منشئ فاتورته. نجلب منشئي فواتير المرتجعات (قد تخرج
+  // بعض الفواتير عن نطاق التاريخ الحالي فلا نعتمد على قائمة الفواتير أعلاه).
+  const returnsByRep = new Map<string, ReturnType<typeof dec>>();
+  if (returns.length > 0) {
+    const invCreators = await prisma.invoice.findMany({
+      where: { id: { in: [...new Set(returns.map((r) => r.invoiceId))] }, tenantId: user.tenantId },
+      select: { id: true, createdById: true, createdBy: { select: { nameAr: true, name: true } } },
+    });
+    const creatorOf = new Map(invCreators.map((i) => [i.id, i]));
+    for (const r of returns) {
+      const inv = creatorOf.get(r.invoiceId);
+      const id = inv?.createdById ?? '—';
+      returnsByRep.set(id, (returnsByRep.get(id) ?? dec(0)).plus(dec(r.totalAmount)));
+    }
+  }
 
   type Row = {
     id: string;
@@ -84,12 +104,13 @@ export default async function EmployeeReport({
     expenses: ReturnType<typeof dec>;
     salary: ReturnType<typeof dec>;
     bonus: ReturnType<typeof dec>;
+    returns: ReturnType<typeof dec>;
     hasInvoices: boolean;
   };
   const byEmp = new Map<string, Row>();
   const blank = (id: string, name: string): Row => ({
     id, name, invoices: 0, pieces: dec(0), revenue: dec(0), cost: dec(0),
-    costKnown: true, expenses: dec(0), salary: dec(0), bonus: dec(0), hasInvoices: false,
+    costKnown: true, expenses: dec(0), salary: dec(0), bonus: dec(0), returns: dec(0), hasInvoices: false,
   });
 
   for (const inv of invoices) {
@@ -125,7 +146,14 @@ export default async function EmployeeReport({
     byEmp.set(e.employeeId, row);
   }
 
-  const net = (r: Row) => r.revenue.minus(r.cost).minus(r.expenses).minus(r.salary).minus(r.bonus);
+  for (const [id, amount] of returnsByRep) {
+    const row = byEmp.get(id) ?? blank(id, id === '—' ? 'غير محدَّد' : 'موظف');
+    row.returns = row.returns.plus(amount);
+    byEmp.set(id, row);
+  }
+
+  const net = (r: Row) =>
+    r.revenue.minus(r.cost).minus(r.expenses).minus(r.salary).minus(r.bonus).minus(r.returns);
   const rows = [...byEmp.values()].sort((a, b) => net(b).minus(net(a)).toNumber());
 
   const sum = (pick: (r: Row) => ReturnType<typeof dec>) => rows.reduce((s, r) => s.plus(pick(r)), dec(0));
@@ -135,6 +163,7 @@ export default async function EmployeeReport({
   const totalExpenses = sum((r) => r.expenses);
   const totalSalary = sum((r) => r.salary);
   const totalBonus = sum((r) => r.bonus);
+  const totalReturns = sum((r) => r.returns);
   const totalInvoices = rows.reduce((s, r) => s + r.invoices, 0);
   const totalProfit = totalRevenue.minus(totalCost);
   const totalNet = sum((r) => net(r));
@@ -164,6 +193,7 @@ export default async function EmployeeReport({
             <Figure label="القطع المباعة" value={formatQty(totalPieces)} strong />
             <Figure label="إجمالي المبيعات" value={formatMoney(totalRevenue)} strong />
             <Figure label="ربح البضاعة" value={formatMoney(totalProfit)} strong tone={totalProfit.lt(0) ? 'bad' : undefined} />
+            <Figure label="المرتجعات" value={formatMoney(totalReturns)} tone={totalReturns.gt(0) ? 'bad' : undefined} />
             <Figure label="مصروفات منسوبة" value={formatMoney(totalExpenses)} />
             <Figure label="الرواتب المصروفة" value={formatMoney(totalSalary)} />
             <Figure label="المكافآت والعمولات" value={formatMoney(totalBonus)} />
@@ -171,7 +201,7 @@ export default async function EmployeeReport({
           </div>
 
           <Table
-            headers={['الموظف', 'الفواتير', 'القطع', 'المبيعات', 'التكلفة', 'الربح', 'مصروفاته', 'راتبه', 'مكافآته', 'صافي المساهمة', '']}
+            headers={['الموظف', 'الفواتير', 'القطع', 'المبيعات', 'التكلفة', 'الربح', 'مرتجعاته', 'مصروفاته', 'راتبه', 'مكافآته', 'صافي المساهمة', '']}
             empty={false}
           >
             {rows.map((r) => {
@@ -188,6 +218,7 @@ export default async function EmployeeReport({
                     {!r.costKnown && <span className="ms-1 text-[0.7rem] text-warn">(ناقصة)</span>}
                   </td>
                   <td className={`tnum px-4 py-3 font-medium ${profit.lt(0) ? 'text-bad' : 'text-brand'}`}>{formatMoney(profit)}</td>
+                  <td className="tnum px-4 py-3 text-txt-3">{r.returns.gt(0) ? formatMoney(r.returns) : '—'}</td>
                   <td className="tnum px-4 py-3 text-txt-3">{formatMoney(r.expenses)}</td>
                   <td className="tnum px-4 py-3 text-txt-3">{formatMoney(r.salary)}</td>
                   <td className="tnum px-4 py-3 text-txt-3">{formatMoney(r.bonus)}</td>
@@ -205,7 +236,7 @@ export default async function EmployeeReport({
           </Table>
           <p className="mt-2 text-[0.7rem] leading-[1.9] text-txt-4">
             المبيعات والقطع والتكلفة والربح من فواتير الموظف. «مصروفاته» = مصروفات معتمدة منسوبة إليه،
-            و«راتبه/مكافآته» = دفعاته في الفترة. <span className="font-medium text-txt-3">صافي المساهمة = الربح − مصروفاته − راتبه − مكافآته</span>.
+            و«راتبه/مكافآته» = دفعاته في الفترة. <span className="font-medium text-txt-3">صافي المساهمة = الربح − مرتجعاته − مصروفاته − راتبه − مكافآته</span>.
             المكافأة تُمنح يدوياً من «الملف · منح مكافأة» (تُسجَّل كدفعة مكافأة للموظف). «(ناقصة)» = بعض المنتجات بلا تكلفة محدَّدة.
           </p>
         </>
