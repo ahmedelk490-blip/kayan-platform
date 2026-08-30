@@ -19,6 +19,7 @@ import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
+import { CopyButton } from '@/components/crud/CopyButton';
 import { dateInput } from '@/lib/ops';
 import type { SearchParams } from '@/lib/query';
 import { PaymentForm, VoidForm } from '../PaymentForm';
@@ -77,7 +78,8 @@ export default async function InvoicePage({
       <ModuleHeader
         title={invoice.number ?? 'فاتورة مسودة'}
         action={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {invoice.number && <CopyButton text={invoice.number} label="رقم الفاتورة" />}
             <Link href="/invoices" className="erp-btn-ghost">
               رجوع
             </Link>

@@ -73,9 +73,22 @@ export default async function NewReturnPage({
     );
   }
 
-  // الخطوة ١: اختيار فاتورة — أحدث الفواتير المُصدَّرة.
+  // الخطوة ١: اختيار فاتورة — بحث بالرقم أو العميل، والأحدث أولاً.
+  const q = (Array.isArray(params.q) ? params.q[0] : params.q)?.trim() ?? '';
   const invoices = await prisma.invoice.findMany({
-    where: { tenantId: user.tenantId, isDeleted: false, status: { notIn: ['DRAFT', 'VOID'] } },
+    where: {
+      tenantId: user.tenantId,
+      isDeleted: false,
+      status: { notIn: ['DRAFT', 'VOID'] },
+      ...(q
+        ? {
+            OR: [
+              { number: { contains: q } },
+              { customer: { is: { OR: [{ contactName: { contains: q } }, { companyName: { contains: q } }] } } },
+            ],
+          }
+        : {}),
+    },
     orderBy: { issueDate: 'desc' },
     take: 100,
     select: {
@@ -90,6 +103,14 @@ export default async function NewReturnPage({
         title="مرتجع جديد — اختر الفاتورة"
         action={<Link href="/returns" className="erp-btn-ghost">رجوع</Link>}
       />
+      <form className="mb-4" action="/returns/new">
+        <input
+          name="q"
+          defaultValue={q}
+          placeholder="ابحث باسم العميل أو رقم الفاتورة…"
+          className="erp-input w-full max-w-md py-2.5"
+        />
+      </form>
       <Table headers={['الرقم', 'التاريخ', 'العميل', 'الإجمالي', '']} empty={invoices.length === 0}>
         {invoices.map((inv) => (
           <tr key={inv.id} className="hover:bg-card-2">
