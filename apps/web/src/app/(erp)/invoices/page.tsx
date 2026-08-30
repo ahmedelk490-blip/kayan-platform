@@ -51,6 +51,8 @@ export default async function InvoicesPage({
   const query = parseListQuery(params, {
     defaultSort: 'createdAt',
     allowedSorts: SORTS.map((s) => s.value),
+    // الأحدث أولاً افتراضياً (تنازلي) بدل الأقدم — بطلب المالك.
+    defaultDir: 'desc',
   });
   const statusFilter = Array.isArray(params.status) ? params.status[0] : params.status;
 
@@ -187,7 +189,7 @@ export default async function InvoicesPage({
         </p>
       </section>
 
-      <Toolbar placeholder="ابحث بالرقم أو العميل…" sorts={SORTS} />
+      <Toolbar placeholder="ابحث بالرقم أو العميل…" sorts={SORTS} defaultDir="desc" />
 
       <div className="mb-4 flex flex-wrap gap-2">
         <Link

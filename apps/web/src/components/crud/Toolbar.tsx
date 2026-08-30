@@ -13,15 +13,19 @@ import { useState, useTransition } from 'react';
 export function Toolbar({
   placeholder = 'ابحث…',
   sorts,
+  defaultDir = 'asc',
 }: {
   placeholder?: string;
   sorts: { value: string; label: string }[];
+  /** الاتجاه الافتراضي حين لا param — ليطابق شريط الترتيب ترتيب الصفحة الفعلي. */
+  defaultDir?: 'asc' | 'desc';
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [value, setValue] = useState(params.get('q') ?? '');
+  const dir = params.get('dir') ?? defaultDir;
 
   function push(next: URLSearchParams) {
     next.delete('page'); // any filter change returns to page 1
@@ -44,7 +48,7 @@ export function Toolbar({
 
   function toggleDir() {
     const next = new URLSearchParams(params.toString());
-    next.set('dir', params.get('dir') === 'desc' ? 'asc' : 'desc');
+    next.set('dir', dir === 'desc' ? 'asc' : 'desc');
     push(next);
   }
 
@@ -83,9 +87,9 @@ export function Toolbar({
         type="button"
         onClick={toggleDir}
         className="erp-btn-ghost"
-        aria-label={params.get('dir') === 'desc' ? 'تنازلي' : 'تصاعدي'}
+        aria-label={dir === 'desc' ? 'تنازلي' : 'تصاعدي'}
       >
-        {params.get('dir') === 'desc' ? '↓ تنازلي' : '↑ تصاعدي'}
+        {dir === 'desc' ? '↓ تنازلي' : '↑ تصاعدي'}
       </button>
 
       {pending && <span className="text-xs text-txt-4">جارٍ التحديث…</span>}

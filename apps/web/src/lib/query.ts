@@ -22,11 +22,13 @@ function first(value: string | string[] | undefined): string {
 
 export function parseListQuery(
   params: SearchParams,
-  options: { defaultSort: string; allowedSorts: readonly string[]; perPage?: number },
+  options: { defaultSort: string; allowedSorts: readonly string[]; perPage?: number; defaultDir?: 'asc' | 'desc' },
 ): ListQuery {
   const sortRaw = first(params.sort);
   const sort = options.allowedSorts.includes(sortRaw) ? sortRaw : options.defaultSort;
-  const dir = first(params.dir) === 'desc' ? 'desc' : 'asc';
+  // اتجاه افتراضي قابل للضبط لكل قائمة — الفواتير مثلاً الأحدث أولاً (تنازلي).
+  const dirRaw = first(params.dir);
+  const dir = dirRaw === 'desc' ? 'desc' : dirRaw === 'asc' ? 'asc' : (options.defaultDir ?? 'asc');
   const page = Math.max(1, Number.parseInt(first(params.page) || '1', 10) || 1);
 
   return {
