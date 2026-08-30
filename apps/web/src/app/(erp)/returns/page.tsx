@@ -6,17 +6,30 @@ import { prisma } from '@/lib/prisma';
 import { can } from '@erp/domain';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
+import type { SearchParams } from '@/lib/query';
 import { deleteReturn } from './actions';
 
 export const metadata: Metadata = { title: 'المرتجعات' };
 
 /** قائمة مرتجعات المبيعات — رقم، تاريخ، فاتورة، عميل، قيمة، عدد أصناف. */
-export default async function ReturnsPage() {
+export default async function ReturnsPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
   const user = await requirePermission('returns.view');
   const canWrite = can(user.role, 'returns.write');
+  const params = await searchParams;
+  const q = (Array.isArray(params.q) ? params.q[0] : params.q)?.trim() ?? '';
 
   const returns = await prisma.salesReturn.findMany({
-    where: { tenantId: user.tenantId, isDeleted: false },
+    where: {
+      tenantId: user.tenantId,
+      isDeleted: false,
+      ...(q
+        ? { OR: [{ customerName: { contains: q } }, { number: { contains: q } }, { invoiceNumber: { contains: q } }] }
+        : {}),
+    },
     orderBy: { returnDate: 'desc' },
     take: 200,
     include: { _count: { select: { lines: true } } },
@@ -42,6 +55,15 @@ export default async function ReturnsPage() {
           <p className="tnum mt-1 text-xl font-bold text-brand">{formatMoney(total)}</p>
         </div>
       </div>
+
+      <form className="mb-4" action="/returns">
+        <input
+          name="q"
+          defaultValue={q}
+          placeholder="ابحث باسم العميل أو رقم المرتجع أو الفاتورة…"
+          className="erp-input w-full max-w-md py-2.5"
+        />
+      </form>
 
       <Table
         headers={['الرقم', 'التاريخ', 'الفاتورة', 'العميل', 'الأصناف', 'القيمة', '']}
