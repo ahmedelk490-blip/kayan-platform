@@ -42,18 +42,21 @@ export function ProductBuy({
   tiers: Tier[];
 }) {
   const [color, setColor] = useState('');
-  const [size, setSize] = useState('');
-  const [qty, setQty] = useState(12);
+  const [qtyBySize, setQtyBySize] = useState<Record<string, number>>({});
+  const [singleQty, setSingleQty] = useState(12);
   const [added, setAdded] = useState(false);
 
   const needsColor = colors.length > 0;
   const needsSize = sizes.length > 0;
-  const ready = (!needsColor || !!color) && (!needsSize || !!size) && qty >= 1;
+  const totalQty = needsSize ? sizes.reduce((s, sz) => s + (qtyBySize[sz] || 0), 0) : singleQty;
+  const ready = (!needsColor || !!color) && totalQty >= 1;
+  const setSizeQty = (s: string, n: number) => setQtyBySize((p) => ({ ...p, [s]: Math.max(0, Math.round(n)) }));
 
   // أسعار الشرائح المنطبقة على الكمية واللون المختارين، مجمّعة حسب الخدمة.
   const priceLines = useMemo(() => {
+    const q = Math.max(1, totalQty);
     const applicable = tiers.filter(
-      (t) => (t.color === null || t.color === color) && t.minQty <= qty && (t.maxQty === null || qty <= t.maxQty),
+      (t) => (t.color === null || t.color === color) && t.minQty <= q && (t.maxQty === null || q <= t.maxQty),
     );
     const byService = new Map<string, Tier>();
     for (const t of applicable) {
@@ -62,7 +65,7 @@ export function ProductBuy({
       if (!cur || (t.color !== null && cur.color === null) || t.price < cur.price) byService.set(t.service, t);
     }
     return [...byService.values()];
-  }, [tiers, color, qty]);
+  }, [tiers, color, totalQty]);
 
   const priceText =
     priceLines.length > 0
@@ -71,16 +74,33 @@ export function ProductBuy({
 
   function add(openAfter: boolean) {
     if (!ready) return;
-    addToCart({
-      key: itemKey(productId, color || undefined, size || undefined),
-      productId,
-      productName,
-      image,
-      colorLabel: color || undefined,
-      sizeLabel: size || undefined,
-      quantity: qty,
-      priceText: priceText || undefined,
-    });
+    // مقاسات لها كميات ⇒ سطر لكل مقاس بكميته؛ وإلا سطر واحد بالكمية.
+    if (needsSize) {
+      for (const s of sizes) {
+        const q = qtyBySize[s] || 0;
+        if (q <= 0) continue;
+        addToCart({
+          key: itemKey(productId, color || undefined, s),
+          productId,
+          productName,
+          image,
+          colorLabel: color || undefined,
+          sizeLabel: s,
+          quantity: q,
+          priceText: priceText || undefined,
+        });
+      }
+    } else {
+      addToCart({
+        key: itemKey(productId, color || undefined, undefined),
+        productId,
+        productName,
+        image,
+        colorLabel: color || undefined,
+        quantity: singleQty,
+        priceText: priceText || undefined,
+      });
+    }
     if (openAfter) openCart();
     else {
       setAdded(true);
@@ -122,23 +142,31 @@ export function ProductBuy({
         </div>
       )}
 
-      {/* المقاسات — قابلة للاختيار */}
+      {/* المقاسات — كمية لكل مقاس */}
       {needsSize && (
         <div className="mt-7">
-          <h2 className="mb-3 text-base font-semibold text-body">المقاس</h2>
-          <ul className="flex flex-wrap gap-2">
+          <h2 className="mb-3 text-base font-semibold text-body">
+            الكمية لكل مقاس
+            {totalQty > 0 && <span className="ms-2 text-sm font-normal text-brand">{totalQty} قطعة</span>}
+          </h2>
+          <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             {sizes.map((s) => {
-              const on = size === s;
+              const q = qtyBySize[s] || 0;
               return (
-                <li key={s}>
-                  <button
-                    type="button"
-                    onClick={() => setSize(on ? '' : s)}
-                    aria-pressed={on}
-                    className={`grid h-11 min-w-11 place-items-center rounded-xl border px-3.5 text-sm transition-colors ${on ? 'border-brand bg-brand-fill text-on-brand' : 'border-edge-strong text-body hover:border-brand'}`}
-                  >
-                    {s}
-                  </button>
+                <li key={s} className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 ${q > 0 ? 'border-brand' : 'border-edge-strong'}`}>
+                  <span className="text-sm font-medium text-body">{s}</span>
+                  <div className="flex items-center rounded-lg border border-edge-strong">
+                    <button type="button" aria-label="أنقص" onClick={() => setSizeQty(s, q - 1)} className="px-2.5 py-1.5 text-body-muted hover:text-body">−</button>
+                    <input
+                      type="number"
+                      min="0"
+                      value={q}
+                      onChange={(e) => setSizeQty(s, Number(e.target.value) || 0)}
+                      dir="ltr"
+                      className="w-10 bg-transparent py-1.5 text-center text-sm text-body outline-none"
+                    />
+                    <button type="button" aria-label="زد" onClick={() => setSizeQty(s, q + 1)} className="px-2.5 py-1.5 text-body-muted hover:text-body">+</button>
+                  </div>
                 </li>
               );
             })}
@@ -146,28 +174,30 @@ export function ProductBuy({
         </div>
       )}
 
-      {/* الكمية + السعر */}
+      {/* الكمية (بلا مقاسات) + السعر */}
       <div className="mt-7 flex flex-wrap items-end gap-5">
-        <label className="block">
-          <span className="mb-2 block text-xs text-body-muted">الكمية</span>
-          <div className="flex items-center rounded-xl border border-edge-strong">
-            <button type="button" aria-label="أنقص" onClick={() => setQty((q) => Math.max(1, q - 1))} className="px-3.5 py-2.5 text-body-muted hover:text-body">−</button>
-            <input
-              type="number"
-              min="1"
-              value={qty}
-              onChange={(e) => setQty(Math.max(1, Math.round(Number(e.target.value) || 1)))}
-              dir="ltr"
-              className="w-16 bg-transparent py-2.5 text-center text-sm text-body outline-none"
-            />
-            <button type="button" aria-label="زد" onClick={() => setQty((q) => q + 1)} className="px-3.5 py-2.5 text-body-muted hover:text-body">+</button>
-          </div>
-        </label>
+        {!needsSize && (
+          <label className="block">
+            <span className="mb-2 block text-xs text-body-muted">الكمية</span>
+            <div className="flex items-center rounded-xl border border-edge-strong">
+              <button type="button" aria-label="أنقص" onClick={() => setSingleQty((q) => Math.max(1, q - 1))} className="px-3.5 py-2.5 text-body-muted hover:text-body">−</button>
+              <input
+                type="number"
+                min="1"
+                value={singleQty}
+                onChange={(e) => setSingleQty(Math.max(1, Math.round(Number(e.target.value) || 1)))}
+                dir="ltr"
+                className="w-16 bg-transparent py-2.5 text-center text-sm text-body outline-none"
+              />
+              <button type="button" aria-label="زد" onClick={() => setSingleQty((q) => q + 1)} className="px-3.5 py-2.5 text-body-muted hover:text-body">+</button>
+            </div>
+          </label>
+        )}
 
         <div className="min-w-0">
           <span className="mb-1 block text-xs text-body-muted">السعر التقريبي</span>
           <p className="text-sm font-semibold text-body">
-            {ready ? (priceText || 'السعر حسب الطلب — نرجع لك بالتسعيرة') : 'اختر اللون والمقاس'}
+            {ready ? (priceText || 'السعر حسب الطلب — نرجع لك بالتسعيرة') : (needsSize ? 'اختر اللون وأدخل الكميات' : 'اختر اللون')}
           </p>
         </div>
       </div>
