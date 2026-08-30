@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { MANUAL_ORDER_SOURCES, ORDER_SOURCE_AR } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { nextCode } from '@/lib/audit';
@@ -109,6 +110,7 @@ export default async function NewInvoicePage({
               : undefined
           }
           webOrderId={webOrderId ?? undefined}
+          sources={MANUAL_ORDER_SOURCES.map((s) => ({ value: s, label: ORDER_SOURCE_AR[s] }))}
           labels={{ dateA: 'تاريخ الإصدار', dateB: 'تاريخ الاستحقاق' }}
           submitLabel="إنشاء الفاتورة"
           instantIssue

@@ -82,6 +82,7 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
         discountAmount: '0',
         taxAmount: '0',
         total: total.toString(),
+        source: 'CASHIER',
         issueDate: issuedAt,
         dueDate: dueDate(issuedAt, settings.termDays),
         issuedById: user.id,

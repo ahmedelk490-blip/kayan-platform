@@ -1664,6 +1664,8 @@ model Invoice {
   paidAmount     Decimal @default(0) @db.Decimal(19, 4)
 
   notes      String?
+  /// مصدر الطلب (ماسنجر/انستا/واتساب/ليدز…) — لمعرفة أكثر قناة تجلب الطلبات.
+  source     String?
   voidReason String?
 
   issuedById  String?

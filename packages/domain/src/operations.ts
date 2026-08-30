@@ -160,6 +160,47 @@ export function penaltyExceedsDamage(amount: Numeric, damageCost: Numeric): bool
 
 // ── Supplies ────────────────────────────────────────────────
 
+/**
+ * مصدر الطلب — من أين جاء الزبون. يُختار عند إنشاء الفاتورة، ويُضبط تلقائياً
+ * للكاشير والموقع، فنعرف أكثر قناة تجلب الطلبات.
+ */
+export const ORDER_SOURCES = [
+  'MESSENGER',
+  'INSTAGRAM',
+  'WHATSAPP',
+  'LEAD_MESSAGE',
+  'LEAD_CALL',
+  'CASHIER',
+  'SITE',
+  'OTHER',
+] as const;
+export type OrderSource = (typeof ORDER_SOURCES)[number];
+
+export const ORDER_SOURCE_AR: Record<OrderSource, string> = {
+  MESSENGER: 'ماسنجر',
+  INSTAGRAM: 'انستا',
+  WHATSAPP: 'واتساب',
+  LEAD_MESSAGE: 'ليدز رسالة',
+  LEAD_CALL: 'ليدز مكالمة',
+  CASHIER: 'كاشير',
+  SITE: 'الموقع',
+  OTHER: 'أخرى',
+};
+
+export function isOrderSource(v: string): v is OrderSource {
+  return (ORDER_SOURCES as readonly string[]).includes(v);
+}
+
+/** المصادر المعروضة في فورم إنشاء الفاتورة (يدوية) — بلا كاشير/موقع التلقائيين. */
+export const MANUAL_ORDER_SOURCES: readonly OrderSource[] = [
+  'MESSENGER',
+  'INSTAGRAM',
+  'WHATSAPP',
+  'LEAD_MESSAGE',
+  'LEAD_CALL',
+  'OTHER',
+];
+
 export const SUPPLY_KINDS = ['PRINTING', 'EMBROIDERY'] as const;
 export type SupplyKind = (typeof SUPPLY_KINDS)[number];
 

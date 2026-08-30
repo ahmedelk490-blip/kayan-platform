@@ -15,6 +15,7 @@ import {
   calcDocument,
   dec,
   can,
+  isOrderSource,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
@@ -101,6 +102,10 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
     };
   });
 
+  // مصدر الطلب: يدويّ من الفورم، أو «الموقع» تلقائياً لطلب موقع، وإلا لا شيء.
+  const sourceRaw = String(formData.get('source') ?? '').trim();
+  const source = isOrderSource(sourceRaw) ? sourceRaw : webOrderId ? 'SITE' : null;
+
   const baseData = {
     tenantId: user.tenantId,
     customerId,
@@ -109,6 +114,7 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
     taxAmount: totals.taxAmount.toString(),
     total: totals.total.toString(),
     notes,
+    source,
     createdById: user.id,
     lines: { create: lineData },
   };

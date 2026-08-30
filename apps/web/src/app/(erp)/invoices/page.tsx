@@ -16,6 +16,8 @@ import {
   RECEIVABLE_STATUSES,
   QUOTATION_STATUS_AR,
   ORDER_STATUS_AR,
+  ORDER_SOURCES,
+  ORDER_SOURCE_AR,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
@@ -55,6 +57,7 @@ export default async function InvoicesPage({
     defaultDir: 'desc',
   });
   const statusFilter = Array.isArray(params.status) ? params.status[0] : params.status;
+  const sourceFilter = Array.isArray(params.source) ? params.source[0] : params.source;
 
   // من لا يملك «عرض فواتير كل الموظفين» يرى فواتيره هو فقط. المدير يرى الكل.
   const seeAll = userCan(user.role, user.overrides, 'invoices.viewAll');
@@ -65,6 +68,7 @@ export default async function InvoicesPage({
     isDeleted: false,
     ...ownerScope,
     ...(statusFilter ? { status: statusFilter } : {}),
+    ...(sourceFilter ? { source: sourceFilter } : {}),
     ...(query.q
       ? {
           OR: [
@@ -217,8 +221,31 @@ export default async function InvoicesPage({
         ))}
       </div>
 
+      {/* فلتر مصدر الطلب — لمعرفة أكثر قناة تجلب الطلبات. */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Link
+          href={statusFilter ? `/invoices?status=${statusFilter}` : '/invoices'}
+          className={sourceFilter ? 'rounded-full border border-line-2 px-3 py-1.5 text-xs text-txt-2' : 'rounded-full bg-brand px-3 py-1.5 text-xs text-white'}
+        >
+          كل المصادر
+        </Link>
+        {ORDER_SOURCES.map((s) => (
+          <Link
+            key={s}
+            href={`/invoices?source=${s}${statusFilter ? `&status=${statusFilter}` : ''}`}
+            className={
+              sourceFilter === s
+                ? 'rounded-full bg-brand px-3 py-1.5 text-xs text-white'
+                : 'rounded-full border border-line-2 px-3 py-1.5 text-xs text-txt-2 hover:border-brand hover:text-brand'
+            }
+          >
+            {ORDER_SOURCE_AR[s]}
+          </Link>
+        ))}
+      </div>
+
       <Table
-        headers={['الرقم', 'العميل', 'الإصدار', 'الاستحقاق', 'الإجمالي', 'المدفوع', 'المتبقي', 'الحالة', '']}
+        headers={['الرقم', 'العميل', 'المصدر', 'الإصدار', 'الاستحقاق', 'الإجمالي', 'المدفوع', 'المتبقي', 'الحالة', '']}
         empty={rows.length === 0}
       >
         {rows.map((row) => {
@@ -231,6 +258,9 @@ export default async function InvoicesPage({
               </td>
               <td className="px-4 py-3 text-txt-2">
                 {row.customer.companyName ?? row.customer.contactName}
+              </td>
+              <td className="px-4 py-3 text-[0.7rem] text-txt-3">
+                {row.source ? (ORDER_SOURCE_AR as Record<string, string>)[row.source] ?? row.source : '—'}
               </td>
               <td className="tnum px-4 py-3 text-txt-3">
                 {row.issueDate ? row.issueDate.toLocaleDateString('ar-EG') : '—'}

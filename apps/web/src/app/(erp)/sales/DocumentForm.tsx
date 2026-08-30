@@ -178,6 +178,7 @@ export function DocumentForm({
   instantDefault = false,
   bundles = [],
   webOrderId,
+  sources,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   customers: { value: string; label: string }[];
@@ -185,6 +186,8 @@ export function DocumentForm({
   values?: DocValues;
   labels: { dateA: string; dateB: string };
   submitLabel?: string;
+  /** مصادر الطلب المتاحة (ماسنجر/انستا/…) — تظهر خانة «مصدر الطلب» إن مُرِّرت. */
+  sources?: { value: string; label: string }[];
   /** يُتيح «إصدار وتحصيل فوري» — خاص بالفاتورة المباشرة فقط. */
   instantIssue?: boolean;
   /** يبدأ «إصدار وتحصيل فوري» مفعّلاً — للوحة الكاشير. */
@@ -374,6 +377,11 @@ export function DocumentForm({
           <span className="mt-1 block text-[0.7rem] text-bad">{state.fieldErrors.customerId}</span>
         )}
       </label>
+
+      {/* مصدر الطلب — من أين جاء الزبون (يظهر عند إنشاء فاتورة مباشرة). */}
+      {sources && sources.length > 0 && (
+        <Select name="source" label="مصدر الطلب" options={sources} placeholder="اختر المصدر" errors={state.fieldErrors} />
+      )}
 
       {/* ١.٥ السيريه/الطقم — إضافة توزيع مقاسات دفعة واحدة. يظهر فقط حين توجد
           سيريات معرّفة. لا يمنع الإدخال اليدوي؛ يضيف سطوره فوقه. */}
