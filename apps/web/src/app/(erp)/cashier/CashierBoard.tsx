@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useActionState } from 'react';
-import { formatMoney, PAYMENT_METHODS, PAYMENT_METHOD_AR, dec } from '@erp/domain';
+import { formatMoney, PAYMENT_METHODS, PAYMENT_METHOD_AR, PRICE_SERVICE_AR, dec } from '@erp/domain';
 import { FormError } from '@/components/crud/Form';
 import { SearchableSelect } from '@/components/crud/SearchableSelect';
 import type { VariantOption } from '@/app/(erp)/sales/DocumentForm';
@@ -202,6 +202,10 @@ function VariantPicker({
   const sizes: Choice[] = dedupe(
     variants.filter((v) => (v.colorId ?? '') === (color === '__none' ? '' : color) && v.sizeId).map((v) => ({ id: v.sizeId!, label: v.sizeCode! })),
   );
+  // الخدمة (طباعة/تطريز…) — تحدّد الشريحة والسعر.
+  const services = servicesOf(variants);
+  const [service, setService] = useState(services[0] ?? '');
+
   // كمية لكل مقاس (أو للمتغيّر الأساسي حين لا مقاسات، بمفتاح ثابت).
   const [qtyBySize, setQtyBySize] = useState<Record<string, number>>({});
   const setQ = (key: string, n: number) => setQtyBySize((p) => ({ ...p, [key]: Math.max(0, n) }));
@@ -216,7 +220,9 @@ function VariantPicker({
   const lines: CartLine[] = rows.flatMap((r) => {
     const q = qtyBySize[r.key] || 0;
     if (q <= 0 || !r.variant) return [];
-    return [{ key: `${r.variant.value}:${r.key}:${Date.now()}`, variantId: r.variant.value, label: r.variant.label, quantity: q, unitPrice: priceFor(r.variant, q) }];
+    const svcLabel = service ? (PRICE_SERVICE_AR as Record<string, string>)[service] ?? '' : '';
+    const label = svcLabel && svcLabel !== 'بدون' ? `${r.variant.label} · ${svcLabel}` : r.variant.label;
+    return [{ key: `${r.variant.value}:${r.key}:${Date.now()}`, variantId: r.variant.value, label, quantity: q, unitPrice: priceFor(r.variant, q, service) }];
   });
   const totalPieces = lines.reduce((s, l) => s + l.quantity, 0);
   const totalPrice = lines.reduce((s, l) => s.plus(dec(l.quantity).times(dec(l.unitPrice))), dec(0));
@@ -241,6 +247,19 @@ function VariantPicker({
           </div>
         )}
 
+        {services.length > 0 && (
+          <div className="mb-4">
+            <p className="mb-2 text-xs text-txt-3">الخدمة</p>
+            <div className="flex flex-wrap gap-2">
+              {services.map((s) => (
+                <button key={s} type="button" onClick={() => setService(s)} className={`rounded-lg border px-3 py-1.5 text-xs ${service === s ? 'border-brand bg-brand text-white' : 'border-line-2 text-txt-2'}`}>
+                  {(PRICE_SERVICE_AR as Record<string, string>)[s] ?? s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {colorChosen ? (
           <div className="mb-4">
             <p className="mb-2 text-xs text-txt-3">{sizes.length > 0 ? 'الكمية لكل مقاس' : 'الكمية'}</p>
@@ -252,7 +271,7 @@ function VariantPicker({
                     <span className="min-w-10 text-sm font-medium text-txt">{r.label}</span>
                     {r.variant ? (
                       <div className="flex items-center gap-3">
-                        <span className="tnum text-[0.7rem] text-txt-4">{formatMoney(priceFor(r.variant, q || 1))}</span>
+                        <span className="tnum text-[0.7rem] text-txt-4">{formatMoney(priceFor(r.variant, q || 1, service))}</span>
                         <div className="flex items-center rounded-lg border border-line-2">
                           <button type="button" onClick={() => setQ(r.key, q - 1)} className="px-3 py-1.5 text-txt-3">−</button>
                           <span className="tnum min-w-8 text-center text-sm text-txt">{q}</span>
@@ -295,11 +314,25 @@ function dedupe(items: Choice[]): Choice[] {
   return [...seen].map(([id, label]) => ({ id, label }));
 }
 
-/** سعر الوحدة من شرائح المتغيّر للكمية (أقلّ سعر منطبق)، وإلا سعره الثابت. */
-function priceFor(v: VariantOption, qty: number): number {
+/**
+ * سعر الوحدة من شرائح المتغيّر للكمية والخدمة المختارة (وإلا أقلّ سعر منطبق،
+ * وإلا سعره الثابت). تمرير الخدمة يجعل السعر يتبع «طباعة/تطريز…».
+ */
+function priceFor(v: VariantOption, qty: number, service?: string): number {
   const applicable = v.tiers.filter(
-    (t) => (t.variantId === null || t.variantId === v.value) && t.minQty <= qty && (t.maxQty === null || qty <= t.maxQty),
+    (t) =>
+      (t.variantId === null || t.variantId === v.value) &&
+      (!service || t.service === service) &&
+      t.minQty <= qty &&
+      (t.maxQty === null || qty <= t.maxQty),
   );
   if (applicable.length > 0) return Math.min(...applicable.map((t) => t.price));
   return v.price > 0 ? v.price : 0;
+}
+
+/** خدمات المتغيّرات المتاحة (من الشرائح) بلا تكرار. */
+function servicesOf(variants: VariantOption[]): string[] {
+  const seen: string[] = [];
+  for (const v of variants) for (const t of v.tiers) if (!seen.includes(t.service)) seen.push(t.service);
+  return seen;
 }

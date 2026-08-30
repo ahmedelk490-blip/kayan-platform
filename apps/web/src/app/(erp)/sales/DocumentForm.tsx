@@ -61,6 +61,8 @@ export interface DocLine {
   service: string;
   quantity: number;
   unitPrice: number;
+  /** سعر أدخله المستخدم يدوياً — لا يُعاد تسعيره تلقائياً بعدها. */
+  manualPrice?: boolean;
   discountAmount: number;
   taxRate: number;
   notes: string;
@@ -283,6 +285,8 @@ export function DocumentForm({
    * أدخله المستخدم يدوياً — لا نخترع صفراً.
    */
   function reprice(line: DocLine): DocLine {
+    // سعر يدوي يبقى كما هو — تغيير الخدمة أو الكمية لا يعيد التسعير عليه.
+    if (line.manualPrice) return line;
     const v = variants.find((x) => x.value === line.variantId);
     if (!v) return line;
     if (line.service) {
@@ -582,15 +586,26 @@ export function DocumentForm({
                 <input type="hidden" name="lineTaxRate" value={0} />
                 <input type="hidden" name="lineNotes" value={line.notes} />
 
-                {/* السطر السفلي: سعر الوحدة (يُملأ تلقائياً وقابل للتعديل) والإجمالي. */}
+                {/* السطر السفلي: سعر الوحدة (يُملأ تلقائياً، وقابل للتعديل اليدوي فيثبت) والإجمالي. */}
                 <div className="mt-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2 border-t border-line/60 pt-3">
-                  <div className="w-32">
+                  <div className="w-40">
                     <NumberCell
                       label="سعر الوحدة"
                       name="lineUnitPrice"
                       value={line.unitPrice}
-                      onChange={(v) => update(index, { unitPrice: v })}
+                      onChange={(v) => update(index, { unitPrice: v, manualPrice: true })}
                     />
+                    {line.manualPrice ? (
+                      <button
+                        type="button"
+                        onClick={() => updatePriced(index, { manualPrice: false })}
+                        className="mt-0.5 text-[0.65rem] text-brand hover:underline"
+                      >
+                        ↺ سعر تلقائي
+                      </button>
+                    ) : (
+                      <span className="mt-0.5 block text-[0.65rem] text-txt-4">تلقائي — عدّله ليثبت</span>
+                    )}
                   </div>
                   <div className="text-end text-sm">
                     {variant && short && (
