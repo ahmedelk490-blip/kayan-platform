@@ -36,7 +36,7 @@ export default async function StatementReport({
   const range = resolveRange(params);
   const { from, to } = range;
 
-  const [lines, salaries, expenses, damages, stock] = await Promise.all([
+  const [lines, salaries, expenses, damages, stock, returns] = await Promise.all([
     // بنود الفواتير الصادرة في الفترة — بالكمية والقيمة وتكلفة المنتج والصنف.
     prisma.invoiceLine.findMany({
       where: {
@@ -70,13 +70,18 @@ export default async function StatementReport({
       where: { variant: { product: { tenantId: user.tenantId } } },
       select: { onHand: true, variant: { select: { cost: true, product: { select: { cost: true } } } } },
     }),
+    // الرواجع (مرتجعات المبيعات) المسجّلة في الفترة.
+    prisma.salesReturn.findMany({
+      where: { tenantId: user.tenantId, isDeleted: false, returnDate: { gte: from, lte: to } },
+      select: { totalAmount: true },
+    }),
   ]);
 
   // ── المبيعات: إجمالي، عدد القطع، تكلفة البضاعة، حسب الصنف، وأكثر المنتجات ──
   let totalSales = dec(0);
   let piecesSold = dec(0);
   let cogs = dec(0);
-  const byCategory = new Map<string, ReturnType<typeof dec>>();
+  const byCategory = new Map<string, { revenue: ReturnType<typeof dec>; qty: ReturnType<typeof dec> }>();
   const byProduct = new Map<string, { revenue: ReturnType<typeof dec>; qty: ReturnType<typeof dec> }>();
   for (const l of lines) {
     const rev = dec(l.lineTotal);
@@ -85,12 +90,14 @@ export default async function StatementReport({
     piecesSold = piecesSold.plus(qty);
     cogs = cogs.plus(qty.times(dec(l.product?.cost ?? 0)));
     const cat = l.product?.category?.nameAr ?? 'غير مصنّف';
-    byCategory.set(cat, (byCategory.get(cat) ?? dec(0)).plus(rev));
+    const c = byCategory.get(cat) ?? { revenue: dec(0), qty: dec(0) };
+    byCategory.set(cat, { revenue: c.revenue.plus(rev), qty: c.qty.plus(qty) });
     const pname = l.product?.nameAr ?? 'غير معروف';
     const p = byProduct.get(pname) ?? { revenue: dec(0), qty: dec(0) };
     byProduct.set(pname, { revenue: p.revenue.plus(rev), qty: p.qty.plus(qty) });
   }
-  const salesRows = [...byCategory.entries()].sort((a, b) => b[1].minus(a[1]).toNumber());
+  const salesRows = [...byCategory.entries()].sort((a, b) => b[1].revenue.minus(a[1].revenue).toNumber());
+  const returnsTotal = returns.reduce((s, r) => s.plus(dec(r.totalAmount)), dec(0));
   const topByRevenue = [...byProduct.entries()].sort((a, b) => b[1].revenue.minus(a[1].revenue).toNumber());
   const topByQty = [...byProduct.entries()].sort((a, b) => b[1].qty.minus(a[1].qty).toNumber());
 
@@ -112,9 +119,10 @@ export default async function StatementReport({
 
   const grossProfit = totalSales.minus(cogs);
   const totalOpex = salaryTotal.plus(expenseTotal).plus(damageTotal);
-  const net = grossProfit.minus(totalOpex);
+  // الربح الصافي = مجمل الربح − التكاليف التشغيلية − الرواجع.
+  const net = grossProfit.minus(totalOpex).minus(returnsTotal);
 
-  const donutPoints = salesRows.map(([cat, v]) => ({ label: cat, value: v.toNumber(), display: formatMoney(v) }));
+  const donutPoints = salesRows.map(([cat, v]) => ({ label: cat, value: v.revenue.toNumber(), display: formatMoney(v.revenue) }));
   const topRevenuePoints = topByRevenue.slice(0, 8).map(([name, v]) => ({ label: name, value: v.revenue.toNumber(), display: formatMoney(v.revenue) }));
 
   const empty = lines.length === 0 && totalOpex.eq(0);
@@ -146,6 +154,7 @@ export default async function StatementReport({
             <Figure label="الرواتب" value={formatMoney(salaryTotal)} />
             <Figure label="المصروفات" value={formatMoney(expenseTotal)} hint={`${expenseRows.length} بند`} />
             <Figure label="الهالك" value={formatMoney(damageTotal)} tone={damageTotal.gt(0) ? 'warn' : undefined} />
+            <Figure label="الرواجع (المرتجعات)" value={formatMoney(returnsTotal)} tone={returnsTotal.gt(0) ? 'bad' : undefined} />
             <Figure label="قيمة المخزون الحالية" value={formatMoney(inventoryValue)} hint="بالتكلفة" />
           </div>
 
@@ -159,9 +168,11 @@ export default async function StatementReport({
             <section className="erp-card p-6">
               <h3 className="mb-4 text-sm font-semibold text-brand">قائمة الدخل</h3>
 
-              <Group title="المبيعات (حسب الصنف)">
-                {salesRows.map(([cat, v]) => <Line key={cat} label={cat} value={formatMoney(v)} />)}
-                <Line label="إجمالي المبيعات" value={formatMoney(totalSales)} strong tone="ok" />
+              <Group title="المبيعات (حسب الصنف — القيمة والعدد)">
+                {salesRows.map(([cat, v]) => (
+                  <Line key={cat} label={`${cat} — ${formatQty(v.qty)} قطعة`} value={formatMoney(v.revenue)} />
+                ))}
+                <Line label={`إجمالي المبيعات — ${formatQty(piecesSold)} قطعة`} value={formatMoney(totalSales)} strong tone="ok" />
               </Group>
 
               <Group title="تكلفة البضاعة المباعة">
@@ -176,6 +187,10 @@ export default async function StatementReport({
                 ))}
                 <Line label="الهالك" value={formatMoney(damageTotal)} />
                 <Line label="إجمالي المصروفات" value={formatMoney(totalOpex)} strong tone="bad" />
+              </Group>
+
+              <Group title="الرواجع (المرتجعات)">
+                <Line label="قيمة المرتجعات" value={formatMoney(returnsTotal)} tone={returnsTotal.gt(0) ? 'bad' : undefined} />
               </Group>
 
               <div className="mt-4 flex items-center justify-between border-t-2 border-brand/30 pt-4">
@@ -214,7 +229,8 @@ export default async function StatementReport({
             كل رقم محسوب من السجلات لحظة العرض بالفلتر المختار. المبيعات وعددها من بنود الفواتير
             الصادرة؛ تكلفة البضاعة = الكمية × تكلفة قطعة المنتج؛ الرواتب من قسم الرواتب؛ المصروفات
             هي المعتمدة مفصّلة ببنودها؛ الهالك المعتمد؛ وقيمة المخزون موقفٌ لحظيّ بالتكلفة (لا يُخصم
-            من الربح). الربح الصافي = المبيعات − تكلفة البضاعة − الرواتب − المصروفات − الهالك.
+            من الربح). الرواجع من مرتجعات المبيعات في الفترة. الربح الصافي = المبيعات − تكلفة البضاعة
+            − الرواتب − المصروفات − الهالك − الرواجع.
           </p>
         </>
       )}

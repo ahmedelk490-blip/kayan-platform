@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const sp = new URL(request.url).searchParams;
   const { from, to } = resolveRange({ from: sp.get('from') ?? undefined, to: sp.get('to') ?? undefined, period: sp.get('period') ?? undefined });
 
-  const [lines, salaries, expenses, damages, stock] = await withTenant(user.tenantId, (tx) =>
+  const [lines, salaries, expenses, damages, stock, returns] = await withTenant(user.tenantId, (tx) =>
     Promise.all([
       tx.invoiceLine.findMany({
         where: { invoice: { tenantId: user.tenantId, isDeleted: false, status: { notIn: ['DRAFT', 'VOID'] }, issueDate: { gte: from, lte: to } } },
@@ -22,21 +22,24 @@ export async function GET(request: Request) {
       tx.secondaryExpense.findMany({ where: { tenantId: user.tenantId, isDeleted: false, status: 'APPROVED', expenseDate: { gte: from, lte: to } }, select: { amount: true, category: true } }),
       tx.damageRecord.findMany({ where: { tenantId: user.tenantId, isDeleted: false, status: 'APPROVED', damageDate: { gte: from, lte: to } }, select: { totalCost: true } }),
       tx.stock.findMany({ where: { variant: { product: { tenantId: user.tenantId } } }, select: { onHand: true, variant: { select: { cost: true, product: { select: { cost: true } } } } } }),
+      tx.salesReturn.findMany({ where: { tenantId: user.tenantId, isDeleted: false, returnDate: { gte: from, lte: to } }, select: { totalAmount: true } }),
     ]),
   );
 
   let totalSales = dec(0), pieces = dec(0), cogs = dec(0);
-  const byCategory = new Map<string, ReturnType<typeof dec>>();
+  const byCategory = new Map<string, { revenue: ReturnType<typeof dec>; qty: ReturnType<typeof dec> }>();
   const byProduct = new Map<string, { revenue: ReturnType<typeof dec>; qty: ReturnType<typeof dec> }>();
   for (const l of lines) {
     const rev = dec(l.lineTotal), qty = dec(l.quantity);
     totalSales = totalSales.plus(rev); pieces = pieces.plus(qty); cogs = cogs.plus(qty.times(dec(l.product?.cost ?? 0)));
     const cat = l.product?.category?.nameAr ?? 'غير مصنّف';
-    byCategory.set(cat, (byCategory.get(cat) ?? dec(0)).plus(rev));
+    const c = byCategory.get(cat) ?? { revenue: dec(0), qty: dec(0) };
+    byCategory.set(cat, { revenue: c.revenue.plus(rev), qty: c.qty.plus(qty) });
     const pn = l.product?.nameAr ?? 'غير معروف';
     const p = byProduct.get(pn) ?? { revenue: dec(0), qty: dec(0) };
     byProduct.set(pn, { revenue: p.revenue.plus(rev), qty: p.qty.plus(qty) });
   }
+  const returnsTotal = returns.reduce((s, r) => s.plus(dec(r.totalAmount)), dec(0));
   const salaryTotal = salaries.reduce((s, p) => s.plus(dec(p.amount)), dec(0));
   const damageTotal = damages.reduce((s, d) => s.plus(dec(d.totalCost)), dec(0));
   const expensesByCat = new Map<string, ReturnType<typeof dec>>();
@@ -48,15 +51,14 @@ export async function GET(request: Request) {
   }, dec(0));
   const grossProfit = totalSales.minus(cogs);
   const totalOpex = salaryTotal.plus(expenseTotal).plus(damageTotal);
-  const net = grossProfit.minus(totalOpex);
+  const net = grossProfit.minus(totalOpex).minus(returnsTotal);
 
-  const headers = ['البند', 'القيمة (د.ع)'];
+  const headers = ['البند', 'القيمة (د.ع)', 'العدد'];
   const rows: unknown[][] = [
-    ['المبيعات (حسب الصنف)', ''],
-    ...[...byCategory.entries()].sort((a, b) => b[1].minus(a[1]).toNumber()).map(([c, v]) => [c, v.toNumber()]),
-    ['إجمالي المبيعات', totalSales.toNumber()],
-    ['عدد القطع المباعة', pieces.toNumber()],
-    ['', ''],
+    ['المبيعات (حسب الصنف)', '', ''],
+    ...[...byCategory.entries()].sort((a, b) => b[1].revenue.minus(a[1].revenue).toNumber()).map(([c, v]) => [c, v.revenue.toNumber(), v.qty.toNumber()]),
+    ['إجمالي المبيعات', totalSales.toNumber(), pieces.toNumber()],
+    ['', '', ''],
     ['تكلفة البضاعة المباعة', cogs.toNumber()],
     ['مجمل الربح', grossProfit.toNumber()],
     ['', ''],
@@ -65,6 +67,7 @@ export async function GET(request: Request) {
     ...[...expensesByCat.entries()].sort((a, b) => b[1].minus(a[1]).toNumber()).map(([c, v]) => [(EXPENSE_CATEGORY_AR as Record<string, string>)[c] ?? c, v.toNumber()]),
     ['الهالك', damageTotal.toNumber()],
     ['إجمالي المصروفات', totalOpex.toNumber()],
+    ['الرواجع (المرتجعات)', returnsTotal.toNumber()],
     ['', ''],
     ['الربح الصافي', net.toNumber()],
     ['قيمة المخزون الحالية (بالتكلفة)', inventoryValue.toNumber()],
