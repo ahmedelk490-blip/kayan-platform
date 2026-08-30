@@ -13,6 +13,7 @@ import {
   type PriceService,
 } from '@erp/domain';
 import { Field, TextArea, Select, SubmitButton, FormError } from '@/components/crud/Form';
+import { SearchableSelect } from '@/components/crud/SearchableSelect';
 import type { FormState } from './shared';
 
 /** شريحة سعر مبسّطة تعبر إلى العميل — أرقام لا Decimal. */
@@ -355,16 +356,20 @@ export function DocumentForm({
         </p>
       )}
 
-      {/* ١. العميل. خطوة واحدة واضحة أعلى الصفحة. */}
-      <Select
-        name="customerId"
-        label="العميل"
-        required
-        options={customers}
-        placeholder="اختر العميل"
-        defaultValue={values?.customerId}
-        errors={state.fieldErrors}
-      />
+      {/* ١. العميل — قائمة قابلة للبحث بالكتابة، الأحدث أولاً. */}
+      <label className="block">
+        <span className="mb-1.5 block text-xs text-txt-2">العميل</span>
+        <SearchableSelect
+          name="customerId"
+          options={customers}
+          placeholder="ابحث عن العميل أو اختره…"
+          defaultValue={values?.customerId}
+          required
+        />
+        {state.fieldErrors?.customerId && (
+          <span className="mt-1 block text-[0.7rem] text-bad">{state.fieldErrors.customerId}</span>
+        )}
+      </label>
 
       {/* ١.٥ السيريه/الطقم — إضافة توزيع مقاسات دفعة واحدة. يظهر فقط حين توجد
           سيريات معرّفة. لا يمنع الإدخال اليدوي؛ يضيف سطوره فوقه. */}

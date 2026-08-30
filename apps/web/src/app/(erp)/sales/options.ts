@@ -9,7 +9,8 @@ export async function loadSalesOptions(tenantId: string) {
   const [customers, variants, tiers, bundles] = await Promise.all([
     prisma.customer.findMany({
       where: { tenantId, isDeleted: false },
-      orderBy: { contactName: 'asc' },
+      // الأحدث أولاً — فآخر عميل أُضيف يظهر أعلى القائمة (بطلب المالك).
+      orderBy: { createdAt: 'desc' },
       select: { id: true, code: true, contactName: true, companyName: true },
     }),
     prisma.productVariant.findMany({

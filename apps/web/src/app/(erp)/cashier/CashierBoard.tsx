@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useActionState } from 'react';
 import { formatMoney, PAYMENT_METHODS, PAYMENT_METHOD_AR, dec } from '@erp/domain';
 import { FormError } from '@/components/crud/Form';
+import { SearchableSelect } from '@/components/crud/SearchableSelect';
 import type { VariantOption } from '@/app/(erp)/sales/DocumentForm';
 import type { FormState } from '@/app/(erp)/invoices/shared';
 import { cashierCheckout } from './actions';
@@ -127,10 +128,13 @@ export function CashierBoard({
 
         <label className="block">
           <span className="mb-1 block text-[0.7rem] text-txt-3">العميل</span>
-          <select name="customerId" value={customerId} onChange={(e) => setCustomerId(e.target.value)} required className="erp-input py-2">
-            <option value="">اختر العميل…</option>
-            {customers.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-          </select>
+          <SearchableSelect
+            name="customerId"
+            options={customers}
+            placeholder="ابحث عن العميل أو اختره…"
+            required
+            onSelect={setCustomerId}
+          />
         </label>
 
         <div className="flex items-center justify-between border-t border-line pt-3">
