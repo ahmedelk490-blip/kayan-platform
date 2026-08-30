@@ -49,11 +49,16 @@ export function CashierBoard({
   const total = cart.reduce((s, l) => s.plus(dec(l.quantity).times(dec(l.unitPrice))), dec(0));
   const remaining = total.minus(paid);
 
-  function addLine(l: CartLine) {
+  // إضافة عدة سطور دفعة واحدة (كمية لكل مقاس)، مع دمج المتكرّر بالمتغيّر.
+  function addLines(newLines: CartLine[]) {
     setCart((prev) => {
-      const found = prev.find((x) => x.variantId === l.variantId);
-      if (found) return prev.map((x) => (x.variantId === l.variantId ? { ...x, quantity: x.quantity + l.quantity } : x));
-      return [...prev, l];
+      let next = [...prev];
+      for (const l of newLines) {
+        const found = next.find((x) => x.variantId === l.variantId);
+        if (found) next = next.map((x) => (x.variantId === l.variantId ? { ...x, quantity: x.quantity + l.quantity } : x));
+        else next = [...next, l];
+      }
+      return next;
     });
     setPicking(null);
   }
@@ -167,14 +172,18 @@ export function CashierBoard({
           product={products.find((p) => p.id === picking)!}
           variants={variants.filter((v) => v.productId === picking)}
           onClose={() => setPicking(null)}
-          onAdd={addLine}
+          onAdd={addLines}
         />
       )}
     </div>
   );
 }
 
-/** نافذة اختيار اللون والمقاس والكمية لمنتج، مع حساب السعر من الشرائح. */
+/**
+ * نافذة اختيار المنتج: لون واحد، ثم **كمية لكل مقاس** — فالزبون الذي يريد
+ * قطعتين L وقطعتين XL وواحدة 2XL يُدخلها دفعة واحدة، وتُضاف سطوراً منفصلة
+ * بأسعارها. المنتج بلا مقاسات يُدخَل بكمية واحدة.
+ */
 function VariantPicker({
   product,
   variants,
@@ -184,25 +193,38 @@ function VariantPicker({
   product: { id: string; name: string };
   variants: VariantOption[];
   onClose: () => void;
-  onAdd: (l: CartLine) => void;
+  onAdd: (lines: CartLine[]) => void;
 }) {
   const colors: Choice[] = dedupe(variants.filter((v) => v.colorId).map((v) => ({ id: v.colorId!, label: v.colorName! })));
-  const [color, setColor] = useState(colors.length === 1 ? colors[0].id : '');
+  const [color, setColor] = useState(colors.length === 1 ? colors[0].id : colors.length === 0 ? '__none' : '');
+  const colorChosen = color !== '';
+
   const sizes: Choice[] = dedupe(
-    variants.filter((v) => (v.colorId ?? '') === color && v.sizeId).map((v) => ({ id: v.sizeId!, label: v.sizeCode! })),
+    variants.filter((v) => (v.colorId ?? '') === (color === '__none' ? '' : color) && v.sizeId).map((v) => ({ id: v.sizeId!, label: v.sizeCode! })),
   );
-  const [size, setSize] = useState('');
-  const [qty, setQty] = useState(1);
+  // كمية لكل مقاس (أو للمتغيّر الأساسي حين لا مقاسات، بمفتاح ثابت).
+  const [qtyBySize, setQtyBySize] = useState<Record<string, number>>({});
+  const setQ = (key: string, n: number) => setQtyBySize((p) => ({ ...p, [key]: Math.max(0, n) }));
 
-  const variant = variants.find((v) => (v.colorId ?? '') === color && (v.sizeId ?? '') === size) ?? (colors.length === 0 && sizes.length === 0 ? variants[0] : undefined);
-  const ready = !!variant && (colors.length === 0 || !!color) && (sizes.length === 0 || !!size);
+  const variantFor = (sizeId: string | null) =>
+    variants.find((v) => (v.colorId ?? '') === (color === '__none' ? '' : color) && (v.sizeId ?? '') === (sizeId ?? ''));
 
-  const unitPrice = variant ? priceFor(variant, qty) : 0;
+  // بناء السطور من الكميات — لكل مقاس متغيّره وسعره حسب كميته.
+  const rows = (sizes.length > 0 ? sizes.map((s) => ({ key: s.id, label: s.label, variant: variantFor(s.id) }))
+    : [{ key: '__base', label: 'الكمية', variant: colorChosen ? variantFor(null) : undefined }]);
+
+  const lines: CartLine[] = rows.flatMap((r) => {
+    const q = qtyBySize[r.key] || 0;
+    if (q <= 0 || !r.variant) return [];
+    return [{ key: `${r.variant.value}:${r.key}:${Date.now()}`, variantId: r.variant.value, label: r.variant.label, quantity: q, unitPrice: priceFor(r.variant, q) }];
+  });
+  const totalPieces = lines.reduce((s, l) => s + l.quantity, 0);
+  const totalPrice = lines.reduce((s, l) => s.plus(dec(l.quantity).times(dec(l.unitPrice))), dec(0));
 
   return (
     <div className="fixed inset-0 z-[60] grid place-items-center p-4" role="dialog">
       <button type="button" aria-label="إغلاق" onClick={onClose} className="absolute inset-0 bg-black/50" />
-      <div className="relative w-full max-w-md rounded-2xl border border-line bg-card p-5 shadow-2xl">
+      <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-line bg-card p-5 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-base font-bold text-txt">{product.name}</h3>
           <button type="button" onClick={onClose} className="text-txt-3">✕</button>
@@ -213,47 +235,51 @@ function VariantPicker({
             <p className="mb-2 text-xs text-txt-3">اللون</p>
             <div className="flex flex-wrap gap-2">
               {colors.map((c) => (
-                <button key={c.id} type="button" onClick={() => { setColor(c.id); setSize(''); }} className={`rounded-lg border px-3 py-1.5 text-xs ${color === c.id ? 'border-brand bg-brand text-white' : 'border-line-2 text-txt-2'}`}>{c.label}</button>
-              ))}
-            </div>
-          </div>
-        )}
-        {sizes.length > 0 && (
-          <div className="mb-4">
-            <p className="mb-2 text-xs text-txt-3">المقاس</p>
-            <div className="flex flex-wrap gap-2">
-              {sizes.map((s) => (
-                <button key={s.id} type="button" onClick={() => setSize(s.id)} className={`rounded-lg border px-3 py-1.5 text-xs ${size === s.id ? 'border-brand bg-brand text-white' : 'border-line-2 text-txt-2'}`}>{s.label}</button>
+                <button key={c.id} type="button" onClick={() => { setColor(c.id); setQtyBySize({}); }} className={`rounded-lg border px-3 py-1.5 text-xs ${color === c.id ? 'border-brand bg-brand text-white' : 'border-line-2 text-txt-2'}`}>{c.label}</button>
               ))}
             </div>
           </div>
         )}
 
-        <div className="mb-4 flex items-end justify-between gap-3">
-          <label className="block">
-            <span className="mb-1 block text-xs text-txt-3">الكمية</span>
-            <div className="flex items-center rounded-lg border border-line-2">
-              <button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))} className="px-3 py-2 text-txt-3">−</button>
-              <span className="tnum min-w-8 text-center text-sm text-txt">{qty}</span>
-              <button type="button" onClick={() => setQty((q) => q + 1)} className="px-3 py-2 text-txt-3">+</button>
+        {colorChosen ? (
+          <div className="mb-4">
+            <p className="mb-2 text-xs text-txt-3">{sizes.length > 0 ? 'الكمية لكل مقاس' : 'الكمية'}</p>
+            <div className="space-y-2">
+              {rows.map((r) => {
+                const q = qtyBySize[r.key] || 0;
+                return (
+                  <div key={r.key} className="flex items-center justify-between gap-3 rounded-lg border border-line bg-card-2 px-3 py-2">
+                    <span className="min-w-10 text-sm font-medium text-txt">{r.label}</span>
+                    {r.variant ? (
+                      <div className="flex items-center gap-3">
+                        <span className="tnum text-[0.7rem] text-txt-4">{formatMoney(priceFor(r.variant, q || 1))}</span>
+                        <div className="flex items-center rounded-lg border border-line-2">
+                          <button type="button" onClick={() => setQ(r.key, q - 1)} className="px-3 py-1.5 text-txt-3">−</button>
+                          <span className="tnum min-w-8 text-center text-sm text-txt">{q}</span>
+                          <button type="button" onClick={() => setQ(r.key, q + 1)} className="px-3 py-1.5 text-txt-3">+</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-[0.7rem] text-txt-4">غير متوفّر</span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          </label>
-          <div className="text-end">
-            <p className="text-[0.7rem] text-txt-3">السعر</p>
-            <p className="tnum text-lg font-bold text-brand">{ready ? formatMoney(unitPrice) : '—'}</p>
           </div>
+        ) : (
+          <p className="mb-4 text-xs text-txt-4">اختر اللون لإظهار المقاسات.</p>
+        )}
+
+        <div className="mb-3 flex items-center justify-between border-t border-line pt-3 text-sm">
+          <span className="text-txt-2">الإجمالي — <span className="tnum">{totalPieces}</span> قطعة</span>
+          <span className="tnum font-bold text-brand">{formatMoney(totalPrice)}</span>
         </div>
 
         <button
           type="button"
-          disabled={!ready}
-          onClick={() => variant && onAdd({
-            key: variant.value + Date.now(),
-            variantId: variant.value,
-            label: variant.label,
-            quantity: qty,
-            unitPrice,
-          })}
+          disabled={lines.length === 0}
+          onClick={() => onAdd(lines)}
           className="erp-btn w-full py-3 disabled:opacity-40"
         >
           أضف للفاتورة
