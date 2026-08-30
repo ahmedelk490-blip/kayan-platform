@@ -55,9 +55,18 @@ export function display(value: Numeric | null | undefined): Decimal {
   return dec(value).toDecimalPlaces(DISPLAY_SCALE, Decimal.ROUND_HALF_UP);
 }
 
-/** Format for the UI: fixed 2 places, Western digits for column alignment. */
+/**
+ * Format money for the UI: thousand separators, and no forced decimals — a
+ * whole amount prints "16,000", not "16000.00". A real fraction still shows
+ * (trailing zeros trimmed): "8,333.33", "12,000.5". Western digits so numeric
+ * columns stay aligned. Built on the Decimal string to keep precision.
+ */
 export function formatMoney(value: Numeric | null | undefined): string {
-  return display(value).toFixed(DISPLAY_SCALE);
+  const d = display(value);
+  const [intPart, fracRaw = ''] = d.abs().toFixed(DISPLAY_SCALE).split('.');
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const frac = fracRaw.replace(/0+$/, '');
+  return (d.isNegative() ? '-' : '') + grouped + (frac ? `.${frac}` : '');
 }
 
 /** Quantities print without forced decimals — "25", not "25.00". */
