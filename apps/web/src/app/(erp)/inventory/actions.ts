@@ -247,3 +247,21 @@ export async function setLevels(_prev: FormState, formData: FormData): Promise<F
   revalidatePath('/inventory');
   return { ok: 'تم حفظ الحدود.' };
 }
+
+/**
+ * تحديد الحدّ الأدنى (حدّ إعادة الطلب) لرصيد منتج — عند بلوغه أو النزول تحته
+ * يظهر الصنف في «نواقص وإعادة الطلب» لتوفيره. صفر = بلا تنبيه بحدّ.
+ */
+export async function setMinStock(stockId: string, _prev: FormState, formData: FormData): Promise<FormState> {
+  const user = await requirePermission('inventory.write');
+  const value = Math.max(0, Math.round(Number(formData.get('minStock') ?? 0) || 0));
+  const st = await prisma.stock.findFirst({
+    where: { id: stockId, variant: { product: { tenantId: user.tenantId } } },
+    select: { id: true },
+  });
+  if (!st) return { error: 'الرصيد غير موجود.' };
+  await prisma.stock.update({ where: { id: stockId }, data: { minStock: value } });
+  await audit({ tenantId: user.tenantId, userId: user.id, action: 'stock.minStock', entityType: 'Stock', entityId: stockId, detail: String(value) });
+  revalidatePath('/inventory');
+  return { ok: 'تم تحديث الحد الأدنى.' };
+}

@@ -7,6 +7,7 @@ import { AppShell } from '@/components/AppShell';
 import { SegmentedTabs } from '@/components/SegmentedTabs';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import { MovementModal } from './MovementModal';
+import { MinStockCell } from './MinStockCell';
 import { reverseMovement } from './actions';
 import { TYPE_LABELS } from './types';
 
@@ -87,7 +88,11 @@ export default async function InventoryPage() {
     // جدول النواقص: كل رصيد منتج له حدٌّ أدنى مضبوط — غير مقيّد بالـ100 المعروضة
     // في تبويب الأرصدة، فجدول «ما يجب طلبه» يجب أن يكون كاملاً لا عيّنة.
     prisma.stock.findMany({
-      where: { minStock: { gt: 0 }, variant: { product: { tenantId: user.tenantId } } },
+      // ما يجب طلبه: النافذ (رصيد ≤ 0) أو ما تحت حدّه الأدنى.
+      where: {
+        variant: { product: { tenantId: user.tenantId } },
+        OR: [{ minStock: { gt: 0 } }, { onHand: { lte: 0 } }],
+      },
       include: {
         variant: { include: { product: true, color: true, size: true } },
         warehouse: { select: { nameAr: true } },
@@ -105,11 +110,11 @@ export default async function InventoryPage() {
     }),
   ]);
 
-  // ملخّص الخامات: كم صنفاً، وكم تحت الحد، وكم نفد.
+  // ملخّص الخامات: النافذ (رصيد ≤ 0) دائماً، والقارب (له حدّ وما زال فوق الصفر).
+  const emptySupplies = supplies.filter((s) => dec(s.onHand).lte(dec(0)));
   const lowSupplies = supplies.filter(
-    (s) => dec(s.minStock).gt(0) && dec(s.onHand).lte(dec(s.minStock)),
+    (s) => dec(s.minStock).gt(0) && dec(s.onHand).gt(0) && dec(s.onHand).lte(dec(s.minStock)),
   );
-  const emptySupplies = lowSupplies.filter((s) => dec(s.onHand).lte(dec(0)));
 
   const SUPPLY_TX_AR: Record<string, string> = {
     PURCHASE: 'شراء',
@@ -128,8 +133,11 @@ export default async function InventoryPage() {
     { onHand: dec(0), reserved: dec(0), damaged: dec(0) },
   );
 
-  const lowStock = stock.filter(
-    (s) => dec(s.minStock).gt(0) && dec(s.onHand).lte(dec(s.minStock)),
+  // النافذ = رصيد ≤ 0 (دائماً، ولو بلا حدّ أدنى). القارب = له حدّ وما زال فوق الصفر لكن عنده أو تحته.
+  // من الجرد الكامل لا قائمة الأرصدة المحدودة بـ100، فالعدّ يشمل كل الأصناف.
+  const outOfStock = fullStock.filter((s) => dec(s.onHand).lte(0));
+  const lowStock = fullStock.filter(
+    (s) => dec(s.minStock).gt(0) && dec(s.onHand).gt(0) && dec(s.onHand).lte(dec(s.minStock)),
   );
 
   // جدول إعادة الطلب: كل منتج وخامة تحت الحدّ الأدنى، مع مقدار النقص
@@ -224,12 +232,18 @@ export default async function InventoryPage() {
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Metric label="رصيد المنتجات" value={totals.onHand} />
         <Metric label="محجوز للبيع" value={totals.reserved} />
-        <Metric label="منتجات تحت الحد" value={lowStock.length} tone={lowStock.length > 0 ? 'bad' : 'muted'} />
+        <Metric
+          label="منتجات نافذة"
+          value={outOfStock.length}
+          tone={outOfStock.length > 0 ? 'bad' : 'muted'}
+          hint={`${lowStock.length} قاربت على النفاد`}
+        />
         {seeSupplies && (
           <Metric
-            label="خامات قاربت على النفاد"
-            value={lowSupplies.length}
-            tone={lowSupplies.length > 0 ? 'bad' : 'muted'}
+            label="خامات نافذة"
+            value={emptySupplies.length}
+            tone={emptySupplies.length > 0 ? 'bad' : 'muted'}
+            hint={`${lowSupplies.length} قاربت على النفاد`}
           />
         )}
       </div>
@@ -362,7 +376,9 @@ export default async function InventoryPage() {
                     )}
                   </td>
                   <td className="tnum px-4 py-3">
-                    {dec(s.minStock).gt(0) && dec(s.onHand).lte(dec(s.minStock)) ? (
+                    {canWrite ? (
+                      <MinStockCell stockId={s.id} value={Number(dec(s.minStock).toString())} />
+                    ) : dec(s.minStock).gt(0) && dec(s.onHand).lte(dec(s.minStock)) ? (
                       <Badge tone="bad">{formatQty(s.minStock)}</Badge>
                     ) : (
                       <span className="text-txt-3">{formatQty(s.minStock)}</span>
@@ -514,10 +530,12 @@ function Metric({
   label,
   value,
   tone,
+  hint,
 }: {
   label: string;
   value: Numeric;
   tone?: 'bad' | 'muted';
+  hint?: string;
 }) {
   return (
     <div className="erp-card p-5">
@@ -525,6 +543,7 @@ function Metric({
       <p className={`tnum mt-2 text-2xl font-semibold ${tone === 'bad' ? 'text-bad' : 'text-brand'}`}>
         {formatQty(value)}
       </p>
+      {hint && <p className="mt-0.5 text-[0.7rem] text-txt-4">{hint}</p>}
     </div>
   );
 }
