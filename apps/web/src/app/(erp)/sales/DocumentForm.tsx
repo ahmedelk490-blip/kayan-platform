@@ -12,7 +12,7 @@ import {
   PAYMENT_METHOD_AR,
   type PriceService,
 } from '@erp/domain';
-import { Field, TextArea, Select, SubmitButton, FormError } from '@/components/crud/Form';
+import { Field, TextArea, SubmitButton, FormError } from '@/components/crud/Form';
 import { SearchableSelect } from '@/components/crud/SearchableSelect';
 import type { FormState } from './shared';
 
@@ -61,8 +61,6 @@ export interface DocLine {
   service: string;
   quantity: number;
   unitPrice: number;
-  /** سعر أدخله المستخدم يدوياً — لا يُعاد تسعيره تلقائياً بعدها. */
-  manualPrice?: boolean;
   discountAmount: number;
   taxRate: number;
   notes: string;
@@ -259,8 +257,8 @@ export function DocumentForm({
         taxRate: 0,
         notes: '',
       };
-      // سعر السيريه يفوز إن وُجد؛ وإلا نستعمل تسعير القطعة/الشرائح المعتاد.
-      added.push(seriesPiecePrice != null ? { ...base, unitPrice: seriesPiecePrice } : reprice(base));
+      // سعر السيريه يفوز إن وُجد؛ وإلا يبقى السعر فارغاً ليكتبه البائع بيده.
+      added.push(seriesPiecePrice != null ? { ...base, unitPrice: seriesPiecePrice } : base);
     }
     if (added.length === 0) {
       setSeriesMsg('لا يوجد متغيّر لأي مقاس في هذه السيريه باللون المختار — أنشئ المتغيّرات أولاً.');
@@ -280,43 +278,34 @@ export function DocumentForm({
   }
 
   /**
-   * يعيد تسعير السطر من شريحة الخدمة والكمية — هذا هو الحساب الصحيح.
+   * السعر المقترح من شرائح الخدمة والكمية، أو السعر الثابت إن وُجد.
    *
-   * سعر المتغيّر الثابت غالباً فارغ، والسعر الحقيقي في شرائح (خدمة، كمية).
-   * فمتى تغيّر المتغيّر أو الخدمة أو الكمية أعدنا ملء سعر الوحدة من الشريحة
-   * المطابقة. إن لم تطابق شريحة استعملنا السعر الثابت إن وُجد، وإلا تركنا ما
-   * أدخله المستخدم يدوياً — لا نخترع صفراً.
+   * سعر الوحدة بيد البائع دائماً (بطلب المالك): النظام لا يملأ الحقل ولا
+   * يغيّره تلقائياً — يعرض المقترح تلميحاً تحته، وضغطةٌ عليه تطبّقه.
    */
-  function reprice(line: DocLine): DocLine {
-    // سعر يدوي يبقى كما هو — تغيير الخدمة أو الكمية لا يعيد التسعير عليه.
-    if (line.manualPrice) return line;
+  function suggestedPrice(line: DocLine): number | null {
     const v = variants.find((x) => x.value === line.variantId);
-    if (!v) return line;
+    if (!v) return null;
     if (line.service) {
       const tier = applicableTier(v.tiers, {
         service: line.service,
         quantity: line.quantity,
         variantId: line.variantId,
       });
-      if (tier) return { ...line, unitPrice: tier.price };
+      if (tier) return tier.price;
     }
-    if (v.tiers.length === 0 && v.price > 0) return { ...line, unitPrice: v.price };
-    return line;
+    if (v.price > 0) return v.price;
+    return null;
   }
 
   function update(index: number, patch: Partial<DocLine>) {
     setLines((prev) => prev.map((l, i) => (i === index ? { ...l, ...patch } : l)));
   }
 
-  /** تعديل يُعقبه إعادة تسعير — للخدمة والكمية (لا يغيّر الاختيار). */
-  function updatePriced(index: number, patch: Partial<DocLine>) {
-    setLines((prev) => prev.map((l, i) => (i === index ? reprice({ ...l, ...patch }) : l)));
-  }
-
   /**
    * اختيار متسلسل: المنتج ثم اللون ثم المقاس. كلٌّ يصفّر ما تحته، ويُختار
    * تلقائياً حين لا بديل (لون واحد أو مقاس واحد)، ثم يُحلّ المتغيّر وتُختار
-   * الخدمة الافتراضية ويُعاد التسعير — فالسعر يظهر بمجرد اكتمال الاختيار.
+   * الخدمة الافتراضية — والسعر يبقى بيد البائع، لا يُملأ تلقائياً.
    */
   function chooseInLine(index: number, patch: { productId?: string; colorId?: string; sizeId?: string }) {
     setLines((prev) =>
@@ -337,7 +326,7 @@ export function DocumentForm({
         next.variantId = resolved?.value ?? '';
         const services = resolved ? servicesOf(resolved) : [];
         next.service = services.includes(next.service) ? next.service : services[0] ?? '';
-        return reprice(next);
+        return next;
       }),
     );
   }
@@ -378,9 +367,22 @@ export function DocumentForm({
         )}
       </label>
 
-      {/* مصدر الطلب — من أين جاء الزبون (يظهر عند إنشاء فاتورة مباشرة). */}
+      {/* مصدر الطلب — كل المصادر ظاهرة كأزرار جنب بعض، ضغطة واحدة تختار. */}
       {sources && sources.length > 0 && (
-        <Select name="source" label="مصدر الطلب" options={sources} placeholder="اختر المصدر" errors={state.fieldErrors} />
+        <fieldset>
+          <legend className="mb-2 text-xs text-txt-2">مصدر الطلب</legend>
+          <div className="flex flex-wrap gap-2">
+            {sources.map((s) => (
+              <label
+                key={s.value}
+                className="cursor-pointer rounded-full border border-line-2 px-4 py-2 text-xs font-medium text-txt-2 transition-colors has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:checked]:text-brand"
+              >
+                <input type="radio" name="source" value={s.value} className="sr-only" />
+                {s.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
       )}
 
       {/* ١.٥ السيريه/الطقم — إضافة توزيع مقاسات دفعة واحدة. يظهر فقط حين توجد
@@ -475,10 +477,9 @@ export function DocumentForm({
         </section>
       )}
 
-      {/* ٢. البنود — لكل بند: المنتج، الخدمة، الكمية، والسعر يظهر محسوباً.
-          لا خصم ولا ضريبة ولا سعر وحدة في كل صف: أُزيلت من الواجهة وتُرسل
-          أصفاراً، فالصف صار ثلاث خانات فقط. السعر يُملأ تلقائياً، ولا يظهر
-          حقل سعر إلا حين لا توجد شريحة تغطّي الكمية. */}
+      {/* ٢. البنود — لكل بند: المنتج واللون والمقاس والخدمة والكمية، وحقل
+          تفاصيل حرّ، وسعر الوحدة يكتبه البائع بنفسه (المقترح تلميح فقط).
+          الخصم والضريبة أُزيلا من الصف وتُرسل أصفاراً. */}
       <section>
         <h3 className="mb-3 text-sm font-semibold text-brand">الأصناف</h3>
 
@@ -492,15 +493,7 @@ export function DocumentForm({
             const sizes = sizesOf(variants, line.productId, line.colorId);
             const short = variant && line.quantity > variant.available;
             const services = variant ? servicesOf(variant) : [];
-            // هل تغطّي شريحةٌ هذه الكمية والخدمة؟
-            const priceGap =
-              variant &&
-              line.service &&
-              !applicableTier(variant.tiers, {
-                service: line.service,
-                quantity: line.quantity,
-                variantId: variant.value,
-              });
+            const suggestion = suggestedPrice(line);
 
             return (
               <div key={index} className="rounded-xl border border-line bg-card-2 p-4">
@@ -553,7 +546,7 @@ export function DocumentForm({
                     <span className="mb-1.5 block text-xs text-txt-2">الخدمة</span>
                     <select
                       value={line.service}
-                      onChange={(e) => updatePriced(index, { service: e.target.value })}
+                      onChange={(e) => update(index, { service: e.target.value })}
                       disabled={services.length === 0}
                       className="erp-input py-2.5 disabled:opacity-50"
                     >
@@ -570,7 +563,7 @@ export function DocumentForm({
                     label="الكمية"
                     name="lineQuantity"
                     value={line.quantity}
-                    onChange={(v) => updatePriced(index, { quantity: v })}
+                    onChange={(v) => update(index, { quantity: v })}
                     integer
                   />
 
@@ -588,31 +581,42 @@ export function DocumentForm({
                   </button>
                 </div>
 
-                {/* المتغيّر المحلول يُرسل للخادم؛ والخصم والضريبة صفر، والملاحظة فارغة. */}
+                {/* المتغيّر المحلول يُرسل للخادم؛ والخصم والضريبة صفر. */}
                 <input type="hidden" name="lineVariantId" value={line.variantId} />
                 <input type="hidden" name="lineDiscount" value={0} />
                 <input type="hidden" name="lineTaxRate" value={0} />
-                <input type="hidden" name="lineNotes" value={line.notes} />
 
-                {/* السطر السفلي: سعر الوحدة (يُملأ تلقائياً، وقابل للتعديل اليدوي فيثبت) والإجمالي. */}
+                {/* تفاصيل حرّة للصنف: اللون، الطباعة، أي ملاحظة — تُحفظ مع سطر الفاتورة. */}
+                <label className="mt-3 block">
+                  <span className="mb-1.5 block text-xs text-txt-2">تفاصيل الصنف — اللون، الطباعة، أي ملاحظة</span>
+                  <input
+                    name="lineNotes"
+                    value={line.notes}
+                    onChange={(e) => update(index, { notes: e.target.value })}
+                    placeholder="مثال: أسود، طباعة شعار على الصدر…"
+                    className="erp-input py-2.5"
+                  />
+                </label>
+
+                {/* السطر السفلي: سعر الوحدة بيد البائع — يكتبه بنفسه، والمقترح تلميح اختياري. */}
                 <div className="mt-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2 border-t border-line/60 pt-3">
                   <div className="w-40">
                     <NumberCell
                       label="سعر الوحدة"
                       name="lineUnitPrice"
                       value={line.unitPrice}
-                      onChange={(v) => update(index, { unitPrice: v, manualPrice: true })}
+                      onChange={(v) => update(index, { unitPrice: v })}
                     />
-                    {line.manualPrice ? (
+                    {suggestion != null && suggestion !== line.unitPrice ? (
                       <button
                         type="button"
-                        onClick={() => updatePriced(index, { manualPrice: false })}
+                        onClick={() => update(index, { unitPrice: suggestion })}
                         className="mt-0.5 text-[0.65rem] text-brand hover:underline"
                       >
-                        ↺ سعر تلقائي
+                        المقترح {formatMoney(dec(suggestion))} — اضغط لاعتماده
                       </button>
                     ) : (
-                      <span className="mt-0.5 block text-[0.65rem] text-txt-4">تلقائي — عدّله ليثبت</span>
+                      <span className="mt-0.5 block text-[0.65rem] text-txt-4">السعر بيدك — اكتبه مباشرة</span>
                     )}
                   </div>
                   <div className="text-end text-sm">
@@ -624,11 +628,6 @@ export function DocumentForm({
                   </div>
                 </div>
 
-                {priceGap && (
-                  <p className="mt-1.5 text-[0.7rem] text-warn">
-                    لا توجد شريحة سعر جاهزة لهذه الكمية — السعر معروض للتعديل يدوياً.
-                  </p>
-                )}
               </div>
             );
           })}
