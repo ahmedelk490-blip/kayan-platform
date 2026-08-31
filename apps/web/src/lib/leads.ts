@@ -98,6 +98,7 @@ export async function createLead(lead: LeadInput): Promise<{ customerId: string;
       whatsapp: lead.phone,
       email: lead.email || null,
       notes: 'وصل من نموذج طلب عرض سعر في الموقع. غير مؤهَّل بعد.',
+      source: 'LEAD',
       activities: {
         create: {
           type: 'INQUIRY',

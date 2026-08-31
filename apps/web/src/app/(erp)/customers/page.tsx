@@ -3,7 +3,7 @@ import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
-import { can } from '@erp/domain';
+import { can, CUSTOMER_SOURCE_AR } from '@erp/domain';
 import { AppShell } from '@/components/AppShell';
 import { Toolbar } from '@/components/crud/Toolbar';
 import { ModuleHeader, Table, Pager } from '@/components/crud/Shell';
@@ -70,7 +70,7 @@ export default async function CustomersPage({
       <Toolbar placeholder="ابحث بالاسم أو الهاتف أو الكود…" sorts={SORTS} />
 
       <Table
-        headers={['الكود', 'اسم المسؤول', 'الشركة', 'الهاتف', 'النشاطات', '']}
+        headers={['الكود', 'اسم المسؤول', 'الشركة', 'الهاتف', 'المصدر', 'النشاطات', '']}
         empty={rows.length === 0}
       >
         {rows.map((row) => (
@@ -82,6 +82,9 @@ export default async function CustomersPage({
             <td className="px-4 py-3 text-txt-2">{row.companyName ?? '—'}</td>
             <td dir="ltr" className="tnum px-4 py-3 text-start text-txt-2">
               {row.phone}
+            </td>
+            <td className="px-4 py-3 text-[0.7rem] text-txt-3">
+              {row.source ? (CUSTOMER_SOURCE_AR as Record<string, string>)[row.source] ?? row.source : '—'}
             </td>
             <td className="tnum px-4 py-3 text-txt-3">{row._count.activities}</td>
             <td className="px-4 py-3">

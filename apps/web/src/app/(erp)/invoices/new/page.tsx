@@ -74,6 +74,7 @@ export default async function NewInvoicePage({
             phone: order.phone,
             whatsapp: order.phone,
             notes: `أُنشئ من طلب الموقع ${order.number}.`,
+            source: 'SITE',
           },
           select: { id: true },
         });

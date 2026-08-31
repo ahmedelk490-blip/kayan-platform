@@ -78,6 +78,7 @@ async function createCustomerCore(
       address: data.address,
       taxNumber: data.taxNumber,
       notes: data.notes,
+      source: 'MANUAL',
     },
   });
 

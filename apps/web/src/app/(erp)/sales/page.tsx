@@ -139,28 +139,31 @@ export default async function SalesDashboard() {
     display: formatMoney(p.value),
   }));
 
-  // أفضل المنتجات مبيعاً هذه السنة — من بنود الفواتير الصادرة.
-  const invoiceLines = seeMoney
-    ? await prisma.invoiceLine.findMany({
-        where: {
-          invoice: {
-            tenantId,
-            isDeleted: false,
-            status: { notIn: ['DRAFT', 'VOID'] },
-            issueDate: { gte: from, lte: to },
-          },
-        },
-        select: { description: true, lineTotal: true },
-      })
-    : [];
-  const byProduct = new Map<string, ReturnType<typeof dec>>();
-  for (const l of invoiceLines) {
-    byProduct.set(l.description, (byProduct.get(l.description) ?? dec(0)).plus(dec(l.lineTotal)));
-  }
-  const topProducts = [...byProduct.entries()]
-    .sort((a, b) => b[1].minus(a[1]).toNumber())
-    .slice(0, 6)
-    .map(([label, value]) => ({ label, value: value.toNumber(), display: formatMoney(value) }));
+  // أفضل المنتجات مبيعاً — بالمنتج (لا المقاس) بالعدد، لهذا الشهر ولهذا العام.
+  const monthRange = periodRange('MONTH');
+  const topBy = async (a: Date, b: Date) => {
+    if (!seeMoney) return [] as { label: string; value: number; display: string }[];
+    const rows = await prisma.invoiceLine.findMany({
+      where: {
+        invoice: { tenantId, isDeleted: false, ...ownerScope, status: { notIn: ['DRAFT', 'VOID'] }, issueDate: { gte: a, lte: b } },
+      },
+      select: { quantity: true, lineTotal: true, product: { select: { nameAr: true } } },
+    });
+    const m = new Map<string, { qty: ReturnType<typeof dec>; rev: ReturnType<typeof dec> }>();
+    for (const l of rows) {
+      const name = l.product?.nameAr ?? 'غير معروف';
+      const cur = m.get(name) ?? { qty: dec(0), rev: dec(0) };
+      m.set(name, { qty: cur.qty.plus(dec(l.quantity)), rev: cur.rev.plus(dec(l.lineTotal)) });
+    }
+    return [...m.entries()]
+      .sort((x, y) => y[1].qty.minus(x[1].qty).toNumber())
+      .slice(0, 6)
+      .map(([label, v]) => ({ label, value: v.qty.toNumber(), display: `${v.qty.toNumber()} قطعة · ${formatMoney(v.rev)}` }));
+  };
+  const [topProductsMonth, topProductsYear] = await Promise.all([
+    topBy(monthRange.from, monthRange.to),
+    topBy(from, to),
+  ]);
 
   const actions: QuickAction[] = [
     { href: '/sales/quotations/new', label: 'عرض سعر جديد', description: `${openQuotations} عرض مفتوح`, available: seeDocs },
@@ -220,12 +223,27 @@ export default async function SalesDashboard() {
           </section>
         )}
 
-        {/* رسم تفاعلي: أفضل المنتجات مبيعاً — أعمدة أفقية بالمرور. */}
-        {seeMoney && topProducts.length > 0 && (
+        {/* أفضل المنتجات مبيعاً بالعدد (بالمنتج لا المقاس) — هذا الشهر وهذا العام. */}
+        {seeMoney && (topProductsMonth.length > 0 || topProductsYear.length > 0) && (
           <section>
-            <SectionTitle note="من قيمة بنود الفواتير الصادرة">أفضل المنتجات مبيعاً</SectionTitle>
-            <div className="erp-card p-6">
-              <HBarChartInteractive points={topProducts} />
+            <SectionTitle note="بالعدد المباع — بالمنتج لا المقاس">أكثر المنتجات مبيعاً</SectionTitle>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="erp-card p-6">
+                <h3 className="mb-4 text-sm font-semibold text-brand">هذا الشهر</h3>
+                {topProductsMonth.length > 0 ? (
+                  <HBarChartInteractive points={topProductsMonth} />
+                ) : (
+                  <p className="py-6 text-center text-sm text-txt-3">لا مبيعات هذا الشهر.</p>
+                )}
+              </div>
+              <div className="erp-card p-6">
+                <h3 className="mb-4 text-sm font-semibold text-brand">هذا العام</h3>
+                {topProductsYear.length > 0 ? (
+                  <HBarChartInteractive points={topProductsYear} />
+                ) : (
+                  <p className="py-6 text-center text-sm text-txt-3">لا مبيعات هذا العام.</p>
+                )}
+              </div>
             </div>
           </section>
         )}

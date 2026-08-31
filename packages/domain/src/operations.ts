@@ -201,6 +201,17 @@ export const MANUAL_ORDER_SOURCES: readonly OrderSource[] = [
   'OTHER',
 ];
 
+/** مصدر تسجيل العميل — من أين أُضيف أول مرة. */
+export const CUSTOMER_SOURCES = ['SITE', 'LEAD', 'MANUAL', 'CASHIER'] as const;
+export type CustomerSource = (typeof CUSTOMER_SOURCES)[number];
+
+export const CUSTOMER_SOURCE_AR: Record<CustomerSource, string> = {
+  SITE: 'الموقع',
+  LEAD: 'ليدز / تواصل',
+  MANUAL: 'إضافة يدوية',
+  CASHIER: 'كاشير',
+};
+
 export const SUPPLY_KINDS = ['PRINTING', 'EMBROIDERY'] as const;
 export type SupplyKind = (typeof SUPPLY_KINDS)[number];
 
