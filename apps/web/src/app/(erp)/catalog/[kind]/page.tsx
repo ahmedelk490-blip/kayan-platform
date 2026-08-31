@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import { CatalogForm } from './CatalogForm';
+import { RenameForm } from './RenameForm';
 import { deleteCatalogItem } from '../actions';
 import { isKind, KINDS, type Kind } from '../types';
 
@@ -167,11 +168,14 @@ export default async function CatalogPage({ params }: { params: Promise<{ kind: 
               <td className="tnum px-4 py-3 text-txt-3">{row.count ?? 0}</td>
               <td className="px-4 py-3 text-end">
                 {canManage && (
-                  <form action={deleteCatalogItem.bind(null, kind, row.id)}>
-                    <button type="submit" className="text-xs text-bad hover:underline">
-                      حذف
-                    </button>
-                  </form>
+                  <div className="flex items-center justify-end gap-3">
+                    <RenameForm kind={kind} id={row.id} name={row.primary} hex={row.hex} />
+                    <form action={deleteCatalogItem.bind(null, kind, row.id)}>
+                      <button type="submit" className="text-xs text-bad hover:underline">
+                        حذف
+                      </button>
+                    </form>
+                  </div>
                 )}
               </td>
             </tr>

@@ -87,6 +87,58 @@ export async function createCatalogItem(
   return { ok: 'تمت الإضافة.' };
 }
 
+/**
+ * تعديل اسم عنصر قائمة (لون/مقاس/تصنيف…) — لتغيير التسمية، مثلاً لون مركّب
+ * «أسود · ياقة برتقالي». للألوان يقبل كود اللون (hex) أيضاً.
+ */
+export async function updateCatalogItem(
+  kind: Kind,
+  id: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requirePermission('catalog.manage');
+  const parsed = Base.safeParse({
+    nameAr: String(formData.get('nameAr') ?? ''),
+    nameEn: String(formData.get('nameEn') ?? ''),
+    extra: String(formData.get('extra') ?? ''),
+    code: String(formData.get('code') ?? ''),
+  });
+  if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
+
+  const { nameAr, nameEn, extra, code } = parsed.data;
+  const where = { id, tenantId: user.tenantId };
+
+  try {
+    switch (kind) {
+      case 'categories':
+        await prisma.category.updateMany({ where, data: { nameAr, nameEn: nameEn || nameAr } });
+        break;
+      case 'colors':
+        await prisma.color.updateMany({ where, data: { nameAr, nameEn: nameEn || null, ...(extra ? { hex: extra } : {}) } });
+        break;
+      case 'sizes':
+        await prisma.size.updateMany({ where, data: { nameAr, ...(code ? { code } : {}) } });
+        break;
+      case 'materials':
+        await prisma.material.updateMany({ where, data: { nameAr, nameEn: nameEn || null, ...(extra ? { spec: extra } : {}) } });
+        break;
+      case 'printing':
+        await prisma.printingOption.updateMany({ where, data: { nameAr, nameEn: nameEn || null, ...(extra ? { notes: extra } : {}) } });
+        break;
+      case 'embroidery':
+        await prisma.embroideryOption.updateMany({ where, data: { nameAr, nameEn: nameEn || null, ...(extra ? { notes: extra } : {}) } });
+        break;
+    }
+  } catch {
+    return { error: 'هذا الاسم موجود بالفعل.' };
+  }
+
+  await audit({ tenantId: user.tenantId, userId: user.id, action: 'catalog.update', entityType: kind, entityId: id, detail: nameAr });
+  revalidatePath(`/catalog/${kind}`);
+  return { ok: 'تم التعديل.' };
+}
+
 /** Soft delete — the row stays so products keep pointing at something real. */
 export async function deleteCatalogItem(kind: Kind, id: string): Promise<void> {
   const user = await requirePermission('catalog.manage');
