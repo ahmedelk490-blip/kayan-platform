@@ -190,7 +190,15 @@ export async function AppShell({
         detail: `الرصيد ${dec(s.onHand).toNumber()} ${s.unit ?? ''} ≤ الحد ${dec(s.minStock).toNumber()}`,
         href: '/supplies',
       }));
-    alerts = [...alerts, ...stockAlerts, ...supplyAlerts];
+
+    // تنبيه مُجمّع واحد للأصناف النافذة (رصيد ≤ 0) بلا إغراق الجرس بمئات السطور.
+    const outCount = await prisma.stock.count({
+      where: { onHand: { lte: 0 }, warehouse: { tenantId: user.tenantId, isDeleted: false } },
+    });
+    const outAlert: Alert[] = outCount > 0
+      ? [{ id: 'stock-out', label: `${outCount} صنف نافذ من المخزون`, detail: 'رصيدها صفر — راجع «نواقص وإعادة الطلب» لتوفيرها', href: '/inventory' }]
+      : [];
+    alerts = [...alerts, ...outAlert, ...stockAlerts, ...supplyAlerts];
   }
 
   const initials =
