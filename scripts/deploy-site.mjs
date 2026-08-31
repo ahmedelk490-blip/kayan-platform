@@ -106,6 +106,9 @@ run('node', [path.join(ROOT, 'scripts', 'package-hostinger.mjs'), 'platform'], {
 const stage = path.join(ROOT, 'dist-hostinger', 'kayan-platform');
 step('البناء');
 run('npm', ['install', '--no-audit', '--no-fund'], { cwd: stage });
+// عميل Prisma لا يتولّد وحده في الحزمة المسطّحة — بدونه يفشل فحص الأنواع
+// بعشرات أخطاء implicit-any لأن كل استعلام يرجع أنواعاً ناقصة.
+run('node', [path.join('node_modules', 'prisma', 'build', 'index.js'), 'generate'], { cwd: stage });
 run('npm', ['run', 'build'], {
   cwd: stage,
   env: {
@@ -155,7 +158,7 @@ if (withDeps) {
   // during boot, which on a process-capped shared host means the first
   // requests get a 503. Measured, not guessed.
   console.log(ssh(`export PATH=/opt/alt/alt-nodejs22/root/usr/bin:$PATH
-cd ${APP} && npm install --no-audit --no-fund 2>&1 | tail -2`));
+cd ${APP} && npm install --no-audit --no-fund 2>&1 | tail -2 && npx prisma generate 2>&1 | tail -1`));
 }
 
 step('الرفع');

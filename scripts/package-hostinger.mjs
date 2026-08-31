@@ -34,6 +34,9 @@ const TARGETS = {
     files: [
       'src',
       'public',
+      // سكربتات التطبيق نفسه — أمر build في package.json يستدعي
+      // scripts/finalize-standalone.mjs بعد next build، فبدونها يفشل البناء.
+      'scripts',
       'next.config.ts',
       'postcss.config.mjs',
       'tsconfig.json',
