@@ -15,7 +15,7 @@ export interface ReturnLine {
 
 /**
  * فورم مرتجع: صفٌّ لكل بند من الفاتورة بكمية مرتجعة (لا تتجاوز المباع)، وقيمة
- * المرتجع تظهر حيّاً. سبب اختياري. الصفوف بكمية صفر تُهمَل.
+ * المرتجع تظهر حيّاً. سبب الإرجاع إلزامي. الصفوف بكمية صفر تُهمَل.
  */
 export function ReturnForm({
   action,
@@ -26,11 +26,13 @@ export function ReturnForm({
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const [qty, setQty] = useState<Record<string, number>>({});
+  const [reason, setReason] = useState('');
 
   const total = lines.reduce((s, l) => s + (qty[l.id] || 0) * l.unitPrice, 0);
+  const reasonMissing = reason.trim().length === 0;
 
   return (
-    <form action={formAction} className="space-y-5" noValidate>
+    <form action={formAction} className="space-y-5">
       <FormError message={state.error} />
 
       <div className="overflow-x-auto">
@@ -88,8 +90,20 @@ export function ReturnForm({
       </div>
 
       <label className="block">
-        <span className="mb-1.5 block text-xs text-txt-2">سبب الإرجاع (اختياري)</span>
-        <input name="reason" className="erp-input py-2.5" placeholder="مثال: مقاس غير مناسب، عيب تصنيع…" />
+        <span className="mb-1.5 block text-xs text-txt-2">
+          سبب الإرجاع <span className="text-bad">*</span>
+        </span>
+        <input
+          name="reason"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          required
+          className="erp-input py-2.5"
+          placeholder="مثال: مقاس غير مناسب، عيب تصنيع…"
+        />
+        {reasonMissing && (
+          <span className="mt-1 block text-[0.7rem] text-txt-4">سبب الإرجاع إلزامي — اكتبه قبل التسجيل.</span>
+        )}
       </label>
 
       <label className="flex items-center gap-2.5 rounded-lg border border-line bg-card-2 px-4 py-3">

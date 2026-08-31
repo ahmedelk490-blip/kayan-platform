@@ -81,10 +81,13 @@ export async function createReturn(
   }
   if (retLines.length === 0) return { error: 'أدخل كمية مرتجعة لصنف واحد على الأقل.' };
 
+  // سبب الإرجاع إلزامي (بطلب المالك) — مرتجع بلا سبب لا يُقبل.
+  const reason = String(formData.get('reason') ?? '').trim();
+  if (!reason) return { error: 'سبب الإرجاع إلزامي — اكتب لماذا رجّع العميل البضاعة.' };
+
   const total = retLines.reduce((s, r) => s.plus(dec(r.line.unitPrice).times(dec(r.qty))), dec(0));
   const number = await nextReturnNumber(user.tenantId);
   const warehouseId = await defaultWarehouseId(user.tenantId);
-  const reason = String(formData.get('reason') ?? '').trim() || null;
 
   // رد المبلغ للعميل (اختياري، افتراضياً نعم) — لا يتجاوز ما دُفع فعلاً على
   // الفاتورة. يُسجَّل كدفعة سالبة تُنقص المدفوع وتُعيد اشتقاق حالة الفاتورة.

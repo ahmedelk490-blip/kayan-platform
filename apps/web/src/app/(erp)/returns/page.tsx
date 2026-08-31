@@ -8,10 +8,11 @@ import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import type { SearchParams } from '@/lib/query';
 import { deleteReturn } from './actions';
+import { categoriesOf } from './category';
 
 export const metadata: Metadata = { title: 'المرتجعات' };
 
-/** قائمة مرتجعات المبيعات — رقم، تاريخ، فاتورة، عميل، قيمة، عدد أصناف. */
+/** قائمة مرتجعات المبيعات — رقم، تاريخ، فاتورة، عميل، تصنيف، قطع، قيمة، وعرض التفاصيل. */
 export default async function ReturnsPage({
   searchParams,
 }: {
@@ -32,10 +33,14 @@ export default async function ReturnsPage({
     },
     orderBy: { returnDate: 'desc' },
     take: 200,
-    include: { _count: { select: { lines: true } } },
+    include: { lines: { select: { description: true, quantity: true } } },
   });
 
   const total = returns.reduce((s, r) => s.plus(dec(r.totalAmount)), dec(0));
+  // عدد القطع لكل مرتجع = مجموع كميات سطوره؛ والإجمالي لكرت الملخّص.
+  const piecesOf = (r: (typeof returns)[number]) =>
+    r.lines.reduce((s, l) => s + Number(l.quantity), 0);
+  const totalPieces = returns.reduce((s, r) => s + piecesOf(r), 0);
 
   return (
     <AppShell user={user} title="المرتجعات">
@@ -49,6 +54,10 @@ export default async function ReturnsPage({
         <div className="erp-card p-4">
           <p className="text-[0.7rem] text-txt-3">عدد المرتجعات</p>
           <p className="tnum mt-1 text-xl font-bold text-brand">{returns.length}</p>
+        </div>
+        <div className="erp-card p-4">
+          <p className="text-[0.7rem] text-txt-3">عدد القطع المرجعة</p>
+          <p className="tnum mt-1 text-xl font-bold text-brand">{totalPieces.toLocaleString('en-US')}</p>
         </div>
         <div className="erp-card p-4">
           <p className="text-[0.7rem] text-txt-3">إجمالي قيمة المرتجعات</p>
@@ -66,25 +75,37 @@ export default async function ReturnsPage({
       </form>
 
       <Table
-        headers={['الرقم', 'التاريخ', 'الفاتورة', 'العميل', 'الأصناف', 'القيمة', '']}
+        headers={['الرقم', 'التاريخ', 'الفاتورة', 'العميل', 'التصنيف', 'القطع', 'القيمة', '']}
         empty={returns.length === 0}
       >
         {returns.map((r) => (
           <tr key={r.id} className="hover:bg-card-2">
-            <td className="tnum px-4 py-3 text-txt">{r.number}</td>
+            <td className="tnum px-4 py-3 text-txt">
+              <Link href={`/returns/${r.id}`} className="hover:text-brand hover:underline">{r.number}</Link>
+            </td>
             <td className="tnum px-4 py-3 text-txt-3">{r.returnDate.toLocaleDateString('ar-EG')}</td>
             <td className="tnum px-4 py-3 text-txt-2">
               <Link href={`/invoices/${r.invoiceId}`} className="text-brand hover:underline">{r.invoiceNumber ?? '—'}</Link>
             </td>
             <td className="px-4 py-3 text-txt-2">{r.customerName ?? '—'}</td>
-            <td className="tnum px-4 py-3 text-txt-3">{r._count.lines}</td>
+            <td className="px-4 py-3">
+              <span className="inline-block rounded-full border border-line-2 bg-card-2 px-2.5 py-1 text-[0.7rem] text-txt-2">
+                {categoriesOf(r.lines.map((l) => l.description)).join(' + ')}
+              </span>
+            </td>
+            <td className="tnum px-4 py-3 text-txt-2">{piecesOf(r).toLocaleString('en-US')}</td>
             <td className="tnum px-4 py-3 font-medium text-brand">{formatMoney(dec(r.totalAmount))}</td>
             <td className="px-4 py-3 text-end">
-              {canWrite && (
-                <form action={deleteReturn.bind(null, r.id)}>
-                  <button type="submit" className="text-[0.7rem] text-bad hover:underline">حذف</button>
-                </form>
-              )}
+              <div className="flex items-center justify-end gap-3">
+                <Link href={`/returns/${r.id}`} className="text-[0.7rem] font-medium text-brand hover:underline">
+                  عرض
+                </Link>
+                {canWrite && (
+                  <form action={deleteReturn.bind(null, r.id)}>
+                    <button type="submit" className="text-[0.7rem] text-bad hover:underline">حذف</button>
+                  </form>
+                )}
+              </div>
             </td>
           </tr>
         ))}
