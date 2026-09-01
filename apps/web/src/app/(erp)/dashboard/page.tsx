@@ -267,18 +267,45 @@ export default async function ManagerDashboard() {
   // شغل اليوم أولاً: البيع والإرجاع والتقفيل — لا صفحات الإدارة.
   const canSell = can(user.role, 'invoices.write');
   const actions: QuickAction[] = [
-    { href: '/cashier', label: 'الكاشير', description: 'بيع سريع — صور أو كتابة', available: canSell },
-    { href: '/invoices/new', label: 'فاتورة جديدة', description: 'عميل وأصناف وإصدار فوري', available: canSell },
-    { href: '/returns/new', label: 'مرتجع جديد', description: 'إرجاع من فاتورة', available: can(user.role, 'returns.write') },
-    { href: '/reports/daily', label: 'يومية اليوم', description: 'مبيعات ومقبوض ومصاريف', available: can(user.role, 'reports.view') },
-    { href: '/inventory', label: 'المخزون', description: `${lowStock.length} صنف تحت الحد`, available: seeInventory },
-    { href: '/sales/quotations', label: 'عرض سعر جديد', description: `${quotationTotal} عرض مسجّل`, available: seeSales },
+    { href: '/cashier', label: 'الكاشير', description: 'بيع سريع — صور أو كتابة', available: canSell, emoji: '🛒', gradient: 'from-emerald-500 to-teal-700' },
+    { href: '/invoices/new', label: 'فاتورة جديدة', description: 'عميل وأصناف وإصدار فوري', available: canSell, emoji: '🧾', gradient: 'from-[#7d3349] to-[#5c2535]' },
+    { href: '/returns/new', label: 'مرتجع جديد', description: 'إرجاع من فاتورة', available: can(user.role, 'returns.write'), emoji: '↩️', gradient: 'from-amber-500 to-orange-600' },
+    { href: '/reports/daily', label: 'يومية اليوم', description: 'مبيعات ومقبوض ومصاريف', available: can(user.role, 'reports.view'), emoji: '📊', gradient: 'from-sky-500 to-blue-700' },
+    { href: '/inventory', label: 'المخزون', description: `${lowStock.length} صنف تحت الحد`, available: seeInventory, emoji: '📦', gradient: 'from-violet-500 to-purple-700' },
+    { href: '/sales/quotations', label: 'عرض سعر جديد', description: `${quotationTotal} عرض مسجّل`, available: seeSales, emoji: '📄', gradient: 'from-slate-500 to-slate-700' },
   ];
+
+  // نبض اليوم للهيرو: مبيعات ومقبوض اليوم بتوقيت بغداد — تجميعتان خفيفتان.
+  const dayStart = (() => {
+    const ref = new Date(Date.now() + 3 * 60 * 60 * 1000);
+    return new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), ref.getUTCDate()) - 3 * 60 * 60 * 1000);
+  })();
+  const [todayInv, todayPay] = await Promise.all([
+    prisma.invoice.aggregate({
+      where: {
+        tenantId,
+        isDeleted: false,
+        status: { notIn: ['DRAFT', 'VOID'] },
+        issueDate: { gte: dayStart },
+      },
+      _sum: { total: true },
+      _count: true,
+    }),
+    prisma.payment.aggregate({
+      where: { tenantId, paidAt: { gte: dayStart } },
+      _sum: { amount: true },
+    }),
+  ]);
+  const today = {
+    sales: formatMoney(dec(todayInv._sum.total ?? 0)),
+    collected: formatMoney(dec(todayPay._sum.amount ?? 0)),
+    invoices: todayInv._count,
+  };
 
   return (
     <AppShell user={user} title="لوحة المدير">
       <div className="space-y-7">
-        <WelcomeHeader name={user.nameAr ?? user.name} roleAr={user.roleNameAr} />
+        <WelcomeHeader name={user.nameAr ?? user.name} roleAr={user.roleNameAr} today={today} />
 
         {/* المهم أولاً: أزرار شغل اليوم قبل الأرقام والرسوم. */}
         <QuickActions actions={actions} />

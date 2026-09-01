@@ -165,17 +165,50 @@ export default async function SalesDashboard() {
     topBy(from, to),
   ]);
 
+  const canSell = can(user.role, 'invoices.write');
   const actions: QuickAction[] = [
-    { href: '/sales/quotations/new', label: 'عرض سعر جديد', description: `${openQuotations} عرض مفتوح`, available: seeDocs },
-    { href: '/sales/orders/new', label: 'أمر بيع جديد', description: `${orderTotal} أمر`, available: seeDocs },
-    { href: '/invoices', label: 'الفواتير والتحصيل', description: seeMoney ? `${formatMoney(outstanding)} مستحق` : '', available: seeMoney },
-    { href: '/requests', label: 'طلبات الموقع', description: `${leadCount} طلب`, available: seeCustomers },
+    { href: '/cashier', label: 'الكاشير', description: 'بيع سريع — صور أو كتابة', available: canSell, emoji: '🛒', gradient: 'from-emerald-500 to-teal-700' },
+    { href: '/invoices/new', label: 'فاتورة جديدة', description: 'عميل وأصناف وإصدار فوري', available: canSell, emoji: '🧾', gradient: 'from-[#7d3349] to-[#5c2535]' },
+    { href: '/sales/quotations/new', label: 'عرض سعر جديد', description: `${openQuotations} عرض مفتوح`, available: seeDocs, emoji: '📄', gradient: 'from-sky-500 to-blue-700' },
+    { href: '/sales/orders/new', label: 'أمر بيع جديد', description: `${orderTotal} أمر`, available: seeDocs, emoji: '📋', gradient: 'from-violet-500 to-purple-700' },
+    { href: '/invoices', label: 'الفواتير والتحصيل', description: seeMoney ? `${formatMoney(outstanding)} مستحق` : '', available: seeMoney, emoji: '💵', gradient: 'from-amber-500 to-orange-600' },
+    { href: '/requests', label: 'طلبات الموقع', description: `${leadCount} طلب`, available: seeCustomers, emoji: '🌐', gradient: 'from-slate-500 to-slate-700' },
   ];
+
+  // نبض اليوم للهيرو (بتوقيت بغداد) — بنطاق المندوب نفسه إن لم يرَ الكل.
+  const dayStart = (() => {
+    const ref = new Date(Date.now() + 3 * 60 * 60 * 1000);
+    return new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), ref.getUTCDate()) - 3 * 60 * 60 * 1000);
+  })();
+  const [todayInv, todayPay] = seeMoney
+    ? await Promise.all([
+        prisma.invoice.aggregate({
+          where: { tenantId, isDeleted: false, ...ownerScope, status: { notIn: ['DRAFT', 'VOID'] }, issueDate: { gte: dayStart } },
+          _sum: { total: true },
+          _count: true,
+        }),
+        prisma.payment.aggregate({
+          where: { tenantId, paidAt: { gte: dayStart }, ...(seeAll ? {} : { recordedById: user.id }) },
+          _sum: { amount: true },
+        }),
+      ])
+    : [null, null];
+  const today =
+    todayInv && todayPay
+      ? {
+          sales: formatMoney(dec(todayInv._sum.total ?? 0)),
+          collected: formatMoney(dec(todayPay._sum.amount ?? 0)),
+          invoices: todayInv._count,
+        }
+      : undefined;
 
   return (
     <AppShell user={user} title="لوحة المبيعات">
       <div className="space-y-7">
-        <WelcomeHeader name={user.nameAr ?? user.name} roleAr={user.roleNameAr} />
+        <WelcomeHeader name={user.nameAr ?? user.name} roleAr={user.roleNameAr} today={today} />
+
+        {/* شغل اليوم أولاً — البلاطات الملوّنة قبل الأرقام والرسوم. */}
+        <QuickActions actions={actions} />
 
         <section>
           <SectionTitle note="محسوبة مباشرة من قاعدة البيانات">نظرة المبيعات</SectionTitle>
@@ -297,10 +330,6 @@ export default async function SalesDashboard() {
           </Panel>
         </div>
 
-        <section>
-          <SectionTitle>إجراءات سريعة</SectionTitle>
-          <QuickActions actions={actions} />
-        </section>
       </div>
     </AppShell>
   );
