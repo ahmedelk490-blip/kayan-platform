@@ -40,6 +40,37 @@ export function CashierBoard({
   const [paid, setPaid] = useState(0);
   const [method, setMethod] = useState('CASH');
 
+  // إضافة سريعة بالكتابة: صنف + كمية + سعر من داخل اللوحة — بلا فتح الصور.
+  // السعر يُقترح من الشرائح عند الاختيار ويبقى بيد الكاشير (بطلب المالك).
+  const [quickVariantId, setQuickVariantId] = useState('');
+  const [quickQty, setQuickQty] = useState(1);
+  const [quickPrice, setQuickPrice] = useState(0);
+  const [quickReset, setQuickReset] = useState(0);
+  const quickVariant = variants.find((v) => v.value === quickVariantId) ?? null;
+
+  function pickQuickVariant(id: string) {
+    setQuickVariantId(id);
+    const v = variants.find((x) => x.value === id);
+    if (v) setQuickPrice(priceFor(v, 1));
+  }
+
+  function addQuick() {
+    if (!quickVariant || quickQty <= 0) return;
+    addLines([
+      {
+        key: `${quickVariant.value}:q:${Date.now()}`,
+        variantId: quickVariant.value,
+        label: quickVariant.label,
+        quantity: quickQty,
+        unitPrice: Math.max(0, quickPrice),
+      },
+    ]);
+    setQuickVariantId('');
+    setQuickQty(1);
+    setQuickPrice(0);
+    setQuickReset((n) => n + 1); // يعيد تركيب منتقي البحث ففراغه جاهز للصنف التالي
+  }
+
   // عميل سريع: اسم + موبايل مكان القائمة — للأوردر السريع على الكاونتر.
   const [quickCustomer, setQuickCustomer] = useState(false);
   const [quickName, setQuickName] = useState('');
@@ -82,7 +113,25 @@ export function CashierBoard({
             <button
               key={p.id}
               type="button"
-              onClick={() => setPicking(p.id)}
+              onClick={() => {
+                // منتج بمتغيّر واحد (لا ألوان ولا مقاسات متعددة): لمسة واحدة
+                // تضيفه للفاتورة مباشرة — النافذة فقط لمن يحتاج اختياراً.
+                const pv = variants.filter((v) => v.productId === p.id);
+                if (pv.length === 1) {
+                  const v = pv[0];
+                  addLines([
+                    {
+                      key: `${v.value}:${Date.now()}`,
+                      variantId: v.value,
+                      label: v.label,
+                      quantity: 1,
+                      unitPrice: priceFor(v, 1),
+                    },
+                  ]);
+                } else {
+                  setPicking(p.id);
+                }
+              }}
               className="group overflow-hidden rounded-2xl border border-line bg-card-2 text-start transition-colors hover:border-brand"
             >
               <div className="relative aspect-square bg-card">
@@ -112,6 +161,56 @@ export function CashierBoard({
         ))}
 
         <h3 className="text-sm font-semibold text-brand">الفاتورة ({cart.length})</h3>
+
+        {/* إضافة سريعة بالكتابة — كل التحكم في اللوحة: الصنف والكمية والسعر. */}
+        <div className="rounded-xl border border-dashed border-brand/40 bg-brand/5 p-3">
+          <p className="mb-2 text-[0.7rem] font-medium text-brand">
+            إضافة سريعة — اكتب اسم الصنف بدل الضغط على الصور
+          </p>
+          <SearchableSelect
+            key={quickReset}
+            name="quickPick"
+            options={variants.map((v) => ({ value: v.value, label: v.label }))}
+            placeholder="اكتب: يلك، تيشيرت، مريلة…"
+            onSelect={pickQuickVariant}
+          />
+          {quickVariant && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="flex items-center overflow-hidden rounded-lg border border-line-2">
+                <button
+                  type="button"
+                  aria-label="أنقص"
+                  onClick={() => setQuickQty((q) => Math.max(1, q - 1))}
+                  className="grid h-10 w-10 place-items-center text-lg text-txt-2 active:bg-card"
+                >
+                  −
+                </button>
+                <span className="tnum min-w-8 text-center text-sm font-medium text-txt">{quickQty}</span>
+                <button
+                  type="button"
+                  aria-label="زد"
+                  onClick={() => setQuickQty((q) => q + 1)}
+                  className="grid h-10 w-10 place-items-center text-lg text-txt-2 active:bg-card"
+                >
+                  +
+                </button>
+              </div>
+              <label className="flex items-center gap-1.5">
+                <span className="text-[0.7rem] text-txt-3">السعر</span>
+                <input
+                  type="number"
+                  dir="ltr"
+                  value={quickPrice}
+                  onChange={(e) => setQuickPrice(Math.max(0, Number(e.target.value) || 0))}
+                  className="erp-input w-24 py-2 text-start text-xs"
+                />
+              </label>
+              <button type="button" onClick={addQuick} className="erp-btn shrink-0 px-5 py-2.5 text-sm">
+                أضف
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="max-h-[40vh] space-y-2 overflow-y-auto">
           {cart.length === 0 ? (
