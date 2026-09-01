@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { PAYMENT_METHODS, PAYMENT_METHOD_AR } from '@erp/domain';
 import { Field, Select, TextArea, SubmitButton, FormError } from '@/components/crud/Form';
 import type { FormState } from './shared';
@@ -11,6 +11,9 @@ import type { FormState } from './shared';
  * The outstanding balance is offered as the default because "they paid the
  * rest" is the common case. The server re-checks it — the default is a
  * convenience, never the control.
+ *
+ * الحقول مضبوطة من الحالة عمداً: خطأُ تحقق من الخادم كان يعيد تعيين الفورم
+ * فيمسح المبلغ والمرجع والملاحظات المكتوبة (سلوك React 19 مع الفورمات الحرّة).
  */
 export function PaymentForm({
   action,
@@ -22,6 +25,9 @@ export function PaymentForm({
   today: string;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
+  const [amount, setAmount] = useState(outstanding);
+  const [reference, setReference] = useState('');
+  const [notes, setNotes] = useState('');
 
   return (
     <form action={formAction} className="space-y-4">
@@ -34,7 +40,8 @@ export function PaymentForm({
           type="number"
           required
           dir="ltr"
-          defaultValue={outstanding}
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
           hint={`المتبقي ${outstanding}`}
           errors={state.fieldErrors}
         />
@@ -58,11 +65,13 @@ export function PaymentForm({
           name="reference"
           label="المرجع"
           placeholder="رقم الشيك أو التحويل"
+          value={reference}
+          onChange={(e) => setReference(e.target.value)}
           errors={state.fieldErrors}
         />
       </div>
 
-      <TextArea name="notes" label="ملاحظات" rows={2} />
+      <TextArea name="notes" label="ملاحظات" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
 
       <div className="flex items-center gap-3">
         <SubmitButton label="تسجيل الدفعة" />
@@ -79,13 +88,24 @@ export function VoidForm({
   action: (state: FormState, formData: FormData) => Promise<FormState>;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
+  const [reason, setReason] = useState('');
 
   return (
     <form action={formAction} className="space-y-3">
       <FormError message={state.error} />
-      <TextArea name="reason" label="سبب الإلغاء (إلزامي)" rows={2} errors={state.fieldErrors} />
+      <TextArea
+        name="reason"
+        label="سبب الإلغاء (إلزامي)"
+        rows={2}
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        errors={state.fieldErrors}
+      />
       <button
         type="submit"
+        onClick={(e) => {
+          if (!window.confirm('إلغاء الفاتورة نهائياً؟ الرقم يبقى محجوزاً ولا يُتراجع عن الإلغاء.')) e.preventDefault();
+        }}
         className="rounded-lg border border-bad px-4 py-2 text-xs text-bad hover:bg-bad-soft"
       >
         إلغاء الفاتورة

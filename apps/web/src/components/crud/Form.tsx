@@ -20,6 +20,8 @@ export function Field({
   required,
   type = 'text',
   defaultValue,
+  value,
+  onChange,
   placeholder,
   dir,
   hint,
@@ -30,6 +32,9 @@ export function Field({
   required?: boolean;
   type?: string;
   defaultValue?: string | number | null;
+  /** الوضع المضبوط: مرِّر value+onChange كي لا يمسح خطأُ الخادم ما كتبه المستخدم. */
+  value?: string | number;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   placeholder?: string;
   dir?: 'ltr' | 'rtl';
   hint?: string;
@@ -47,7 +52,7 @@ export function Field({
         type={type}
         dir={dir}
         required={required}
-        defaultValue={defaultValue ?? undefined}
+        {...(value !== undefined ? { value, onChange } : { defaultValue: defaultValue ?? undefined })}
         placeholder={placeholder}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${name}-error` : hint ? `${name}-hint` : undefined}
@@ -72,12 +77,17 @@ export function TextArea({
   label,
   errors,
   defaultValue,
+  value,
+  onChange,
   rows = 3,
 }: {
   name: string;
   label: string;
   errors?: FieldErrors;
   defaultValue?: string | null;
+  /** الوضع المضبوط: مرِّر value+onChange كي لا يمسح خطأُ الخادم ما كتبه المستخدم. */
+  value?: string;
+  onChange?: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   rows?: number;
 }) {
   const error = errors?.[name];
@@ -90,7 +100,7 @@ export function TextArea({
         id={name}
         name={name}
         rows={rows}
-        defaultValue={defaultValue ?? undefined}
+        {...(value !== undefined ? { value, onChange } : { defaultValue: defaultValue ?? undefined })}
         aria-invalid={Boolean(error)}
         className={`erp-input resize-y py-2.5 ${error ? 'border-bad' : ''}`}
       />

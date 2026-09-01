@@ -7,6 +7,7 @@ import { can } from '@erp/domain';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import type { SearchParams } from '@/lib/query';
+import { ConfirmButton } from '@/components/crud/ConfirmButton';
 import { deleteReturn } from './actions';
 import { categoriesOf } from './category';
 
@@ -102,7 +103,10 @@ export default async function ReturnsPage({
                 </Link>
                 {canWrite && (
                   <form action={deleteReturn.bind(null, r.id)}>
-                    <button type="submit" className="text-[0.7rem] text-bad hover:underline">حذف</button>
+                    <ConfirmButton
+                      label="حذف"
+                      message={`حذف المرتجع ${r.number}؟ الحذف لا يسحب البضاعة من المخزون ولا يلغي رد المبلغ — صحّحهما يدوياً إن لزم.`}
+                    />
                   </form>
                 )}
               </div>

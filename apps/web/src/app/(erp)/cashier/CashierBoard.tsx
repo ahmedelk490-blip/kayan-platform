@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { formatMoney, PAYMENT_METHODS, PAYMENT_METHOD_AR, PRICE_SERVICE_AR, dec } from '@erp/domain';
 import { FormError } from '@/components/crud/Form';
 import { SearchableSelect } from '@/components/crud/SearchableSelect';
@@ -64,7 +65,8 @@ export function CashierBoard({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+    // pb-24 على الجوال: خلوص للشريط السفلي الثابت كي لا يغطي زر «بيع وتحصيل».
+    <div className="grid gap-6 pb-24 lg:grid-cols-[1.6fr_1fr] lg:pb-0">
       {/* شبكة المنتجات بالصور */}
       <div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
@@ -163,9 +165,7 @@ export function CashierBoard({
         </div>
         <p className="text-[0.7rem] text-txt-4">المتبقّي: <span className={`tnum font-semibold ${remaining.lte(0) ? 'text-ok' : 'text-warn'}`}>{formatMoney(remaining)}</span></p>
 
-        <button type="submit" disabled={cart.length === 0 || !customerId} className="erp-btn py-3.5 text-base disabled:opacity-40">
-          بيع وتحصيل
-        </button>
+        <CheckoutButton disabled={cart.length === 0 || !customerId} />
       </form>
 
       {picking && (
@@ -322,6 +322,20 @@ function VariantPicker({
         </button>
       </div>
     </div>
+  );
+}
+
+/** زر الإتمام: يتعطّل أثناء الإرسال — لمستان سريعتان لا تصنعان فاتورتين. */
+function CheckoutButton({ disabled }: { disabled: boolean }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={disabled || pending}
+      className="erp-btn py-3.5 text-base disabled:opacity-40"
+    >
+      {pending ? 'جارٍ إتمام البيع…' : 'بيع وتحصيل'}
+    </button>
   );
 }
 

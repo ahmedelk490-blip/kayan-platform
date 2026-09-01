@@ -20,6 +20,8 @@ import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import { CopyButton } from '@/components/crud/CopyButton';
+import { ConfirmButton } from '@/components/crud/ConfirmButton';
+import { SubmitButton } from '@/components/crud/Form';
 import { dateInput } from '@/lib/ops';
 import type { SearchParams } from '@/lib/query';
 import { PaymentForm, VoidForm } from '../PaymentForm';
@@ -131,9 +133,8 @@ export default async function InvoicePage({
             )}
             {canIssue && status === 'DRAFT' && (
               <form action={issueInvoice.bind(null, invoice.id)}>
-                <button type="submit" className="erp-btn">
-                  إصدار الفاتورة
-                </button>
+                {/* SubmitButton يتعطّل أثناء الإرسال — ضغطة مزدوجة لا تحرق رقمين. */}
+                <SubmitButton label="إصدار الفاتورة" />
               </form>
             )}
           </div>
@@ -252,9 +253,10 @@ export default async function InvoicePage({
                       <td className="px-4 py-3 text-end">
                         {canPay && !isReversal && !wasReversed && (
                           <form action={reversePayment.bind(null, invoice.id, p.id)}>
-                            <button type="submit" className="text-[0.7rem] text-bad hover:underline">
-                              عكس
-                            </button>
+                            <ConfirmButton
+                              label="عكس"
+                              message={`عكس الدفعة ${p.number} بمبلغ ${formatMoney(p.amount)}؟ سيُنقص المدفوع بهذا المبلغ ولا يُتراجع عن العكس.`}
+                            />
                           </form>
                         )}
                         {wasReversed && <span className="text-[0.7rem] text-txt-4">معكوسة</span>}

@@ -70,7 +70,9 @@ export function ReturnForm({
                         max={remaining}
                         step="1"
                         dir="ltr"
-                        defaultValue={0}
+                        // مضبوط من الحالة لا defaultValue: خطأ تحقق من الخادم كان
+                        // يعيد تعيين الفورم فيمسح كل الكميات المدخلة (React 19).
+                        value={qty[l.id] ?? 0}
                         onChange={(e) => {
                           const v = Math.max(0, Math.min(remaining, Math.round(Number(e.target.value) || 0)));
                           setQty((p) => ({ ...p, [l.id]: v }));
