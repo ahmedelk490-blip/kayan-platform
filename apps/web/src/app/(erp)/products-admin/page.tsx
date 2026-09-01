@@ -5,18 +5,19 @@ import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader } from '@/components/crud/Shell';
+import { StatCard } from '@/components/dashboard/StatCard';
+import { QuickActions, type QuickAction } from '@/components/dashboard/QuickActions';
+import { IconProduct, IconCategory, IconBell, IconActivity } from '@/components/dashboard/Icons';
 import { DonutChartInteractive } from '@/components/dashboard/DonutChartInteractive';
 import { HBarChartInteractive } from '@/components/dashboard/HBarChartInteractive';
 
 export const metadata: Metadata = { title: 'لوحة إدارة المنتجات' };
 
-interface Shortcut { href: string; title: string; desc: string; show: boolean }
-
 /**
- * لوحة إدارة المنتجات — قسمٌ مستقل يجمع كل ما يخصّ المنتجات والمخزون في مكان
- * واحد ومنظّم: أرقام سريعة، رسمان تفاعليّان (توزيع المنتجات وقيمة المخزون حسب
- * التصنيف)، ثم بطاقات شورت-كت مقسّمة لمجموعتين واضحتين. بوابة منظّمة تفتح على
- * الشاشات الفعلية، لا شاشة عمل بذاتها.
+ * لوحة إدارة المنتجات — بوابة تُقرأ بنظرة، بأسلوب لوحة المدير نفسه.
+ *
+ * كانت بطاقات نصية رمادية وقوائم؛ صارت: بلاطات ملوّنة تفتح كل شاشة، صف
+ * أرقام واحد، ورسمان تفاعليان. لا سرد — كل التفاصيل خلف بلاطتها.
  */
 export default async function ProductsAdminPage() {
   const user = await requirePermission('products.read');
@@ -75,97 +76,84 @@ export default async function ProductsAdminPage() {
   const canWrite = can(user.role, 'products.write');
   const seeInventory = can(user.role, 'inventory.read');
 
-  const stats = [
-    { label: 'إجمالي المنتجات', value: String(productCount), hint: `${activeCount} نشط`, tone: undefined as 'bad' | undefined },
-    { label: 'المتغيّرات (لون×مقاس)', value: String(variantCount), hint: undefined, tone: undefined },
-    { label: 'السيريات المعرّفة', value: String(seriesCount), hint: undefined, tone: undefined },
-    { label: 'أصناف تحت الحدّ', value: String(lowStock), hint: lowStock > 0 ? 'تحتاج طلب' : 'كله فوق الحدّ', tone: lowStock > 0 ? ('bad' as const) : undefined },
-    { label: 'قيمة المخزون بالتكلفة', value: formatMoney(inventoryValue), hint: undefined, tone: undefined },
-  ];
-
-  const productCards: Shortcut[] = [
-    { href: '/catalog/products', title: 'المنتجات', desc: 'قائمة المنتجات، بحث وفلترة، وتعديل (مع الدست والأسعار).', show: true },
-    { href: '/catalog/products/new', title: '+ منتج جديد', desc: 'أضِف منتجاً بنظام الدست، وحدّد قطع الدستة وتكلفتها وسعرها.', show: canWrite },
-    { href: '/catalog/products', title: 'السيريات والأسعار', desc: 'توزيع مقاسات السيريه وسعر الدست — من داخل صفحة المنتج.', show: canWrite },
-    { href: '/catalog/categories', title: 'التصنيفات والقوائم', desc: 'أصناف المنتجات وترتيبها.', show: true },
-    { href: '/catalog/review', title: 'مراجعة عرض الموقع', desc: 'المنتجات المعروضة على الموقع والموافقة عليها.', show: true },
-  ];
-  const stockCards: Shortcut[] = [
-    { href: '/inventory', title: 'الجرد الكامل', desc: 'جرد المخزن بالدست والقطعة، مع قيمة كل صنف.', show: seeInventory },
-    { href: '/inventory', title: 'النواقص وإعادة الطلب', desc: 'الأصناف تحت الحدّ الأدنى وما يجب طلبه.', show: seeInventory },
-    { href: '/inventory', title: 'تسجيل حركة مخزون', desc: 'إدخال/صرف بالدست + قطعة زيادة — يتحسب أوتوماتيك.', show: seeInventory && canWrite },
+  // كل شاشات القسم كبلاطات ملوّنة — بلون هوية كل فعل.
+  const actions: QuickAction[] = [
+    { href: '/catalog/products', label: 'المنتجات', description: 'قائمة، بحث، وتعديل بالدست', available: true, emoji: '👕', gradient: 'from-[#7d3349] to-[#5c2535]' },
+    { href: '/catalog/products/new', label: 'منتج جديد', description: 'دستة وتكلفة وسعر', available: canWrite, emoji: '➕', gradient: 'from-emerald-500 to-teal-700' },
+    { href: '/catalog/categories', label: 'التصنيفات', description: 'الأصناف وترتيبها', available: true, emoji: '🗂️', gradient: 'from-sky-500 to-blue-700' },
+    { href: '/catalog/review', label: 'عرض الموقع', description: 'ما يراه الزبون وموافقته', available: true, emoji: '🌐', gradient: 'from-violet-500 to-purple-700' },
+    { href: '/inventory', label: 'الجرد الكامل', description: 'بالدست والقطعة وقيمته', available: seeInventory, emoji: '📦', gradient: 'from-amber-500 to-orange-600' },
+    { href: '/inventory?tab=reorder', label: 'النواقص', description: lowStock > 0 ? `${lowStock} صنف يحتاج طلباً` : 'كله فوق الحدّ', available: seeInventory, emoji: '⚠️', gradient: 'from-rose-500 to-red-700' },
   ];
 
   return (
     <AppShell user={user} title="لوحة إدارة المنتجات">
-      <ModuleHeader
-        title="لوحة إدارة المنتجات"
-        action={canWrite ? <Link href="/catalog/products/new" className="erp-btn">+ منتج جديد</Link> : null}
-      />
+      <div className="space-y-6">
+        <ModuleHeader
+          title="لوحة إدارة المنتجات"
+          action={canWrite ? <Link href="/catalog/products/new" className="erp-btn">+ منتج جديد</Link> : null}
+        />
 
-      {/* أرقام سريعة */}
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {stats.map((s) => (
-          <div key={s.label} className="erp-card p-4">
-            <p className="text-[0.7rem] text-txt-3">{s.label}</p>
-            <p className={`tnum mt-1 text-xl font-bold ${s.tone === 'bad' ? 'text-bad' : 'text-brand'}`}>{s.value}</p>
-            {s.hint && <p className="mt-0.5 text-[0.7rem] text-txt-4">{s.hint}</p>}
-          </div>
-        ))}
+        <QuickActions actions={actions} />
+
+        {/* الأرقام الأربعة — لا أكثر. */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            index={0}
+            label="المنتجات"
+            value={productCount}
+            unit="منتج"
+            hint={`${activeCount} نشط · ${variantCount} متغيّر`}
+            icon={<IconProduct />}
+            tone="primary"
+          />
+          <StatCard
+            index={1}
+            label="السيريات المعرّفة"
+            value={seriesCount}
+            unit="سيريه"
+            hint="توزيعات مقاسات جاهزة"
+            icon={<IconActivity />}
+            tone="neutral"
+          />
+          <StatCard
+            index={2}
+            label="أصناف تحت الحدّ"
+            value={lowStock}
+            unit="صنف"
+            hint={lowStock > 0 ? 'افتح النواقص لطلبها' : 'كله فوق الحدّ'}
+            icon={<IconBell />}
+            tone={lowStock > 0 ? 'warning' : 'success'}
+          />
+          <StatCard
+            index={3}
+            label="قيمة المخزون بالتكلفة"
+            value={formatMoney(inventoryValue)}
+            icon={<IconCategory />}
+            tone="success"
+          />
+        </div>
+
+        {/* رسمان تفاعليان — بصريان، بلا سطور. */}
+        <div className="grid gap-4 lg:grid-cols-2">
+          <section className="erp-card p-5">
+            <h3 className="mb-4 text-sm font-semibold text-brand">توزيع المنتجات حسب التصنيف</h3>
+            {donutPoints.length > 0 ? (
+              <DonutChartInteractive points={donutPoints} />
+            ) : (
+              <p className="py-8 text-center text-xs text-txt-4">لا منتجات بعد.</p>
+            )}
+          </section>
+          <section className="erp-card p-5">
+            <h3 className="mb-4 text-sm font-semibold text-brand">قيمة المخزون حسب التصنيف</h3>
+            {valuePoints.length > 0 ? (
+              <HBarChartInteractive points={valuePoints} />
+            ) : (
+              <p className="py-8 text-center text-xs text-txt-4">لا رصيد بتكلفة معروفة بعد.</p>
+            )}
+          </section>
+        </div>
       </div>
-
-      {/* رسمان تفاعليان */}
-      <div className="mb-8 grid gap-4 lg:grid-cols-2">
-        <section className="erp-card p-5">
-          <h3 className="mb-4 text-sm font-semibold text-brand">توزيع المنتجات حسب التصنيف</h3>
-          {donutPoints.length > 0 ? (
-            <DonutChartInteractive points={donutPoints} />
-          ) : (
-            <p className="py-8 text-center text-xs text-txt-4">لا منتجات بعد.</p>
-          )}
-        </section>
-        <section className="erp-card p-5">
-          <h3 className="mb-4 text-sm font-semibold text-brand">قيمة المخزون حسب التصنيف</h3>
-          {valuePoints.length > 0 ? (
-            <HBarChartInteractive points={valuePoints} />
-          ) : (
-            <p className="py-8 text-center text-xs text-txt-4">لا رصيد بتكلفة معروفة بعد.</p>
-          )}
-        </section>
-      </div>
-
-      {/* بطاقات مقسّمة لمجموعتين */}
-      <CardGroup title="المنتجات" cards={productCards} />
-      <CardGroup title="المخزون والجرد" cards={stockCards} />
     </AppShell>
-  );
-}
-
-/** مجموعة بطاقات شورت-كت تحت عنوان — تنظّم الروابط بصرياً. */
-function CardGroup({ title, cards }: { title: string; cards: Shortcut[] }) {
-  const shown = cards.filter((c) => c.show);
-  if (shown.length === 0) return null;
-  return (
-    <section className="mb-6">
-      <h2 className="mb-3 text-xs font-semibold text-txt-3">{title}</h2>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {shown.map((c) => (
-          <Link
-            key={c.title}
-            href={c.href}
-            className="group flex items-start justify-between gap-3 rounded-2xl border border-line bg-card p-5 transition-colors hover:border-brand hover:bg-card-2"
-          >
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-txt group-hover:text-brand">{c.title}</h3>
-              <p className="mt-1 text-[0.7rem] leading-[1.8] text-txt-4">{c.desc}</p>
-            </div>
-            <svg className="mt-0.5 shrink-0 text-txt-4 transition-transform group-hover:-translate-x-1 group-hover:text-brand" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <line x1="19" y1="12" x2="5" y2="12" />
-              <polyline points="12 19 5 12 12 5" />
-            </svg>
-          </Link>
-        ))}
-      </div>
-    </section>
   );
 }

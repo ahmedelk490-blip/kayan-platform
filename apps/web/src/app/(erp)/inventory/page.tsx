@@ -1,11 +1,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { can, available, dec, formatQty, formatMoney, type Numeric } from '@erp/domain';
+import { can, available, dec, formatQty, formatMoney } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { SegmentedTabs } from '@/components/SegmentedTabs';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
+import { StatCard } from '@/components/dashboard/StatCard';
+import { IconProduct, IconClock, IconBell, IconActivity } from '@/components/dashboard/Icons';
 import { MovementModal } from './MovementModal';
 import { MinStockCell } from './MinStockCell';
 import { ShareShortages } from './ShareShortages';
@@ -267,21 +269,42 @@ export default async function InventoryPage({
         </a>
       )}
 
+      {/* أرقام حيّة بأيقونات وعدّادات — بأسلوب لوحة المدير نفسه. */}
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Metric label="رصيد المنتجات" value={totals.onHand} />
-        <Metric label="محجوز للبيع" value={totals.reserved} />
-        <Metric
+        <StatCard
+          index={0}
+          label="رصيد المنتجات"
+          value={Number(dec(totals.onHand))}
+          unit="قطعة"
+          icon={<IconProduct />}
+          tone="primary"
+        />
+        <StatCard
+          index={1}
+          label="محجوز للبيع"
+          value={Number(dec(totals.reserved))}
+          unit="قطعة"
+          icon={<IconClock />}
+          tone="neutral"
+        />
+        <StatCard
+          index={2}
           label="منتجات نافذة"
           value={outOfStock.length}
-          tone={outOfStock.length > 0 ? 'bad' : 'muted'}
+          unit="صنف"
           hint={`${lowStock.length} قاربت على النفاد`}
+          icon={<IconBell />}
+          tone={outOfStock.length > 0 ? 'warning' : 'success'}
         />
         {seeSupplies && (
-          <Metric
+          <StatCard
+            index={3}
             label="خامات نافذة"
             value={emptySupplies.length}
-            tone={emptySupplies.length > 0 ? 'bad' : 'muted'}
+            unit="خامة"
             hint={`${lowSupplies.length} قاربت على النفاد`}
+            icon={<IconActivity />}
+            tone={emptySupplies.length > 0 ? 'warning' : 'success'}
           />
         )}
       </div>
@@ -533,24 +556,3 @@ export default async function InventoryPage({
   );
 }
 
-function Metric({
-  label,
-  value,
-  tone,
-  hint,
-}: {
-  label: string;
-  value: Numeric;
-  tone?: 'bad' | 'muted';
-  hint?: string;
-}) {
-  return (
-    <div className="erp-card p-5">
-      <p className="text-xs text-txt-3">{label}</p>
-      <p className={`tnum mt-2 text-2xl font-semibold ${tone === 'bad' ? 'text-bad' : 'text-brand'}`}>
-        {formatQty(value)}
-      </p>
-      {hint && <p className="mt-0.5 text-[0.7rem] text-txt-4">{hint}</p>}
-    </div>
-  );
-}
