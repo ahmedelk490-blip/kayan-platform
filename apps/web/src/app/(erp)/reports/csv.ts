@@ -32,7 +32,8 @@ export function csvResponse(filename: string, headers: string[], rows: unknown[]
   });
 }
 
-/** اسم ملف مختوم بالتاريخ: kayan-inventory-2026-08-22.csv */
+/** اسم ملف مختوم بتاريخ يوم بغداد: kayan-inventory-2026-08-22.csv */
 export function stampedName(base: string): string {
-  return `${base}-${new Date().toISOString().slice(0, 10)}.csv`;
+  const iraq = new Date(Date.now() + 3 * 60 * 60 * 1000);
+  return `${base}-${iraq.toISOString().slice(0, 10)}.csv`;
 }

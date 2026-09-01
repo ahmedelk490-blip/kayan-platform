@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { dec } from '@erp/domain';
+import { dec, iraqYear } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
@@ -10,9 +10,9 @@ import { num } from '@/lib/num';
 import type { FormState } from '@/lib/ops';
 import { lockPaymentSequence, nextPaymentNumber } from '@/app/(erp)/invoices/shared';
 
-/** رقم مرتجع متسلسل للسنة: RET-YYYY-N. */
+/** رقم مرتجع متسلسل للسنة (سنة بغداد): RET-YYYY-N. */
 async function nextReturnNumber(tenantId: string): Promise<string> {
-  const stem = `RET-${new Date().getFullYear()}-`;
+  const stem = `RET-${iraqYear()}-`;
   const rows = await prisma.salesReturn.findMany({
     where: { tenantId, number: { startsWith: stem } },
     select: { number: true },

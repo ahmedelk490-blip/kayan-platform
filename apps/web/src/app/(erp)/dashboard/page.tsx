@@ -94,7 +94,8 @@ export default async function ManagerDashboard() {
     prisma.category.count({ where: { tenantId, isDeleted: false } }),
     seeCustomers ? prisma.customer.count({ where: { tenantId, isDeleted: false } }) : 0,
     prisma.user.count({ where: { tenantId } }),
-    prisma.session.count({ where: { revokedAt: null, expiresAt: { gt: new Date() } } }),
+    // جلسات هذا المستأجر فقط — بلا شرط المستخدم كانت تُعدّ جلسات كل المستأجرين.
+    prisma.session.count({ where: { revokedAt: null, expiresAt: { gt: new Date() }, user: { tenantId } } }),
     prisma.auditLog.count({ where: { tenantId } }),
 
     seeSales

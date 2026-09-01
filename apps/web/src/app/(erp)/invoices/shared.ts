@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { Prisma } from '@prisma/client';
+import { iraqYear } from '@erp/domain';
 import { prisma } from '@/lib/prisma';
 
 export interface FormState {
@@ -32,7 +33,9 @@ export async function allocateInvoiceNumber(
   tenantId: string,
   prefix: string,
 ): Promise<string> {
-  const year = new Date().getFullYear();
+  // سنة بغداد لا سنة الخادم — أول ثلاث ساعات من رأس السنة العراقية كانت
+  // تواصل ترقيم العام المنصرم.
+  const year = iraqYear();
 
   // Upsert-then-lock: the row must exist before it can be locked, and the
   // first invoice of a year would otherwise find nothing to lock.
@@ -79,7 +82,7 @@ export async function lockPaymentSequence(
   tx: Prisma.TransactionClient,
   tenantId: string,
 ): Promise<void> {
-  const year = new Date().getFullYear();
+  const year = iraqYear();
   await tx.$executeRaw`
     INSERT INTO \`DocumentSequence\` (\`id\`, \`tenantId\`, \`kind\`, \`year\`, \`lastNumber\`, \`updatedAt\`)
     VALUES (${`seq_${tenantId}_PAYMENT_${year}`}, ${tenantId}, 'PAYMENT', ${year}, 0, NOW())
@@ -98,7 +101,7 @@ export async function nextPaymentNumber(
   tenantId: string,
   db: Prisma.TransactionClient | typeof prisma = prisma,
 ): Promise<string> {
-  const stem = `PAY-${new Date().getFullYear()}-`;
+  const stem = `PAY-${iraqYear()}-`;
   const rows = await db.payment.findMany({
     where: { tenantId, number: { startsWith: stem } },
     select: { number: true },

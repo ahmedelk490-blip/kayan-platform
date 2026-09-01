@@ -27,7 +27,8 @@ export default async function AdminPage() {
       include: { _count: { select: { permissions: true, users: true } } },
       orderBy: { key: 'asc' },
     }),
-    prisma.session.count({ where: { revokedAt: null, expiresAt: { gt: new Date() } } }),
+    // جلسات هذا المستأجر فقط — بلا شرط المستخدم كانت تُعدّ جلسات كل المستأجرين.
+    prisma.session.count({ where: { revokedAt: null, expiresAt: { gt: new Date() }, user: { tenantId: user.tenantId } } }),
     prisma.auditLog.count({ where: { tenantId: user.tenantId } }),
   ]);
 

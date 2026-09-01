@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { iraqYear } from '@erp/domain';
 import { prisma } from '@/lib/prisma';
 
 export interface FormState {
@@ -20,7 +21,7 @@ export async function nextDocumentNumber(
   kind: 'QUO' | 'SO',
   tenantId: string,
 ): Promise<string> {
-  const year = new Date().getFullYear();
+  const year = iraqYear();
   const prefix = `${kind}-${year}-`;
 
   const rows =

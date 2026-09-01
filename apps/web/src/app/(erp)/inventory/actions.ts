@@ -232,8 +232,10 @@ export async function setLevels(_prev: FormState, formData: FormData): Promise<F
     return { fieldErrors: { maxStock: 'الحد الأقصى يجب أن يكون أكبر من الأدنى.' } };
   }
 
-  await prisma.stock.update({
-    where: { id: parsed.data.stockId },
+  // updateMany بشرط المستأجر: stockId يصل من المتصفح، وبلا الشرط كان يعدّل
+  // صفوف مستأجرين آخرين.
+  await prisma.stock.updateMany({
+    where: { id: parsed.data.stockId, variant: { product: { tenantId: user.tenantId } } },
     data: { minStock: parsed.data.minStock, maxStock: max },
   });
 

@@ -393,12 +393,17 @@ export async function setWorkOrderStatus(
   workOrderId: string,
   next: string,
 ): Promise<void> {
-  await requirePermission('manufacturing.write');
+  const user = await requirePermission('manufacturing.write');
   if (!isWorkOrderStatus(next)) return;
 
   const now = new Date();
-  await prisma.workOrder.update({
-    where: { id: workOrderId },
+  // updateMany بشرط المستأجر: المعرّفات تصل من المتصفح، وبلا الشرط كان يقلب
+  // حالة أوامر تشغيل مستأجرين آخرين.
+  await prisma.workOrder.updateMany({
+    where: {
+      id: workOrderId,
+      productionOrder: { id: productionOrderId, tenantId: user.tenantId },
+    },
     data: {
       status: next,
       ...(next === 'IN_PROGRESS' ? { actualStartDate: now } : {}),

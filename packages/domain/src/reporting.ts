@@ -28,33 +28,61 @@ export const PERIOD_AR: Record<Period, string> = {
   ALL: 'كل الفترات',
 };
 
+/** إزاحة توقيت العراق: UTC+3 ثابتة بلا توقيت صيفي. يوم العمل يومُ بغداد لا يوم الخادم. */
+export const IRAQ_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+/** لحظة «الآن» منقولة لعقارب بغداد — اقرأ مكوّناتها بدوال getUTC*. */
+export function iraqNow(now: Date = new Date()): Date {
+  return new Date(now.getTime() + IRAQ_OFFSET_MS);
+}
+
+/** سنة العراق الحالية — لترقيم المستندات، فلا يبدأ عامُ بغداد بأرقام العام الماضي. */
+export function iraqYear(now: Date = new Date()): number {
+  return iraqNow(now).getUTCFullYear();
+}
+
+/** منتصف ليل بغداد ليومٍ معيّن، كنقطة زمنية UTC حقيقية. */
+export function iraqMidnight(year: number, monthIndex: number, day: number): Date {
+  return new Date(Date.UTC(year, monthIndex, day) - IRAQ_OFFSET_MS);
+}
+
 /**
- * Start and end of a period, anchored on a reference date.
+ * Start and end of a period, anchored on a reference date — **بيوم العراق**.
+ *
+ * الخادم يعمل بـUTC وبغداد +3: حسابُ الحدود بتوقيت الخادم كان يزيح كل
+ * تقرير ثلاث ساعات، فتسقط فواتير أول الليل من تقرير يومها وتُحسب في اليوم
+ * السابق. الحدود تُبنى من مكوّنات تاريخ بغداد ثم تُعاد كنقاط UTC، فتصحّ
+ * على أي خادم أياً كانت منطقته.
  *
  * `ALL` returns a window wide enough to hold any record this system could
  * hold, rather than null — a caller that forgets to branch then gets
  * everything, which is what ALL means, instead of a crash.
  */
 export function periodRange(period: Period, now: Date = new Date()): { from: Date; to: Date } {
-  const year = now.getFullYear();
+  const ref = iraqNow(now);
+  const year = ref.getUTCFullYear();
+  const month = ref.getUTCMonth();
 
   switch (period) {
     case 'MONTH':
       return {
-        from: new Date(year, now.getMonth(), 1),
-        to: new Date(year, now.getMonth() + 1, 0, 23, 59, 59, 999),
+        from: iraqMidnight(year, month, 1),
+        to: new Date(iraqMidnight(year, month + 1, 1).getTime() - 1),
       };
     case 'QUARTER': {
-      const firstMonth = Math.floor(now.getMonth() / 3) * 3;
+      const firstMonth = Math.floor(month / 3) * 3;
       return {
-        from: new Date(year, firstMonth, 1),
-        to: new Date(year, firstMonth + 3, 0, 23, 59, 59, 999),
+        from: iraqMidnight(year, firstMonth, 1),
+        to: new Date(iraqMidnight(year, firstMonth + 3, 1).getTime() - 1),
       };
     }
     case 'YEAR':
-      return { from: new Date(year, 0, 1), to: new Date(year, 11, 31, 23, 59, 59, 999) };
+      return {
+        from: iraqMidnight(year, 0, 1),
+        to: new Date(iraqMidnight(year + 1, 0, 1).getTime() - 1),
+      };
     case 'ALL':
-      return { from: new Date(2000, 0, 1), to: new Date(2999, 11, 31, 23, 59, 59, 999) };
+      return { from: new Date(Date.UTC(2000, 0, 1)), to: new Date(Date.UTC(2999, 11, 31)) };
   }
 }
 
@@ -62,9 +90,10 @@ export function isPeriod(v: string): v is Period {
   return (PERIODS as readonly string[]).includes(v);
 }
 
-/** `2026-08` — the key a monthly series is grouped by. */
+/** `2026-08` — the key a monthly series is grouped by (بشهر بغداد لا شهر الخادم). */
 export function monthKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  const d = iraqNow(date);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
 // ── Totals that know whether they are empty ─────────────────
