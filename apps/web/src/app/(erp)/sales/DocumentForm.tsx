@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 import {
   calcLine,
   calcDocument,
@@ -177,6 +177,8 @@ export function DocumentForm({
   bundles = [],
   webOrderId,
   sources,
+  allowNewCustomer = false,
+  lastPriceAction,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   customers: { value: string; label: string }[];
@@ -194,6 +196,10 @@ export function DocumentForm({
   bundles?: BundleOption[];
   /** طلب موقع مصدر هذه الفاتورة — يُوسَم «تحوّل» عند الإنشاء. */
   webOrderId?: string;
+  /** يُظهر «+ عميل جديد» داخل الفورم (اسم وهاتف) بدل مغادرة الفاتورة. */
+  allowNewCustomer?: boolean;
+  /** يجلب آخر سعر بيع (عميل × متغيّر) ليظهر تلميحاً تحت خانة السعر. */
+  lastPriceAction?: (customerId: string, variantId: string) => Promise<{ price: number; date: string } | null>;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const [lines, setLines] = useState<DocLine[]>(() =>
@@ -204,6 +210,25 @@ export function DocumentForm({
   const [issueNow, setIssueNow] = useState(instantDefault);
   const [payMethod, setPayMethod] = useState('CASH');
   const [payAmount, setPayAmount] = useState(0);
+
+  // «+ عميل جديد» داخل الفورم: اسم وهاتف بدل مغادرة الفاتورة والرجوع.
+  const [newCustomer, setNewCustomer] = useState(false);
+
+  // آخر سعر (عميل × متغيّر): يُجلب عند اكتمال الاختيار ويُعرض تلميحاً.
+  const [customerId, setCustomerId] = useState(values?.customerId ?? '');
+  const [lastPrices, setLastPrices] = useState<Record<string, { price: number; date: string }>>({});
+  const fetchedPrices = useRef(new Set<string>());
+  useEffect(() => {
+    if (!lastPriceAction || !customerId || newCustomer) return;
+    for (const vid of new Set(lines.map((l) => l.variantId).filter(Boolean))) {
+      const key = `${customerId}:${vid}`;
+      if (fetchedPrices.current.has(key)) continue;
+      fetchedPrices.current.add(key);
+      lastPriceAction(customerId, vid).then((res) => {
+        if (res) setLastPrices((p) => ({ ...p, [key]: res }));
+      });
+    }
+  }, [customerId, lines, lastPriceAction, newCustomer]);
 
   // منتقي السيريه: منتج ← لون ← سيريه ← عدد الأطقم، يتوسّع إلى سطور.
   const [seriesProductId, setSeriesProductId] = useState('');
@@ -352,20 +377,51 @@ export function DocumentForm({
         </p>
       )}
 
-      {/* ١. العميل — قائمة قابلة للبحث بالكتابة، الأحدث أولاً. */}
-      <label className="block">
-        <span className="mb-1.5 block text-xs text-txt-2">العميل</span>
-        <SearchableSelect
-          name="customerId"
-          options={customers}
-          placeholder="ابحث عن العميل أو اختره…"
-          defaultValue={values?.customerId}
-          required
-        />
+      {/* ١. العميل — قائمة قابلة للبحث، أو «+ عميل جديد» (اسم وهاتف) في مكانه. */}
+      <div className="block">
+        <span className="mb-1.5 flex items-center justify-between text-xs text-txt-2">
+          <span>العميل</span>
+          {allowNewCustomer && (
+            <button
+              type="button"
+              onClick={() => setNewCustomer((v) => !v)}
+              className="text-[0.7rem] font-medium text-brand hover:underline"
+            >
+              {newCustomer ? '← اختيار عميل موجود' : '+ عميل جديد'}
+            </button>
+          )}
+        </span>
+        {newCustomer ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <input
+              name="newCustomerName"
+              required
+              placeholder="اسم العميل الجديد"
+              className="erp-input py-2.5"
+            />
+            <input
+              name="newCustomerPhone"
+              required
+              dir="ltr"
+              inputMode="tel"
+              placeholder="رقم الهاتف (يمنع التكرار)"
+              className="erp-input py-2.5 text-start"
+            />
+          </div>
+        ) : (
+          <SearchableSelect
+            name="customerId"
+            options={customers}
+            placeholder="ابحث عن العميل أو اختره…"
+            defaultValue={values?.customerId}
+            required
+            onSelect={setCustomerId}
+          />
+        )}
         {state.fieldErrors?.customerId && (
           <span className="mt-1 block text-[0.7rem] text-bad">{state.fieldErrors.customerId}</span>
         )}
-      </label>
+      </div>
 
       {/* مصدر الطلب — كل المصادر ظاهرة كأزرار جنب بعض، ضغطة واحدة تختار. */}
       {sources && sources.length > 0 && (
@@ -494,6 +550,8 @@ export function DocumentForm({
             const short = variant && line.quantity > variant.available;
             const services = variant ? servicesOf(variant) : [];
             const suggestion = suggestedPrice(line);
+            const lastPrice =
+              customerId && line.variantId ? lastPrices[`${customerId}:${line.variantId}`] : undefined;
 
             return (
               <div key={index} className="rounded-xl border border-line bg-card-2 p-4">
@@ -611,12 +669,22 @@ export function DocumentForm({
                       <button
                         type="button"
                         onClick={() => update(index, { unitPrice: suggestion })}
-                        className="mt-0.5 text-[0.65rem] text-brand hover:underline"
+                        className="mt-0.5 block text-[0.65rem] text-brand hover:underline"
                       >
                         المقترح {formatMoney(dec(suggestion))} — اضغط لاعتماده
                       </button>
                     ) : (
                       <span className="mt-0.5 block text-[0.65rem] text-txt-4">السعر بيدك — اكتبه مباشرة</span>
+                    )}
+                    {lastPrice && lastPrice.price !== line.unitPrice && (
+                      <button
+                        type="button"
+                        onClick={() => update(index, { unitPrice: lastPrice.price })}
+                        className="mt-0.5 block text-[0.65rem] text-ok hover:underline"
+                        title={lastPrice.date ? `بتاريخ ${lastPrice.date}` : undefined}
+                      >
+                        آخر سعر لهذا العميل {formatMoney(dec(lastPrice.price))} — اضغط لاعتماده
+                      </button>
                     )}
                   </div>
                   <div className="text-end text-sm">

@@ -19,8 +19,8 @@ import {
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
-import { audit, fieldErrors } from '@/lib/audit';
-import { readLines, decimal } from '@/app/(erp)/sales/shared';
+import { audit, fieldErrors, nextCode } from '@/lib/audit';
+import { readLines, decimal, normalizeDigits } from '@/app/(erp)/sales/shared';
 import {
   allocateInvoiceNumber,
   nextPaymentNumber,
@@ -38,7 +38,40 @@ import {
 export async function createSalesInvoice(_prev: FormState, formData: FormData): Promise<FormState> {
   const user = await requirePermission('invoices.write');
 
-  const customerId = String(formData.get('customerId') ?? '').trim();
+  let customerId = String(formData.get('customerId') ?? '').trim();
+
+  // عميل جديد من داخل الفورم نفسه (اسم + هاتف) — بلا مغادرة الفاتورة.
+  // يُطابَق بالهاتف أولاً: الرقم يعرّف العميل في هذا السوق، فلا ينشأ مكرّر.
+  const newName = String(formData.get('newCustomerName') ?? '').trim();
+  const newPhone = normalizeDigits(String(formData.get('newCustomerPhone') ?? ''));
+  if (!customerId && newName) {
+    if (!newPhone) return { fieldErrors: { customerId: 'اكتب رقم هاتف العميل الجديد.' } };
+    const existing = await prisma.customer.findFirst({
+      where: { tenantId: user.tenantId, phone: newPhone, isDeleted: false },
+      select: { id: true },
+    });
+    if (existing) {
+      customerId = existing.id;
+    } else {
+      const codes = await prisma.customer.findMany({
+        where: { tenantId: user.tenantId },
+        select: { code: true },
+      });
+      const created = await prisma.customer.create({
+        data: {
+          tenantId: user.tenantId,
+          code: await nextCode('CUS', codes),
+          contactName: newName,
+          phone: newPhone,
+          whatsapp: newPhone,
+          notes: 'أُنشئ من فورم الفاتورة.',
+        },
+        select: { id: true },
+      });
+      customerId = created.id;
+    }
+  }
+
   if (!customerId) return { fieldErrors: { customerId: 'العميل مطلوب.' } };
 
   // طلب موقع مصدر هذه الفاتورة، إن وُجد — يُوسَم «تحوّل» بعد الإنشاء.
@@ -744,6 +777,41 @@ export async function recordPayment(
   revalidatePath('/invoices');
   revalidatePath(`/invoices/${invoiceId}`);
   return { ok: `تم تسجيل الدفعة ${number}.` };
+}
+
+/**
+ * آخر سعر بيع لهذا المتغيّر لهذا العميل — تلميح تحت خانة السعر في الفورم.
+ *
+ * التسعير يدوي بالكامل (بطلب المالك)، فأنفع مرجع للبائع هو ما دفعه نفس
+ * العميل آخر مرة لنفس الصنف. من فواتير صادرة فقط — المسوّدات والملغاة ليست
+ * أسعاراً حقيقية.
+ */
+export async function lastCustomerPrice(
+  customerId: string,
+  variantId: string,
+): Promise<{ price: number; date: string } | null> {
+  const user = await requirePermission('invoices.write');
+  if (!customerId || !variantId) return null;
+
+  const line = await prisma.invoiceLine.findFirst({
+    where: {
+      variantId,
+      invoice: {
+        tenantId: user.tenantId,
+        customerId,
+        isDeleted: false,
+        status: { notIn: ['DRAFT', 'VOID'] },
+      },
+    },
+    orderBy: { invoice: { issueDate: 'desc' } },
+    select: { unitPrice: true, invoice: { select: { issueDate: true } } },
+  });
+  if (!line) return null;
+
+  return {
+    price: dec(line.unitPrice).toNumber(),
+    date: line.invoice.issueDate ? line.invoice.issueDate.toLocaleDateString('ar-EG') : '',
+  };
 }
 
 /**

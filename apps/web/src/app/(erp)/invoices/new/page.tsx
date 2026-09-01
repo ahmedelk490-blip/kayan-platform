@@ -8,7 +8,7 @@ import { AppShell } from '@/components/AppShell';
 import { ModuleHeader } from '@/components/crud/Shell';
 import { DocumentForm, type DocLine } from '@/app/(erp)/sales/DocumentForm';
 import { loadSalesOptions } from '@/app/(erp)/sales/options';
-import { createSalesInvoice } from '../actions';
+import { createSalesInvoice, lastCustomerPrice } from '../actions';
 import type { SearchParams } from '@/lib/query';
 
 export const metadata: Metadata = { title: 'فاتورة مبيعات جديدة' };
@@ -115,6 +115,8 @@ export default async function NewInvoicePage({
           labels={{ dateA: 'تاريخ الإصدار', dateB: 'تاريخ الاستحقاق' }}
           submitLabel="إنشاء الفاتورة"
           instantIssue
+          allowNewCustomer
+          lastPriceAction={lastCustomerPrice}
         />
         <p className="mt-4 text-[0.7rem] text-txt-4">
           {webOrderId
