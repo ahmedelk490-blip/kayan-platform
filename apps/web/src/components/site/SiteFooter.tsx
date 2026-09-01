@@ -66,13 +66,21 @@ export function SiteFooter() {
           {BRAND.name}
         </p>
 
-        <div className="mt-8 flex flex-col gap-4 border-t border-edge pt-8 text-xs text-body-subtle sm:flex-row sm:items-center sm:justify-between">
-          <span>
-            {BRAND.nameAr} | {BRAND.name} — مصنع الزي الموحد والطباعة والتطريز
-          </span>
-          <span className="flex items-center gap-3">
-            © {new Date().getFullYear()} · جميع الحقوق محفوظة
-            {/* مدخل النظام للموظفين — خافت في أسفل التذييل، لا يلفت الزبون. */}
+        {/* صف ختامي واحد، عربي بالكامل: الهوية، الحقوق، وكريدت المطوّر
+            (يفتح موقع Q Marketing) — والنقطة الأخيرة مدخل الموظفين الخافت. */}
+        <div className="mt-8 flex flex-col gap-3 border-t border-edge pt-8 text-xs text-body-subtle sm:flex-row sm:items-center sm:justify-between">
+          <span>{BRAND.nameAr} — مصنع الزي الموحد والطباعة والتطريز</span>
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>© {new Date().getFullYear()} · جميع الحقوق محفوظة</span>
+            <span className="text-body-subtle/70">·</span>
+            <a
+              href="https://qmarketingeg.com/ar"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition-colors hover:text-body-muted"
+            >
+              تصميم وبرمجة شركة Q Marketing
+            </a>
             <Link
               href="/login"
               className="text-body-subtle/60 transition-colors hover:text-body-muted"
@@ -81,20 +89,6 @@ export function SiteFooter() {
               ·
             </Link>
           </span>
-        </div>
-
-        {/* كريدت الجهة المطوّرة — عربي وإنجليزي، يفتح موقع Q Marketing. */}
-        <div className="mt-4 border-t border-edge pt-4 text-center text-[0.7rem] text-body-subtle">
-          <a
-            href="https://qmarketingeg.com/ar"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition-colors hover:text-body-muted"
-          >
-            <span>تصميم وبرمجة شركة Q Marketing © {new Date().getFullYear()} · جميع الحقوق محفوظة</span>
-            <span dir="ltr" className="mx-2 text-body-subtle/70">·</span>
-            <span dir="ltr">Design &amp; development by Q Marketing © {new Date().getFullYear()} · All rights reserved</span>
-          </a>
         </div>
       </div>
     </footer>
