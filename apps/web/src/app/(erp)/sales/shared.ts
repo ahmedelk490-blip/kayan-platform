@@ -84,6 +84,9 @@ export function readLines(formData: FormData) {
   const discounts = formData.getAll('lineDiscount').map(String);
   const taxRates = formData.getAll('lineTaxRate').map(String);
   const notes = formData.getAll('lineNotes').map(String);
+  // الخدمة (تطريز/DTF…) تصل من حقل مخفي دائم الوجود — لا من select قد يُعطَّل
+  // فيغيب عن الإرسال وتنزاح المصفوفات المتوازية.
+  const services = formData.getAll('lineService').map(String);
 
   // num يطبّع الأرقام العربية قبل التحويل، فسطرٌ كميته «٥» لا يسقط. القيمة
   // غير الصالحة تصير صفراً لا NaN، والصفر يُفلتر لاحقاً كما يجب.
@@ -100,6 +103,7 @@ export function readLines(formData: FormData) {
       discountAmount: num(discounts[i]),
       taxRate: num(taxRates[i]),
       notes: notes[i]?.trim() || null,
+      service: services[i]?.trim() || null,
     }))
     .filter((l) => l.variantId && l.quantity > 0);
 }

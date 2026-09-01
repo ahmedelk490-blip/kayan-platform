@@ -7,7 +7,7 @@ import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import { num } from '@/lib/num';
-import { allocateInvoiceNumber, nextPaymentNumber, invoiceSettings, type FormState } from '../invoices/shared';
+import { allocateInvoiceNumber, lockPaymentSequence, nextPaymentNumber, invoiceSettings, type FormState } from '../invoices/shared';
 
 /**
  * إتمام بيع الكاشير — فاتورة مُصدَرة ومُحصَّلة تخصم المخزون، في معاملة واحدة.
@@ -26,6 +26,13 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
   const warehouseId = String(formData.get('warehouseId') ?? '').trim();
   if (!customerId) return { fieldErrors: { customerId: 'اختر العميل.' } };
   if (!warehouseId) return { error: 'لا يوجد مخزن للصرف منه.' };
+
+  // المخزن يجب أن يكون مخزن هذا المستأجر — القيمة تصل من المتصفح ولا تُؤتمن.
+  const warehouse = await prisma.warehouse.findFirst({
+    where: { id: warehouseId, tenantId: user.tenantId, isDeleted: false },
+    select: { id: true },
+  });
+  if (!warehouse) return { error: 'المخزن غير صالح.' };
 
   const customer = await prisma.customer.findFirst({
     where: { id: customerId, tenantId: user.tenantId, isDeleted: false },
@@ -68,7 +75,6 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
 
   const settings = await invoiceSettings(user.tenantId);
   const issuedAt = new Date();
-  const paymentNumber = wantsPayment ? await nextPaymentNumber(user.tenantId) : null;
 
   const created = await tenantTransaction(async (tx) => {
     const number = await allocateInvoiceNumber(tx, user.tenantId, settings.prefix);
@@ -110,10 +116,14 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
     });
 
     if (wantsPayment) {
+      // رقم الدفعة داخل المعاملة وخلف قفل التسلسل — كاشيران متزامنان يتسلسلان
+      // بدل أن يولّدا نفس الرقم.
+      await lockPaymentSequence(tx, user.tenantId);
+      const paymentNumber = await nextPaymentNumber(user.tenantId, tx);
       await tx.payment.create({
         data: {
           tenantId: user.tenantId,
-          number: paymentNumber!,
+          number: paymentNumber,
           invoiceId: inv.id,
           amount: payAmount.toString(),
           method: payMethod,

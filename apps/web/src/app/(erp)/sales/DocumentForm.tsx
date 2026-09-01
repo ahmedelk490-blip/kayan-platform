@@ -639,8 +639,10 @@ export function DocumentForm({
                   </button>
                 </div>
 
-                {/* المتغيّر المحلول يُرسل للخادم؛ والخصم والضريبة صفر. */}
+                {/* المتغيّر المحلول والخدمة يُرسلان للخادم من حقول مخفية دائمة
+                    الوجود (select الخدمة قد يُعطَّل فلا يُرسَل)؛ والخصم والضريبة صفر. */}
                 <input type="hidden" name="lineVariantId" value={line.variantId} />
+                <input type="hidden" name="lineService" value={line.service} />
                 <input type="hidden" name="lineDiscount" value={0} />
                 <input type="hidden" name="lineTaxRate" value={0} />
 

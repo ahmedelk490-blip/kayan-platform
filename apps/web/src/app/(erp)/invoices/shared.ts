@@ -68,10 +68,38 @@ export async function allocateInvoiceNumber(
   return `${prefix}-${year}-${String(next).padStart(4, '0')}`;
 }
 
-/** Payments are not fiscal documents, so the cheaper derivation is fine. */
-export async function nextPaymentNumber(tenantId: string): Promise<string> {
+/**
+ * قفل تسلسل الدفعات — MUTEX لكل دفعات المستأجر.
+ *
+ * صف DocumentSequence بنوع PAYMENT لا يُستخدم كعدّاد بل كقفل: كل معاملة
+ * تكتب دفعة تمسكه بـ FOR UPDATE أولاً، فتتسلسل الدفعات المتزامنة — لا رقم
+ * دفعة مكرّر، ولا قراءة paidAmount قديمة تسمح بتحصيل يتجاوز المتبقي.
+ */
+export async function lockPaymentSequence(
+  tx: Prisma.TransactionClient,
+  tenantId: string,
+): Promise<void> {
+  const year = new Date().getFullYear();
+  await tx.$executeRaw`
+    INSERT INTO \`DocumentSequence\` (\`id\`, \`tenantId\`, \`kind\`, \`year\`, \`lastNumber\`, \`updatedAt\`)
+    VALUES (${`seq_${tenantId}_PAYMENT_${year}`}, ${tenantId}, 'PAYMENT', ${year}, 0, NOW())
+    ON DUPLICATE KEY UPDATE \`id\` = \`id\``;
+  await tx.$queryRaw`
+    SELECT \`lastNumber\` FROM \`DocumentSequence\`
+     WHERE \`tenantId\` = ${tenantId} AND \`kind\` = 'PAYMENT' AND \`year\` = ${year}
+     FOR UPDATE`;
+}
+
+/**
+ * Payments are not fiscal documents, so MAX+1 is fine — لكن استدعها داخل
+ * معاملة تمسك lockPaymentSequence أولاً، وإلا وُلد نفس الرقم لدفعتين متزامنتين.
+ */
+export async function nextPaymentNumber(
+  tenantId: string,
+  db: Prisma.TransactionClient | typeof prisma = prisma,
+): Promise<string> {
   const stem = `PAY-${new Date().getFullYear()}-`;
-  const rows = await prisma.payment.findMany({
+  const rows = await db.payment.findMany({
     where: { tenantId, number: { startsWith: stem } },
     select: { number: true },
   });

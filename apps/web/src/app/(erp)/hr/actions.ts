@@ -156,8 +156,16 @@ export async function recordEmployeePayment(
 
   const paidAtRaw = String(formData.get('paidAt') ?? '');
   const paidAt = paidAtRaw ? new Date(paidAtRaw) : new Date();
-  const periodMonth = num(formData.get('periodMonth'));
-  const periodYear = num(formData.get('periodYear'));
+
+  // فترة الراتب (شهر/سنة) ضرورية لراتب SALARY: منع التكرار في «رواتب الشهر»
+  // يبحث بها، وراتبٌ بلا فترة كان يُدفع ثانيةً مع الدفعة الشهرية. إن غابت من
+  // الفورم تُشتق من تاريخ الدفع بدل أن تُخزَّن فارغة.
+  const base = Number.isNaN(paidAt.getTime()) ? new Date() : paidAt;
+  const pmRaw = num(formData.get('periodMonth')) ?? 0;
+  const pyRaw = num(formData.get('periodYear')) ?? 0;
+  const wantsPeriod = parsed.data.kind === 'SALARY' || pmRaw > 0 || pyRaw > 0;
+  const periodMonth = pmRaw >= 1 && pmRaw <= 12 ? pmRaw : wantsPeriod ? base.getMonth() + 1 : null;
+  const periodYear = pyRaw >= 2020 && pyRaw <= 2100 ? pyRaw : wantsPeriod ? base.getFullYear() : null;
 
   const number = await nextPaymentNumber(user.tenantId);
   await prisma.employeePayment.create({
@@ -167,9 +175,9 @@ export async function recordEmployeePayment(
       employeeId: parsed.data.employeeId,
       kind: parsed.data.kind,
       amount,
-      paidAt: Number.isNaN(paidAt.getTime()) ? new Date() : paidAt,
-      periodMonth: periodMonth ?? null,
-      periodYear: periodYear ?? null,
+      paidAt: base,
+      periodMonth,
+      periodYear,
       note: parsed.data.note || null,
       createdById: user.id,
     },

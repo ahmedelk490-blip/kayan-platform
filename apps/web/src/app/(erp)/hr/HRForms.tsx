@@ -193,6 +193,24 @@ function PaymentForm({
         <Field name="amount" label="المبلغ" type="number" dir="ltr" required errors={state.fieldErrors} />
       </div>
       <Field name="paidAt" label="التاريخ" type="date" dir="ltr" errors={state.fieldErrors} />
+      {/* فترة الاستحقاق — بها يعرف «رواتب الشهر» أن هذا الشهر مدفوع فلا يكرره. */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Select
+          name="periodMonth"
+          label="عن شهر"
+          options={Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `شهر ${i + 1}` }))}
+          defaultValue={String(new Date().getMonth() + 1)}
+          errors={state.fieldErrors}
+        />
+        <Field
+          name="periodYear"
+          label="عن سنة"
+          type="number"
+          dir="ltr"
+          defaultValue={new Date().getFullYear()}
+          errors={state.fieldErrors}
+        />
+      </div>
       <TextArea name="note" label="ملاحظة" rows={2} errors={state.fieldErrors} />
       <SubmitButton label="تسجيل" />
     </form>

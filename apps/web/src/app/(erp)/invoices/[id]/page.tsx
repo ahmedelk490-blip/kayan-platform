@@ -70,7 +70,15 @@ export default async function InvoicePage({
   const canWrite = can(user.role, 'invoices.write');
 
   const status: InvoiceStatus = isInvoiceStatus(invoice.status) ? invoice.status : 'DRAFT';
-  const left = balance(invoice.total, invoice.paidAmount);
+
+  // المرتجعات تُنقص المستحق: المتبقي = (الإجمالي − المرتجع) − المدفوع، وإلا
+  // ظهرت فاتورةٌ مرتجعة بالكامل ديناً وهمياً على العميل.
+  const returnAgg = await prisma.salesReturn.aggregate({
+    where: { tenantId: user.tenantId, invoiceId: invoice.id, isDeleted: false },
+    _sum: { totalAmount: true },
+  });
+  const returnedValue = dec(returnAgg._sum.totalAmount ?? 0);
+  const left = balance(dec(invoice.total).minus(returnedValue), invoice.paidAmount);
   const late = daysOverdue(invoice.dueDate, left);
 
   // رابط واتساب بنص الفاتورة جاهزاً — زبون هذا السوق كل تعامله واتساب.
@@ -198,6 +206,9 @@ export default async function InvoicePage({
                 <Row label="الإجمالي" value={formatMoney(invoice.total)} strong />
               </div>
               <Row label="المدفوع" value={formatMoney(invoice.paidAmount)} />
+              {returnedValue.gt(0) && (
+                <Row label="المرتجع" value={`− ${formatMoney(returnedValue)}`} />
+              )}
               <div className="border-t border-line pt-2">
                 <Row label="المتبقي" value={formatMoney(left)} strong />
               </div>

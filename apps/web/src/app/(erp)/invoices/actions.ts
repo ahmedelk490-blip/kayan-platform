@@ -16,6 +16,8 @@ import {
   dec,
   can,
   isOrderSource,
+  PRICE_SERVICE_AR,
+  type PriceService,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
@@ -24,10 +26,27 @@ import { readLines, decimal, normalizeDigits } from '@/app/(erp)/sales/shared';
 import { numeric } from '@/lib/num';
 import {
   allocateInvoiceNumber,
+  lockPaymentSequence,
   nextPaymentNumber,
   invoiceSettings,
   type FormState,
 } from './shared';
+
+/**
+ * وصف سطر الفاتورة المجمّد: منتج · لون · مقاس، تليه الخدمة (تطريز/DTF…) ثم
+ * تفاصيل البائع الحرّة — كلها في عمود description الموجود، فتظهر في الفاتورة
+ * وطباعتها والمرتجعات بلا عمود جديد في قاعدة البيانات.
+ */
+function lineDescription(
+  v: { product: { nameAr: string }; color: { nameAr: string } | null; size: { code: string } | null },
+  service: string | null,
+  notes: string | null,
+): string {
+  const base = [v.product.nameAr, v.color?.nameAr, v.size?.code].filter(Boolean).join(' · ');
+  const svc = service ? ((PRICE_SERVICE_AR as Record<string, string>)[service as PriceService] ?? service) : '';
+  const extras = [svc && svc !== 'بدون' ? svc : null, notes].filter(Boolean).join(' — ');
+  return extras ? `${base} — ${extras}` : base;
+}
 
 /**
  * إنشاء فاتورة مبيعات مباشرة — عميل ومنتجات وكميات، بلا عرض سعر ولا أمر بيع.
@@ -126,7 +145,7 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
       lineNo: i + 1,
       productId: v.productId,
       variantId: v.id,
-      description: [v.product.nameAr, v.color?.nameAr, v.size?.code].filter(Boolean).join(' · '),
+      description: lineDescription(v, l.service, l.notes),
       quantity: dec(l.quantity).toString(),
       unitPrice: dec(l.unitPrice).toString(),
       discountAmount: dec(l.discountAmount).toString(),
@@ -184,7 +203,6 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
 
     const settings = await invoiceSettings(user.tenantId);
     const issuedAt = new Date();
-    const paymentNumber = wantsPayment ? await nextPaymentNumber(user.tenantId) : null;
     // فاتورة مباشرة تصرف بضاعتها من المخزون فور إصدارها — كالكاشير.
     const warehouseId = await defaultWarehouseId(user.tenantId);
     const stockLines = rawLines.map((l) => ({
@@ -210,10 +228,13 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
         },
       });
       if (wantsPayment) {
+        // رقم الدفعة داخل المعاملة وخلف قفل التسلسل — لا تكرار مع بيع متزامن.
+        await lockPaymentSequence(tx, user.tenantId);
+        const paymentNumber = await nextPaymentNumber(user.tenantId, tx);
         await tx.payment.create({
           data: {
             tenantId: user.tenantId,
-            number: paymentNumber!,
+            number: paymentNumber,
             invoiceId: inv.id,
             amount: payAmount.toString(),
             method: payMethodRaw,
@@ -399,7 +420,7 @@ export async function updateInvoiceLines(
       lineNo: i + 1,
       productId: v.productId,
       variantId: v.id,
-      description: [v.product.nameAr, v.color?.nameAr, v.size?.code].filter(Boolean).join(' · '),
+      description: lineDescription(v, l.service, l.notes),
       quantity: dec(l.quantity).toString(),
       unitPrice: dec(l.unitPrice).toString(),
       discountAmount: dec(l.discountAmount).toString(),
@@ -425,8 +446,9 @@ export async function updateInvoiceLines(
     newQty.set(l.variantId, (newQty.get(l.variantId) ?? dec(0)).plus(dec(l.quantity)));
   }
 
-  // المسوّدة لم تُصرَف بعد، فلا تمسّ المخزون؛ غيرها يُسوّى بالفرق.
-  const touchStock = invoice.status !== 'DRAFT';
+  // المسوّدة لم تُصرَف بعد، وفاتورة أمر البيع مخزونها مُدار عبر الحجز (الإصدار
+  // والإلغاء يتجاوزانها عمداً) — تعديلها هنا كان يخصم المخزون مرة ثانية.
+  const touchStock = invoice.status !== 'DRAFT' && !invoice.salesOrderId;
   const warehouseId = touchStock ? await defaultWarehouseId(user.tenantId) : null;
 
   const newStatus =
@@ -648,7 +670,9 @@ export async function voidInvoice(
   const invoice = await prisma.invoice.findFirst({
     where: { id, tenantId: user.tenantId, isDeleted: false },
     include: {
-      payments: { where: { reversesId: null } },
+      // الدفعات الحيّة فقط: أصلٌ عُكس لم يعد مالاً محتجزاً — بدون هذا الشرط
+      // كانت فاتورةٌ عُكست كل دفعاتها تستحيل على الإلغاء للأبد.
+      payments: { where: { reversesId: null, reversedBy: { is: null } } },
       lines: { select: { productId: true, variantId: true, quantity: true } },
     },
   });
@@ -738,10 +762,27 @@ export async function recordPayment(
     };
   }
 
-  const number = await nextPaymentNumber(user.tenantId);
   const paidAtDate = parsed.data.paidAt ? new Date(parsed.data.paidAt) : new Date();
 
-  await tenantTransaction(async (tx) => {
+  // قفل تسلسل الدفعات يجعل التحصيلات المتزامنة تتسلسل، ثم تُقرأ الفاتورة
+  // طازجةً خلفه ويُعاد الفحص — فلا يمرّ تحصيلان فوق المتبقي، ولا يمحو
+  // أحدهما paidAmount الآخر، ولا يتكرر رقم دفعة.
+  const result = await tenantTransaction(async (tx) => {
+    await lockPaymentSequence(tx, user.tenantId);
+    const fresh = await tx.invoice.findFirst({
+      where: { id: invoiceId, tenantId: user.tenantId, isDeleted: false },
+      select: { total: true, paidAmount: true, status: true },
+    });
+    if (!fresh || fresh.status === 'DRAFT' || fresh.status === 'VOID') {
+      return { error: 'الفاتورة غير صالحة للتحصيل.' } as const;
+    }
+    if (exceedsBalance(parsed.data.amount, fresh.total, fresh.paidAmount)) {
+      return {
+        error: `المبلغ يتجاوز المتبقي (${balance(fresh.total, fresh.paidAmount).toString()}).`,
+      } as const;
+    }
+
+    const number = await nextPaymentNumber(user.tenantId, tx);
     await tx.payment.create({
       data: {
         tenantId: user.tenantId,
@@ -756,15 +797,19 @@ export async function recordPayment(
       },
     });
 
-    const paid = dec(invoice.paidAmount).plus(dec(parsed.data.amount));
+    const paid = dec(fresh.paidAmount).plus(dec(parsed.data.amount));
     await tx.invoice.update({
       where: { id: invoiceId },
       data: {
         paidAmount: paid.toString(),
-        status: deriveInvoiceStatus(invoice.total, paid, invoice.status as never),
+        status: deriveInvoiceStatus(fresh.total, paid, fresh.status as never),
       },
     });
+    return { number } as const;
   });
+
+  if ('error' in result && result.error) return { fieldErrors: { amount: result.error } };
+  if (!('number' in result)) return { error: 'تعذّر تسجيل الدفعة.' };
 
   await audit({
     tenantId: user.tenantId,
@@ -772,12 +817,12 @@ export async function recordPayment(
     action: 'payment.record',
     entityType: 'Invoice',
     entityId: invoiceId,
-    detail: `${number} ${parsed.data.amount}`,
+    detail: `${result.number} ${parsed.data.amount}`,
   });
 
   revalidatePath('/invoices');
   revalidatePath(`/invoices/${invoiceId}`);
-  return { ok: `تم تسجيل الدفعة ${number}.` };
+  return { ok: `تم تسجيل الدفعة ${result.number}.` };
 }
 
 /**
@@ -824,16 +869,18 @@ export async function lastCustomerPrice(
 export async function reversePayment(invoiceId: string, paymentId: string): Promise<void> {
   const user = await requirePermission('payments.record');
 
-  const payment = await prisma.payment.findFirst({
-    where: { id: paymentId, tenantId: user.tenantId, invoiceId },
-    include: { reversedBy: true, invoice: true },
-  });
-  if (!payment) redirect(`/invoices/${invoiceId}`);
-  if (payment.reversedBy || payment.reversesId) redirect(`/invoices/${invoiceId}`);
+  // كل الفحص والكتابة خلف قفل تسلسل الدفعات: ضغطتان متتاليتان على «عكس»
+  // تتسلسلان، والثانية تجد الدفعة معكوسة فتنصرف — لا عكس مزدوج يجعل
+  // المدفوع سالباً، ولا رقم عكس مكرر.
+  const result = await tenantTransaction(async (tx) => {
+    await lockPaymentSequence(tx, user.tenantId);
+    const payment = await tx.payment.findFirst({
+      where: { id: paymentId, tenantId: user.tenantId, invoiceId },
+      include: { reversedBy: true, invoice: true },
+    });
+    if (!payment || payment.reversedBy || payment.reversesId) return null;
 
-  const number = await nextPaymentNumber(user.tenantId);
-
-  await tenantTransaction(async (tx) => {
+    const number = await nextPaymentNumber(user.tenantId, tx);
     await tx.payment.create({
       data: {
         tenantId: user.tenantId,
@@ -860,16 +907,20 @@ export async function reversePayment(invoiceId: string, paymentId: string): Prom
         ),
       },
     });
+    return { number, original: payment.number };
   });
 
-  await audit({
-    tenantId: user.tenantId,
-    userId: user.id,
-    action: 'payment.reverse',
-    entityType: 'Invoice',
-    entityId: invoiceId,
-    detail: `${number} reverses ${payment.number}`,
-  });
+  if (result) {
+    await audit({
+      tenantId: user.tenantId,
+      userId: user.id,
+      action: 'payment.reverse',
+      entityType: 'Invoice',
+      entityId: invoiceId,
+      detail: `${result.number} reverses ${result.original}`,
+    });
+  }
 
   revalidatePath(`/invoices/${invoiceId}`);
+  redirect(`/invoices/${invoiceId}`);
 }

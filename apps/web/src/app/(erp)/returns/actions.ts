@@ -2,13 +2,13 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { dec, deriveInvoiceStatus, type InvoiceStatus } from '@erp/domain';
+import { dec } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import { num } from '@/lib/num';
 import type { FormState } from '@/lib/ops';
-import { nextPaymentNumber } from '@/app/(erp)/invoices/shared';
+import { lockPaymentSequence, nextPaymentNumber } from '@/app/(erp)/invoices/shared';
 
 /** رقم مرتجع متسلسل للسنة: RET-YYYY-N. */
 async function nextReturnNumber(tenantId: string): Promise<string> {
@@ -59,7 +59,7 @@ export async function createReturn(
   // المرتجَع سابقاً لكل بند من هذه الفاتورة — لمنع تجاوز المباع عبر عدة مرتجعات.
   const priorReturns = await prisma.salesReturn.findMany({
     where: { tenantId: user.tenantId, invoiceId: invoice.id, isDeleted: false },
-    select: { lines: { select: { invoiceLineId: true, quantity: true } } },
+    select: { totalAmount: true, lines: { select: { invoiceLineId: true, quantity: true } } },
   });
   const returnedByLine = new Map<string, ReturnType<typeof dec>>();
   for (const pr of priorReturns) {
@@ -86,16 +86,33 @@ export async function createReturn(
   const reason = String(formData.get('reason') ?? '').trim();
   if (!reason) return { error: 'سبب الإرجاع إلزامي — اكتب لماذا رجّع العميل البضاعة.' };
 
-  const total = retLines.reduce((s, r) => s.plus(dec(r.line.unitPrice).times(dec(r.qty))), dec(0));
+  // قيمة المرتجع بما دفعه العميل فعلاً، لا بسعر السطر الإجمالي:
+  // سعر الوحدة من lineTotal (بعد خصم السطر) × نسبة ما بقي بعد خصم الفاتورة
+  // الكلي. الحساب القديم كان يردّ سعر ما قبل الخصومات — نقد يخرج زيادة.
+  const subtotal = dec(invoice.subtotal);
+  let docRatio = dec(1);
+  if (subtotal.gt(0)) {
+    docRatio = subtotal.minus(dec(invoice.discountAmount)).dividedBy(subtotal);
+    if (docRatio.lt(0)) docRatio = dec(0);
+    if (docRatio.gt(1)) docRatio = dec(1);
+  }
+  const effectiveUnit = (line: (typeof invoice.lines)[number]) =>
+    dec(line.lineTotal).dividedBy(dec(line.quantity)).times(docRatio).toDecimalPlaces(4);
+  const total = retLines
+    .reduce((s, r) => s.plus(effectiveUnit(r.line).times(dec(r.qty))), dec(0))
+    .toDecimalPlaces(4);
   const number = await nextReturnNumber(user.tenantId);
   const warehouseId = await defaultWarehouseId(user.tenantId);
+
+  // قيمة كل المرتجعات السابقة — لاشتقاق ما بقي مستحقاً على الفاتورة بعد هذا
+  // المرتجع، فلا تعود فاتورةٌ مدفوعة تظهر ديناً على عميلٍ أرجع بضاعته.
+  const priorReturnedValue = priorReturns.reduce((s, pr) => s.plus(dec(pr.totalAmount)), dec(0));
 
   // رد المبلغ للعميل (اختياري، افتراضياً نعم) — لا يتجاوز ما دُفع فعلاً على
   // الفاتورة. يُسجَّل كدفعة سالبة تُنقص المدفوع وتُعيد اشتقاق حالة الفاتورة.
   const refundWanted = ['1', 'on', 'true'].includes(String(formData.get('refund') ?? ''));
   const paid = dec(invoice.paidAmount);
   const refundAmount = refundWanted && paid.gt(0) ? (total.gt(paid) ? paid : total) : dec(0);
-  const paymentNumber = refundAmount.gt(0) ? await nextPaymentNumber(user.tenantId) : null;
 
   await tenantTransaction(async (tx) => {
     await tx.salesReturn.create({
@@ -116,8 +133,9 @@ export async function createReturn(
             variantId: r.line.variantId,
             description: r.line.description,
             quantity: dec(r.qty).toString(),
-            unitPrice: dec(r.line.unitPrice).toString(),
-            lineTotal: dec(r.line.unitPrice).times(dec(r.qty)).toString(),
+            // السعر الفعلي بعد كل الخصومات — ما دفعه العميل للوحدة حقاً.
+            unitPrice: effectiveUnit(r.line).toString(),
+            lineTotal: effectiveUnit(r.line).times(dec(r.qty)).toDecimalPlaces(4).toString(),
           })),
         },
       },
@@ -149,8 +167,11 @@ export async function createReturn(
       }
     }
 
-    // رد المبلغ نقداً: دفعة سالبة على الفاتورة تُنقص المدفوع وتُحدّث الحالة.
-    if (refundAmount.gt(0) && paymentNumber) {
+    // رد المبلغ نقداً: دفعة سالبة على الفاتورة تُنقص المدفوع — رقمها داخل
+    // المعاملة وخلف قفل تسلسل الدفعات، فلا يتكرر مع تحصيل متزامن.
+    if (refundAmount.gt(0)) {
+      await lockPaymentSequence(tx, user.tenantId);
+      const paymentNumber = await nextPaymentNumber(user.tenantId, tx);
       await tx.payment.create({
         data: {
           tenantId: user.tenantId,
@@ -163,15 +184,25 @@ export async function createReturn(
           recordedById: user.id,
         },
       });
-      const newPaid = paid.minus(refundAmount);
-      await tx.invoice.update({
-        where: { id: invoice.id },
-        data: {
-          paidAmount: newPaid.toString(),
-          status: deriveInvoiceStatus(invoice.total, newPaid, invoice.status as InvoiceStatus),
-        },
-      });
     }
+
+    // حالة الفاتورة بعد المرتجع تُشتق من المستحق الصافي (الإجمالي − كل
+    // المرتجعات) مقابل المدفوع الجديد — فمرتجعٌ كامل مردود المبلغ يترك
+    // الفاتورة PAID لا ديناً وهمياً يظهر في تقارير الذمم.
+    const newPaid = refundAmount.gt(0) ? paid.minus(refundAmount) : paid;
+    const owedAfterReturns = dec(invoice.total).minus(priorReturnedValue).minus(total);
+    const newStatus =
+      invoice.status === 'DRAFT' || invoice.status === 'VOID'
+        ? invoice.status
+        : owedAfterReturns.lte(newPaid)
+          ? 'PAID'
+          : newPaid.lte(0)
+            ? 'ISSUED'
+            : 'PARTIALLY_PAID';
+    await tx.invoice.update({
+      where: { id: invoice.id },
+      data: { paidAmount: newPaid.toString(), status: newStatus },
+    });
   });
 
   await audit({
