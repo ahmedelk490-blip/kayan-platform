@@ -264,17 +264,24 @@ export default async function ManagerDashboard() {
     imageCount: row._count.images,
   }));
 
+  // شغل اليوم أولاً: البيع والإرجاع والتقفيل — لا صفحات الإدارة.
+  const canSell = can(user.role, 'invoices.write');
   const actions: QuickAction[] = [
-    { href: '/sales/quotations', label: 'عرض سعر جديد', description: `${quotationTotal} عرض مسجّل`, available: seeSales },
-    { href: '/manufacturing', label: 'أوامر الإنتاج', description: `${inProgress} قيد التنفيذ`, available: seeProduction },
+    { href: '/cashier', label: 'الكاشير', description: 'بيع سريع — صور أو كتابة', available: canSell },
+    { href: '/invoices/new', label: 'فاتورة جديدة', description: 'عميل وأصناف وإصدار فوري', available: canSell },
+    { href: '/returns/new', label: 'مرتجع جديد', description: 'إرجاع من فاتورة', available: can(user.role, 'returns.write') },
+    { href: '/reports/daily', label: 'يومية اليوم', description: 'مبيعات ومقبوض ومصاريف', available: can(user.role, 'reports.view') },
     { href: '/inventory', label: 'المخزون', description: `${lowStock.length} صنف تحت الحد`, available: seeInventory },
-    { href: '/reports', label: 'التقارير', description: 'مبيعات ومخزون وربحية', available: can(user.role, 'reports.view') },
+    { href: '/sales/quotations', label: 'عرض سعر جديد', description: `${quotationTotal} عرض مسجّل`, available: seeSales },
   ];
 
   return (
     <AppShell user={user} title="لوحة المدير">
       <div className="space-y-7">
         <WelcomeHeader name={user.nameAr ?? user.name} roleAr={user.roleNameAr} />
+
+        {/* المهم أولاً: أزرار شغل اليوم قبل الأرقام والرسوم. */}
+        <QuickActions actions={actions} />
 
         <section>
           <SectionTitle note="محسوبة مباشرة من قاعدة البيانات">نظرة عامة</SectionTitle>
@@ -559,10 +566,6 @@ export default async function ManagerDashboard() {
           </Panel>
 
           <div className="space-y-5">
-            <Panel title="إجراءات سريعة" delay={0.45}>
-              <QuickActions actions={actions} />
-            </Panel>
-
             <Panel title="ما زال ناقصاً" delay={0.5}>
               <p className="text-xs leading-relaxed text-txt-3">
                 لا توجد محاسبة (قيود، دليل حسابات) ولا إشعارات آلية. تنبيه نقص المخزون أعلاه

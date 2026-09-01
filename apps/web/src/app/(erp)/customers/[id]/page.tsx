@@ -1,13 +1,15 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { can } from '@erp/domain';
+import { can, dec, formatMoney } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { waLink } from '@/lib/wa';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader } from '@/components/crud/Shell';
 import { CustomerForm } from '../CustomerForm';
 import { updateCustomer, deleteCustomer } from '../actions';
+import { duplicateInvoice } from '@/app/(erp)/invoices/actions';
 import { ActivityForm } from './ActivityForm';
 
 export const metadata: Metadata = { title: 'بيانات العميل' };
@@ -45,18 +47,79 @@ export default async function CustomerDetailPage({
   if (!customer) notFound();
 
   const canWrite = can(user.role, 'customers.write');
+  const canSell = can(user.role, 'invoices.write');
   const update = updateCustomer.bind(null, customer.id);
   const remove = deleteCustomer.bind(null, customer.id);
+
+  // فواتير العميل المفتوحة (للدين وكشف الحساب) + آخر فاتورة (لتكرار الطلب).
+  const [openInvoices, lastInvoice] = await Promise.all([
+    prisma.invoice.findMany({
+      where: {
+        tenantId: user.tenantId,
+        customerId: customer.id,
+        isDeleted: false,
+        status: { in: ['ISSUED', 'PARTIALLY_PAID'] },
+      },
+      orderBy: { issueDate: 'asc' },
+      select: { number: true, issueDate: true, total: true, paidAmount: true },
+    }),
+    prisma.invoice.findFirst({
+      where: {
+        tenantId: user.tenantId,
+        customerId: customer.id,
+        isDeleted: false,
+        status: { notIn: ['VOID'] },
+        lines: { some: {} },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, number: true },
+    }),
+  ]);
+
+  const owed = openInvoices.reduce(
+    (s, i) => s.plus(dec(i.total).minus(dec(i.paidAmount))),
+    dec(0),
+  );
+
+  // كشف حساب جاهز للواتساب: الفواتير المفتوحة والمتبقي الكلي — للمطالبة بضغطة.
+  const statementUrl =
+    openInvoices.length > 0
+      ? waLink(
+          customer.whatsapp ?? customer.phone,
+          [
+            `كشف حساب — ${customer.companyName ?? customer.contactName}`,
+            ...openInvoices.map(
+              (i) =>
+                `• ${i.number ?? 'فاتورة'}${i.issueDate ? ` (${i.issueDate.toLocaleDateString('ar-EG')})` : ''} — المتبقي ${formatMoney(dec(i.total).minus(dec(i.paidAmount)))} د.ع`,
+            ),
+            `الإجمالي المتبقي: ${formatMoney(owed)} د.ع`,
+            'شاكرين تعاونكم — كيان للزي الموحد',
+          ].join('\n'),
+        )
+      : null;
 
   return (
     <AppShell user={user} title={customer.contactName}>
       <ModuleHeader
         title={customer.companyName ?? customer.contactName}
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Link href="/customers" className="erp-btn-ghost">
               رجوع
             </Link>
+            {canSell && lastInvoice && (
+              <form action={duplicateInvoice.bind(null, lastInvoice.id)}>
+                {/* مسوّدة جديدة بنفس أصناف آخر فاتورة — للطلب الموسمي المتكرر. */}
+                <button type="submit" className="erp-btn-ghost" title={`ينسخ ${lastInvoice.number ?? 'آخر فاتورة'}`}>
+                  كرر آخر طلب
+                </button>
+              </form>
+            )}
+            {statementUrl && (
+              <a href={statementUrl} target="_blank" rel="noopener noreferrer" className="erp-btn-ghost">
+                كشف حساب واتساب
+              </a>
+            )}
             {canWrite && (
               <form action={remove}>
                 <button
@@ -71,10 +134,22 @@ export default async function CustomerDetailPage({
         }
       />
 
-      <p className="mb-5 text-xs text-txt-3">
+      <p className="mb-2 text-xs text-txt-3">
         الكود <span dir="ltr" className="tnum">{customer.code}</span> · أُنشئ{' '}
         {customer.createdAt.toLocaleDateString('ar-EG')}
       </p>
+
+      {/* الدين المفتوح واضح فوق قبل أي شيء — أو سطر اطمئنان أخضر. */}
+      {owed.gt(0) ? (
+        <p className="mb-5 inline-block rounded-lg border border-warn bg-warn-soft px-3 py-2 text-xs font-semibold text-warn">
+          ⚠ عليه <span className="tnum">{formatMoney(owed)}</span> د.ع من {openInvoices.length}{' '}
+          {openInvoices.length === 1 ? 'فاتورة مفتوحة' : 'فواتير مفتوحة'}
+        </p>
+      ) : (
+        <p className="mb-5 inline-block rounded-lg border border-ok bg-ok-soft px-3 py-2 text-xs font-medium text-ok">
+          ✓ لا ديون مفتوحة على هذا العميل
+        </p>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
         <section className="erp-card p-6">

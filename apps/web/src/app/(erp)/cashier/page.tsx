@@ -56,6 +56,7 @@ export default async function CashierPage() {
           <CashierBoard
             customers={options.customers}
             variants={options.variants}
+            debts={options.debts}
             images={images}
             warehouseId={warehouse.id}
           />

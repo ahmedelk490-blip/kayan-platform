@@ -203,6 +203,30 @@ export async function AppShell({
     alerts = [...alerts, ...outAlert, ...stockAlerts, ...supplyAlerts];
   }
 
+  // المطلوب تحصيله: فواتير مفتوحة تجاوزت استحقاقها — تنبيه مجمّع يفتح تقرير
+  // تقدّم الديون، فلا يضيع دَينٌ بالنسيان.
+  if (userCan(user.role, user.overrides, 'reports.view')) {
+    const overdueCount = await prisma.invoice.count({
+      where: {
+        tenantId: user.tenantId,
+        isDeleted: false,
+        status: { in: ['ISSUED', 'PARTIALLY_PAID'] },
+        dueDate: { lt: new Date() },
+      },
+    });
+    if (overdueCount > 0) {
+      alerts = [
+        {
+          id: 'overdue-invoices',
+          label: `${overdueCount} فاتورة متأخرة عن الاستحقاق`,
+          detail: 'ديون تنتظر التحصيل — اضغط لفتح تقرير تقدّم الديون بالأقدم أولاً',
+          href: '/reports/aging',
+        },
+        ...alerts,
+      ];
+    }
+  }
+
   const initials =
     (user.nameAr ?? user.name ?? '')
       .split(/\s+/)

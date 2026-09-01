@@ -179,6 +179,7 @@ export function DocumentForm({
   sources,
   allowNewCustomer = false,
   lastPriceAction,
+  debts,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   customers: { value: string; label: string }[];
@@ -200,6 +201,8 @@ export function DocumentForm({
   allowNewCustomer?: boolean;
   /** يجلب آخر سعر بيع (عميل × متغيّر) ليظهر تلميحاً تحت خانة السعر. */
   lastPriceAction?: (customerId: string, variantId: string) => Promise<{ price: number; date: string } | null>;
+  /** دين كل عميل المفتوح — يظهر تحذيراً لحظة اختياره. */
+  debts?: Record<string, { amount: number; count: number }>;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const [lines, setLines] = useState<DocLine[]>(() =>
@@ -420,6 +423,13 @@ export function DocumentForm({
         )}
         {state.fieldErrors?.customerId && (
           <span className="mt-1 block text-[0.7rem] text-bad">{state.fieldErrors.customerId}</span>
+        )}
+        {/* دين العميل يواجه البائع لحظة الاختيار — يقرر بالبيع الآجل وهو شايف. */}
+        {!newCustomer && customerId && debts?.[customerId] && (
+          <span className="mt-1.5 block rounded-lg border border-warn bg-warn-soft px-3 py-1.5 text-[0.7rem] font-medium text-warn">
+            ⚠ عليه {formatMoney(dec(debts[customerId].amount))} د.ع من {debts[customerId].count}{' '}
+            {debts[customerId].count === 1 ? 'فاتورة مفتوحة' : 'فواتير مفتوحة'}
+          </span>
         )}
       </div>
 

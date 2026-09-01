@@ -117,6 +117,7 @@ export default async function NewInvoicePage({
           instantIssue
           allowNewCustomer
           lastPriceAction={lastCustomerPrice}
+          debts={options.debts}
         />
         <p className="mt-4 text-[0.7rem] text-txt-4">
           {webOrderId

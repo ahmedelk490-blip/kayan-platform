@@ -24,8 +24,9 @@ import { ConfirmButton } from '@/components/crud/ConfirmButton';
 import { SubmitButton } from '@/components/crud/Form';
 import { dateInput } from '@/lib/ops';
 import type { SearchParams } from '@/lib/query';
+import { waLink } from '@/lib/wa';
 import { PaymentForm, VoidForm } from '../PaymentForm';
-import { issueInvoice, voidInvoice, recordPayment, reversePayment } from '../actions';
+import { issueInvoice, voidInvoice, recordPayment, reversePayment, duplicateInvoice } from '../actions';
 
 export const metadata: Metadata = { title: 'الفاتورة' };
 
@@ -83,17 +84,10 @@ export default async function InvoicePage({
   const left = balance(dec(invoice.total).minus(returnedValue), invoice.paidAmount);
   const late = daysOverdue(invoice.dueDate, left);
 
-  // رابط واتساب بنص الفاتورة جاهزاً — زبون هذا السوق كل تعامله واتساب.
-  // الرقم يُحوَّل للصيغة الدولية: ٠٧… العراقي يصير ‎964…؛ الفتح لا يُرسل
-  // شيئاً بنفسه — يفتح المحادثة والنص جاهز والبائع يضغط إرسال بنفسه.
-  const waUrl = (() => {
-    const raw = invoice.customer.whatsapp ?? invoice.customer.phone;
-    if (!raw) return null;
-    let digits = raw.replace(/\D/g, '');
-    if (digits.startsWith('00')) digits = digits.slice(2);
-    if (digits.startsWith('0')) digits = `964${digits.slice(1)}`;
-    if (digits.length < 10) return null;
-    const text = [
+  // رابط واتساب بنص الفاتورة جاهزاً — لا يُرسل شيئاً بنفسه.
+  const waUrl = waLink(
+    invoice.customer.whatsapp ?? invoice.customer.phone,
+    [
       `فاتورة ${invoice.number ?? 'مسودة'}`,
       ...invoice.lines.map(
         (l) => `• ${l.description} × ${formatQty(l.quantity)} = ${formatMoney(l.lineTotal)} د.ع`,
@@ -104,9 +98,8 @@ export default async function InvoicePage({
       'شكراً لتعاملكم معنا — كيان للزي الموحد',
     ]
       .filter(Boolean)
-      .join('\n');
-    return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
-  })();
+      .join('\n'),
+  );
 
   return (
     <AppShell user={user} title={invoice.number ?? 'فاتورة مسودة'}>
@@ -130,6 +123,14 @@ export default async function InvoicePage({
               <Link href={`/invoices/${invoice.id}/edit`} className="erp-btn-ghost">
                 تعديل البنود
               </Link>
+            )}
+            {canWrite && invoice.lines.length > 0 && (
+              <form action={duplicateInvoice.bind(null, invoice.id)}>
+                {/* نفس العميل ونفس الأصناف في مسوّدة جديدة — للطلب الموسمي المتكرر. */}
+                <button type="submit" className="erp-btn-ghost">
+                  كرر الطلب
+                </button>
+              </form>
             )}
             {canIssue && status === 'DRAFT' && (
               <form action={issueInvoice.bind(null, invoice.id)}>

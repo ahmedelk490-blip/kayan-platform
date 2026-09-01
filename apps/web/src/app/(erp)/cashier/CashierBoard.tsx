@@ -27,11 +27,14 @@ export function CashierBoard({
   variants,
   images,
   warehouseId,
+  debts,
 }: {
   customers: { value: string; label: string }[];
   variants: VariantOption[];
   images: Record<string, string | null>;
   warehouseId: string;
+  /** دين كل عميل المفتوح — يظهر تحذيراً لحظة اختياره. */
+  debts?: Record<string, { amount: number; count: number }>;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(cashierCheckout, {});
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -282,6 +285,13 @@ export function CashierBoard({
           )}
           {state.fieldErrors?.customerId && (
             <span className="mt-1 block text-[0.7rem] text-bad">{state.fieldErrors.customerId}</span>
+          )}
+          {/* دين العميل أمام الكاشير لحظة اختياره. */}
+          {!quickCustomer && customerId && debts?.[customerId] && (
+            <span className="mt-1.5 block rounded-lg border border-warn bg-warn-soft px-3 py-1.5 text-[0.7rem] font-medium text-warn">
+              ⚠ عليه {formatMoney(dec(debts[customerId].amount))} د.ع من {debts[customerId].count}{' '}
+              {debts[customerId].count === 1 ? 'فاتورة مفتوحة' : 'فواتير مفتوحة'}
+            </span>
           )}
         </div>
 

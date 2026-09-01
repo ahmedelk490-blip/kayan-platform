@@ -282,6 +282,63 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
   redirect(`/invoices/${invoice.id}`);
 }
 
+/**
+ * تكرار طلب: مسوّدة جديدة بنفس عميل وأصناف وأسعار فاتورة سابقة — عملاء
+ * اليونيفورم يعيدون نفس الطلب كل موسم، فبدل إعادة إدخال السطور تُنسخ
+ * وتُراجَع ثم تُصدَر. لا مخزون يُمسّ حتى الإصدار.
+ */
+export async function duplicateInvoice(invoiceId: string): Promise<void> {
+  const user = await requirePermission('invoices.write');
+
+  const src = await prisma.invoice.findFirst({
+    where: { id: invoiceId, tenantId: user.tenantId, isDeleted: false },
+    include: { lines: { orderBy: { lineNo: 'asc' } } },
+  });
+  if (!src || src.lines.length === 0) redirect(`/invoices/${invoiceId}`);
+
+  const created = await prisma.invoice.create({
+    data: {
+      tenantId: user.tenantId,
+      customerId: src.customerId,
+      status: 'DRAFT',
+      subtotal: src.subtotal,
+      discountAmount: src.discountAmount,
+      taxAmount: src.taxAmount,
+      total: src.total,
+      source: src.source,
+      notes: src.notes,
+      createdById: user.id,
+      lines: {
+        create: src.lines.map((l, i) => ({
+          lineNo: i + 1,
+          productId: l.productId,
+          variantId: l.variantId,
+          description: l.description,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          discountAmount: l.discountAmount,
+          taxRate: l.taxRate,
+          taxAmount: l.taxAmount,
+          lineTotal: l.lineTotal,
+        })),
+      },
+    },
+    select: { id: true },
+  });
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'invoice.duplicate',
+    entityType: 'Invoice',
+    entityId: created.id,
+    detail: `مكررة من ${src.number ?? 'مسودة'}`,
+  });
+
+  revalidatePath('/invoices');
+  redirect(`/invoices/${created.id}`);
+}
+
 /** المخزن الافتراضي للمستأجر — لتسوية المخزون عند تعديل بنود الفاتورة. */
 async function defaultWarehouseId(tenantId: string): Promise<string | null> {
   const wh = await prisma.warehouse.findFirst({
