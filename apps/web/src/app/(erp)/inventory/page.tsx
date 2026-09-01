@@ -9,6 +9,7 @@ import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import { MovementModal } from './MovementModal';
 import { MinStockCell } from './MinStockCell';
 import { ShareShortages } from './ShareShortages';
+import { StocktakeTable, type StocktakeRow } from './StocktakeTable';
 import { reverseMovement } from './actions';
 import { TYPE_LABELS } from './types';
 
@@ -201,14 +202,17 @@ export default async function InventoryPage({
           ),
         ].join('\n');
 
-  // الجرد الكامل: كل رصيد بالدست والقطعة، حسب قطع دستة كل منتج.
-  const stocktakeRows = fullStock.map((s) => {
+  // الجرد الكامل: كل رصيد بالدست والقطعة، حسب قطع دستة كل منتج — صفوف
+  // جاهزة للعرض (نصوص وأرقام) لأن الجدول مكوّن عميل ببحث فوري.
+  let stocktakeValue = dec(0);
+  const stocktakeRows: StocktakeRow[] = fullStock.map((s) => {
     const ppd = s.variant.product.piecesPerDozen || 12;
     const onHandNum = Math.max(0, Math.trunc(dec(s.onHand).toNumber()));
     const dozens = Math.floor(onHandNum / ppd);
     const looseP = onHandNum - dozens * ppd;
     const unitCost = s.variant.cost ?? s.variant.product.cost ?? null;
     const value = unitCost !== null ? dec(s.onHand).times(dec(unitCost)) : null;
+    if (value) stocktakeValue = stocktakeValue.plus(value);
     const isOut = dec(s.onHand).lte(0);
     const isLow = !isOut && dec(s.minStock).gt(0) && dec(s.onHand).lte(dec(s.minStock));
     return {
@@ -218,14 +222,13 @@ export default async function InventoryPage({
       ppd,
       dozens,
       looseP,
-      onHand: s.onHand,
-      unitCost,
-      value,
-      status: isOut ? ('نفد' as const) : isLow ? ('قارب على النفاد' as const) : ('متوفّر' as const),
-      tone: isOut ? ('bad' as const) : isLow ? ('bad' as const) : ('ok' as const),
+      onHand: formatQty(s.onHand),
+      unitCost: unitCost === null ? null : formatMoney(unitCost),
+      value: value === null ? null : formatMoney(value),
+      status: isOut ? 'نفد' : isLow ? 'قارب على النفاد' : 'متوفّر',
+      tone: isOut || isLow ? ('bad' as const) : ('ok' as const),
     };
   });
-  const stocktakeValue = stocktakeRows.reduce((sum, r) => (r.value ? sum.plus(r.value) : sum), dec(0));
 
   return (
     <AppShell user={user} title="المخزون">
@@ -248,6 +251,21 @@ export default async function InventoryPage({
           </div>
         }
       />
+
+      {/* المهم أولاً: النواقص تواجهك قبل أي جدول — ضغطة تفتح قائمة الطلب. */}
+      {reorderRows.length > 0 && (
+        <a
+          href="/inventory?tab=reorder"
+          className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-bad bg-bad-soft px-4 py-3 transition-opacity hover:opacity-90"
+        >
+          <span className="text-sm font-semibold text-bad">
+            ⚠ {reorderRows.length} صنف ناقص
+            {reorderRows.filter((r) => r.empty).length > 0 &&
+              ` — منها ${reorderRows.filter((r) => r.empty).length} نفد تماماً`}
+          </span>
+          <span className="shrink-0 text-xs font-medium text-bad underline">افتح قائمة الطلب ←</span>
+        </a>
+      )}
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Metric label="رصيد المنتجات" value={totals.onHand} />
@@ -279,42 +297,7 @@ export default async function InventoryPage({
           {
             key: 'stocktake',
             label: 'الجرد الكامل',
-            content: (
-              <section>
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-brand">جرد المخزن كاملاً — بالدست والقطعة</h3>
-                  <span className="text-[0.7rem] text-txt-4">
-                    {stocktakeRows.length} صنف · القيمة الإجمالية <span className="tnum font-semibold text-brand">{formatMoney(stocktakeValue)}</span>
-                  </span>
-                </div>
-                <Table
-                  headers={['المنتج / المتغيّر', 'المخزن', 'الدست', 'قطعة زيادة', 'إجمالي القطع', 'قطع الدستة', 'تكلفة القطعة', 'القيمة', 'الحالة']}
-                  empty={stocktakeRows.length === 0}
-                >
-                  {stocktakeRows.map((r) => (
-                    <tr key={r.id} className="hover:bg-card-2">
-                      <td className="px-4 py-3 text-txt">{r.label}</td>
-                      <td className="px-4 py-3 text-txt-3">{r.warehouse}</td>
-                      <td className="tnum px-4 py-3 font-semibold text-txt">{r.dozens}</td>
-                      <td className="tnum px-4 py-3 text-txt-2">{r.looseP}</td>
-                      <td className="tnum px-4 py-3 text-txt-2">{formatQty(r.onHand)}</td>
-                      <td className="tnum px-4 py-3 text-txt-4">{r.ppd}</td>
-                      <td className="tnum px-4 py-3 text-txt-3">
-                        {r.unitCost === null ? <span className="text-warn">—</span> : formatMoney(r.unitCost)}
-                      </td>
-                      <td className="tnum px-4 py-3 font-medium text-brand">
-                        {r.value === null ? '—' : formatMoney(r.value)}
-                      </td>
-                      <td className="px-4 py-3"><Badge tone={r.tone}>{r.status}</Badge></td>
-                    </tr>
-                  ))}
-                </Table>
-                <p className="mt-2 text-[0.7rem] leading-[1.8] text-txt-4">
-                  «الدست» و«قطعة زيادة» محسوبان من إجمالي القطع على أساس قطع دستة كل منتج
-                  (تُضبط من صفحة المنتج). القيمة = إجمالي القطع × تكلفة القطعة.
-                </p>
-              </section>
-            ),
+            content: <StocktakeTable rows={stocktakeRows} totalValue={formatMoney(stocktakeValue)} />,
           },
           {
             key: 'reorder',

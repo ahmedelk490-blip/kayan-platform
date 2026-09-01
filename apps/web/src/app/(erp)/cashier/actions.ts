@@ -5,8 +5,8 @@ import { redirect } from 'next/navigation';
 import { dec, dueDate, deriveInvoiceStatus, exceedsBalance, isPaymentMethod, can } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
-import { audit } from '@/lib/audit';
-import { num } from '@/lib/num';
+import { audit, nextCode } from '@/lib/audit';
+import { num, normalizeDigits } from '@/lib/num';
 import { allocateInvoiceNumber, lockPaymentSequence, nextPaymentNumber, invoiceSettings, type FormState } from '../invoices/shared';
 
 /**
@@ -22,8 +22,41 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
     return { error: 'تحتاج صلاحيتَي الإصدار والتحصيل لإتمام البيع.' };
   }
 
-  const customerId = String(formData.get('customerId') ?? '').trim();
+  let customerId = String(formData.get('customerId') ?? '').trim();
   const warehouseId = String(formData.get('warehouseId') ?? '').trim();
+
+  // عميل سريع من الكاشير: اسم وهاتف فقط — الزبون واقف على الكاونتر لا وقت
+  // لمغادرة الشاشة. يُطابَق بالهاتف أولاً فلا يتكرر العميل.
+  const newName = String(formData.get('newCustomerName') ?? '').trim();
+  const newPhone = normalizeDigits(String(formData.get('newCustomerPhone') ?? ''));
+  if (!customerId && newName) {
+    if (!newPhone) return { fieldErrors: { customerId: 'اكتب رقم هاتف العميل الجديد.' } };
+    const existing = await prisma.customer.findFirst({
+      where: { tenantId: user.tenantId, phone: newPhone, isDeleted: false },
+      select: { id: true },
+    });
+    if (existing) {
+      customerId = existing.id;
+    } else {
+      const codes = await prisma.customer.findMany({
+        where: { tenantId: user.tenantId },
+        select: { code: true },
+      });
+      const created = await prisma.customer.create({
+        data: {
+          tenantId: user.tenantId,
+          code: await nextCode('CUS', codes),
+          contactName: newName,
+          phone: newPhone,
+          whatsapp: newPhone,
+          notes: 'أُنشئ من لوحة الكاشير.',
+        },
+        select: { id: true },
+      });
+      customerId = created.id;
+    }
+  }
+
   if (!customerId) return { fieldErrors: { customerId: 'اختر العميل.' } };
   if (!warehouseId) return { error: 'لا يوجد مخزن للصرف منه.' };
 

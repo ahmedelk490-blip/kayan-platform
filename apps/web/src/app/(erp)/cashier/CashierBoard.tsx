@@ -40,6 +40,14 @@ export function CashierBoard({
   const [paid, setPaid] = useState(0);
   const [method, setMethod] = useState('CASH');
 
+  // عميل سريع: اسم + موبايل مكان القائمة — للأوردر السريع على الكاونتر.
+  const [quickCustomer, setQuickCustomer] = useState(false);
+  const [quickName, setQuickName] = useState('');
+  const [quickPhone, setQuickPhone] = useState('');
+  const customerReady = quickCustomer
+    ? quickName.trim().length > 0 && quickPhone.trim().length > 0
+    : Boolean(customerId);
+
   // المنتجات المميّزة من المتغيّرات، بصورها.
   const products = useMemo(() => {
     const map = new Map<string, { id: string; name: string; image: string | null }>();
@@ -134,16 +142,49 @@ export function CashierBoard({
           )}
         </div>
 
-        <label className="block">
-          <span className="mb-1 block text-[0.7rem] text-txt-3">العميل</span>
-          <SearchableSelect
-            name="customerId"
-            options={customers}
-            placeholder="ابحث عن العميل أو اختره…"
-            required
-            onSelect={setCustomerId}
-          />
-        </label>
+        <div className="block">
+          <span className="mb-1 flex items-center justify-between text-[0.7rem] text-txt-3">
+            <span>العميل</span>
+            <button
+              type="button"
+              onClick={() => setQuickCustomer((v) => !v)}
+              className="font-medium text-brand hover:underline"
+            >
+              {quickCustomer ? '← عميل موجود' : '+ عميل جديد بسرعة'}
+            </button>
+          </span>
+          {quickCustomer ? (
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                name="newCustomerName"
+                value={quickName}
+                onChange={(e) => setQuickName(e.target.value)}
+                placeholder="اسم العميل"
+                className="erp-input py-2.5"
+              />
+              <input
+                name="newCustomerPhone"
+                value={quickPhone}
+                onChange={(e) => setQuickPhone(e.target.value)}
+                dir="ltr"
+                inputMode="tel"
+                placeholder="رقم الموبايل"
+                className="erp-input py-2.5 text-start"
+              />
+            </div>
+          ) : (
+            <SearchableSelect
+              name="customerId"
+              options={customers}
+              placeholder="ابحث عن العميل أو اختره…"
+              required
+              onSelect={setCustomerId}
+            />
+          )}
+          {state.fieldErrors?.customerId && (
+            <span className="mt-1 block text-[0.7rem] text-bad">{state.fieldErrors.customerId}</span>
+          )}
+        </div>
 
         <div className="flex items-center justify-between border-t border-line pt-3">
           <span className="text-sm text-txt-2">الإجمالي</span>
@@ -165,7 +206,7 @@ export function CashierBoard({
         </div>
         <p className="text-[0.7rem] text-txt-4">المتبقّي: <span className={`tnum font-semibold ${remaining.lte(0) ? 'text-ok' : 'text-warn'}`}>{formatMoney(remaining)}</span></p>
 
-        <CheckoutButton disabled={cart.length === 0 || !customerId} />
+        <CheckoutButton disabled={cart.length === 0 || !customerReady} />
       </form>
 
       {picking && (
