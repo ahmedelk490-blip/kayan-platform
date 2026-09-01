@@ -5,6 +5,7 @@ import type { PermissionKey } from '@erp/domain';
 import { userCan, landingPathFor } from '@erp/domain';
 import { getSessionUser, type SessionUser } from './auth';
 import { setCurrentTenant } from './tenant-context';
+import { maybeBackup } from './backup';
 
 /**
  * Route guards — deny by default (NFR-12).
@@ -24,6 +25,9 @@ export async function requireUser(): Promise<SessionUser> {
   const user = await getSessionUser();
   if (!user) redirect('/login');
   setCurrentTenant(user.tenantId);
+  // النسخ الاحتياطي اليومي يعلّق هنا: كل طلب مسجَّل يمرّ من هذا الحارس،
+  // فأول طلب بعد مرور يوم يطلق نسخة في الخلفية — بلا كرون وبلا انتظار.
+  maybeBackup();
   return user;
 }
 

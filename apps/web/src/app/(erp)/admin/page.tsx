@@ -5,6 +5,9 @@ import { AppShell } from '@/components/AppShell';
 import { Kpi, Panel } from '@/components/Kpi';
 import { can } from '@erp/domain';
 import { SeedButton } from './SeedButton';
+import { SubmitButton } from '@/components/crud/Form';
+import { listBackups } from '@/lib/backup';
+import { runBackupNow } from './backup-actions';
 
 export const metadata: Metadata = { title: 'الإدارة' };
 
@@ -96,6 +99,10 @@ export default async function AdminPage() {
           </Panel>
         )}
 
+        <Panel title="النسخ الاحتياطي">
+          <BackupPanel />
+        </Panel>
+
         <Panel title="الأدوار والصلاحيات">
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {roles.map((role) => (
@@ -113,5 +120,40 @@ export default async function AdminPage() {
         </Panel>
       </div>
     </AppShell>
+  );
+}
+
+/**
+ * حالة النسخ الاحتياطي: النظام يأخذ نسخة يومية تلقائياً مع أول استخدام بعد
+ * مرور يوم، وهنا زر نسخة فورية وآخر النسخ الموجودة على الخادم.
+ */
+async function BackupPanel() {
+  const backups = await listBackups();
+  const mb = (n: number) => `${(n / 1024 / 1024).toFixed(2)} م.ب`;
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs leading-relaxed text-txt-3">
+          نسخة يومية تلقائية من كل الجداول (JSON مضغوط) في مجلد خارج مجلد النشر،
+          وتُحفظ آخر ٣٠ نسخة.
+          {backups.length > 0
+            ? ` آخر نسخة: ${backups[0].mtime.toLocaleString('ar-EG', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.`
+            : ' لا نسخ بعد — الأولى ستؤخذ تلقائياً، أو خذها الآن.'}
+        </p>
+        <form action={runBackupNow}>
+          <SubmitButton label="نسخة احتياطية الآن" />
+        </form>
+      </div>
+      {backups.length > 0 && (
+        <ul className="mt-3 space-y-1.5">
+          {backups.slice(0, 5).map((b) => (
+            <li key={b.name} className="flex justify-between gap-3 text-[0.7rem] text-txt-3">
+              <span dir="ltr" className="tnum truncate text-start">{b.name}</span>
+              <span className="tnum shrink-0">{mb(b.size)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
