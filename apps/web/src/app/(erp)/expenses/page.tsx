@@ -16,6 +16,8 @@ import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Pager, Badge } from '@/components/crud/Shell';
+import { StatCard } from '@/components/dashboard/StatCard';
+import { IconCategory, IconClock, IconActivity } from '@/components/dashboard/Icons';
 import { BarChartInteractive } from '@/components/dashboard/BarChartInteractive';
 import { DonutChartInteractive } from '@/components/dashboard/DonutChartInteractive';
 import { Toolbar } from '@/components/crud/Toolbar';
@@ -248,11 +250,32 @@ export default async function ExpensesPage({
         <span className="self-center text-[0.7rem] text-brand">المدى: {range.label}</span>
       </form>
 
-      {/* مربعات كبيرة تفاعلية بالأرقام الصحيحة (المعتمد فقط = ما صُرِف فعلاً). */}
+      {/* أرقام حيّة بأيقونات (المعتمد فقط = ما صُرِف فعلاً) — بأسلوب لوحة المدير. */}
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <BigFigure label="إجمالي المصروفات المعتمدة" value={formatMoney(approvedTotal)} hint={`${rangeTotal._count._all} مصروف · ${range.label}`} strong />
-        <BigFigure label="بانتظار الاعتماد" value={formatMoney(pendingTotal)} hint={`${pendingAgg._count._all} مصروف — لا يُخصَم قبل الاعتماد`} tone={pendingTotal.gt(0) ? 'warn' : undefined} />
-        <BigFigure label="المصروفات الثابتة الشهرية" value={formatMoney(recurringTotal)} hint={`${recurring.filter((r) => r.isActive).length} بند ثابت نشط`} />
+        <StatCard
+          index={0}
+          label="المصروفات المعتمدة"
+          value={formatMoney(approvedTotal)}
+          hint={`${rangeTotal._count._all} مصروف · ${range.label}`}
+          icon={<IconCategory />}
+          tone="primary"
+        />
+        <StatCard
+          index={1}
+          label="بانتظار الاعتماد"
+          value={formatMoney(pendingTotal)}
+          hint={`${pendingAgg._count._all} مصروف — لا يُخصَم قبل الاعتماد`}
+          icon={<IconClock />}
+          tone={pendingTotal.gt(0) ? 'warning' : 'success'}
+        />
+        <StatCard
+          index={2}
+          label="الثابتة الشهرية"
+          value={formatMoney(recurringTotal)}
+          hint={`${recurring.filter((r) => r.isActive).length} بند ثابت نشط`}
+          icon={<IconActivity />}
+          tone="neutral"
+        />
       </div>
 
       {approvedTotal.gt(0) && (
@@ -469,27 +492,3 @@ function Figure({ label, value, strong }: { label: string; value: string; strong
   );
 }
 
-/** مربّع كبير للأرقام — أوضح وأكبر من Figure، للوحة المصروفات العلوية. */
-function BigFigure({
-  label,
-  value,
-  hint,
-  strong,
-  tone,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  strong?: boolean;
-  tone?: 'warn';
-}) {
-  return (
-    <div className="erp-card p-6 transition-colors hover:border-brand/40">
-      <p className="text-xs text-txt-3">{label}</p>
-      <p className={`tnum mt-2 text-3xl font-bold ${tone === 'warn' ? 'text-warn' : 'text-brand'} ${strong ? '' : ''}`}>
-        {value}
-      </p>
-      {hint && <p className="mt-2 text-[0.7rem] text-txt-4">{hint}</p>}
-    </div>
-  );
-}

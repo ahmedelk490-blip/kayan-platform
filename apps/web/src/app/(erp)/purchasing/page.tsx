@@ -7,6 +7,8 @@ import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { Toolbar } from '@/components/crud/Toolbar';
 import { ModuleHeader, Table, Pager, Badge } from '@/components/crud/Shell';
+import { StatCard } from '@/components/dashboard/StatCard';
+import { IconBell, IconCategory, IconProduct } from '@/components/dashboard/Icons';
 import { parseListQuery, skipTake, type SearchParams } from '@/lib/query';
 
 export const metadata: Metadata = { title: 'أوامر الشراء' };
@@ -52,7 +54,7 @@ export default async function PurchasingPage({
       : {}),
   };
 
-  const [rows, count, outstanding] = await Promise.all([
+  const [rows, count, outstanding, totalCount, receivedCount] = await Promise.all([
     prisma.purchaseOrder.findMany({
       where,
       orderBy: { [query.sort]: query.dir },
@@ -70,6 +72,11 @@ export default async function PurchasingPage({
         status: { in: ['CONFIRMED', 'PARTIALLY_RECEIVED'] },
       },
       _sum: { total: true },
+      _count: { _all: true },
+    }),
+    prisma.purchaseOrder.count({ where: { tenantId: user.tenantId, isDeleted: false } }),
+    prisma.purchaseOrder.count({
+      where: { tenantId: user.tenantId, isDeleted: false, status: 'RECEIVED' },
     }),
   ]);
 
@@ -89,12 +96,33 @@ export default async function PurchasingPage({
         }
       />
 
-      <p className="mb-5 text-xs text-txt-3">
-        قيمة الأوامر المفتوحة (مؤكَّدة ولم تُستلم بالكامل):{' '}
-        <span className="tnum font-medium text-brand">
-          {formatMoney(outstanding._sum.total ?? 0)}
-        </span>
-      </p>
+      {/* أرقام حيّة بأيقونات — بأسلوب لوحة المدير نفسه. */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <StatCard
+          index={0}
+          label="قيمة الأوامر المفتوحة"
+          value={formatMoney(outstanding._sum.total ?? 0)}
+          hint={`${outstanding._count._all} أمر مؤكَّد لم يُستلم بالكامل`}
+          icon={<IconBell />}
+          tone={outstanding._count._all > 0 ? 'warning' : 'success'}
+        />
+        <StatCard
+          index={1}
+          label="أوامر الشراء (الكل)"
+          value={totalCount}
+          unit="أمر"
+          icon={<IconCategory />}
+          tone="primary"
+        />
+        <StatCard
+          index={2}
+          label="مستلمة بالكامل"
+          value={receivedCount}
+          unit="أمر"
+          icon={<IconProduct />}
+          tone="success"
+        />
+      </div>
 
       <Toolbar placeholder="ابحث بالرقم أو المورّد…" sorts={SORTS} />
 

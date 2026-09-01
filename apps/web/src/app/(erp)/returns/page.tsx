@@ -6,6 +6,8 @@ import { prisma } from '@/lib/prisma';
 import { can } from '@erp/domain';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Pager } from '@/components/crud/Shell';
+import { StatCard } from '@/components/dashboard/StatCard';
+import { IconActivity, IconProduct, IconBell } from '@/components/dashboard/Icons';
 import { parseListQuery, skipTake, type SearchParams } from '@/lib/query';
 import { ConfirmButton } from '@/components/crud/ConfirmButton';
 import { deleteReturn } from './actions';
@@ -73,20 +75,31 @@ export default async function ReturnsPage({
         action={canWrite ? <Link href="/returns/new" className="erp-btn">+ مرتجع جديد</Link> : null}
       />
 
-      {/* الكروت إجماليات كلية من قاعدة البيانات — لا تتأثر بالبحث أو الصفحة. */}
+      {/* أرقام حيّة بأيقونات — إجماليات كلية من قاعدة البيانات لا من الصفحة المعروضة. */}
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <div className="erp-card p-4">
-          <p className="text-[0.7rem] text-txt-3">عدد المرتجعات (الكل)</p>
-          <p className="tnum mt-1 text-xl font-bold text-brand">{agg._count}</p>
-        </div>
-        <div className="erp-card p-4">
-          <p className="text-[0.7rem] text-txt-3">عدد القطع المرجعة (الكل)</p>
-          <p className="tnum mt-1 text-xl font-bold text-brand">{totalPieces.toLocaleString('en-US')}</p>
-        </div>
-        <div className="erp-card p-4">
-          <p className="text-[0.7rem] text-txt-3">إجمالي قيمة المرتجعات (الكل)</p>
-          <p className="tnum mt-1 text-xl font-bold text-brand">{formatMoney(total)}</p>
-        </div>
+        <StatCard
+          index={0}
+          label="عدد المرتجعات (الكل)"
+          value={agg._count}
+          unit="مرتجع"
+          icon={<IconActivity />}
+          tone="neutral"
+        />
+        <StatCard
+          index={1}
+          label="القطع المرجعة (الكل)"
+          value={totalPieces}
+          unit="قطعة"
+          icon={<IconProduct />}
+          tone="primary"
+        />
+        <StatCard
+          index={2}
+          label="قيمة المرتجعات (الكل)"
+          value={formatMoney(total)}
+          icon={<IconBell />}
+          tone={total.gt(0) ? 'warning' : 'success'}
+        />
       </div>
 
       <form className="mb-4" action="/returns">
