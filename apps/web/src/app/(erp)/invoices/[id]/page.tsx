@@ -111,11 +111,11 @@ export default async function InvoicePage({
             <Link href="/invoices" className="erp-btn-ghost">
               رجوع
             </Link>
-            <Link href={`/invoices/${invoice.id}/print`} className="erp-btn-ghost">
+            <Link href={`/invoices/${invoice.id}/print`} className="erp-btn-print">
               طباعة / PDF
             </Link>
             {waUrl && (
-              <a href={waUrl} target="_blank" rel="noopener noreferrer" className="erp-btn-ghost">
+              <a href={waUrl} target="_blank" rel="noopener noreferrer" className="erp-btn-wa">
                 واتساب للعميل
               </a>
             )}
@@ -127,7 +127,7 @@ export default async function InvoicePage({
             {canWrite && invoice.lines.length > 0 && (
               <form action={duplicateInvoice.bind(null, invoice.id)}>
                 {/* نفس العميل ونفس الأصناف في مسوّدة جديدة — للطلب الموسمي المتكرر. */}
-                <button type="submit" className="erp-btn-ghost">
+                <button type="submit" className="erp-btn-repeat">
                   كرر الطلب
                 </button>
               </form>

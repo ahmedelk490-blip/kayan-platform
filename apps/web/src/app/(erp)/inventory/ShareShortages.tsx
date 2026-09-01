@@ -31,7 +31,7 @@ export function ShareShortages({ text }: { text: string }) {
         href={`https://wa.me/?text=${encodeURIComponent(text)}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="rounded-lg border border-line px-3 py-1.5 text-[0.7rem] font-medium text-txt-2 transition-colors hover:border-brand hover:text-brand"
+        className="erp-btn-wa erp-btn-sm"
       >
         إرسال واتساب للمورّد
       </a>

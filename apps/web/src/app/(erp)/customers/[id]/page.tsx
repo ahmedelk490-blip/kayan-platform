@@ -110,13 +110,13 @@ export default async function CustomerDetailPage({
             {canSell && lastInvoice && (
               <form action={duplicateInvoice.bind(null, lastInvoice.id)}>
                 {/* مسوّدة جديدة بنفس أصناف آخر فاتورة — للطلب الموسمي المتكرر. */}
-                <button type="submit" className="erp-btn-ghost" title={`ينسخ ${lastInvoice.number ?? 'آخر فاتورة'}`}>
+                <button type="submit" className="erp-btn-repeat" title={`ينسخ ${lastInvoice.number ?? 'آخر فاتورة'}`}>
                   كرر آخر طلب
                 </button>
               </form>
             )}
             {statementUrl && (
-              <a href={statementUrl} target="_blank" rel="noopener noreferrer" className="erp-btn-ghost">
+              <a href={statementUrl} target="_blank" rel="noopener noreferrer" className="erp-btn-wa">
                 كشف حساب واتساب
               </a>
             )}
