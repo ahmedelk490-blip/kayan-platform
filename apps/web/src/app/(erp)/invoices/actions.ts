@@ -21,6 +21,7 @@ import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors, nextCode } from '@/lib/audit';
 import { readLines, decimal, normalizeDigits } from '@/app/(erp)/sales/shared';
+import { numeric } from '@/lib/num';
 import {
   allocateInvoiceNumber,
   nextPaymentNumber,
@@ -693,7 +694,7 @@ export async function voidInvoice(
 // ── Payments ────────────────────────────────────────────────
 
 const PaymentSchema = z.object({
-  amount: z.coerce.number().positive('المبلغ يجب أن يكون أكبر من صفر.'),
+  amount: numeric(z.coerce.number().positive('المبلغ يجب أن يكون أكبر من صفر.')),
   method: z.string().refine(isPaymentMethod, 'طريقة سداد غير معروفة.'),
   paidAt: z.string().optional(),
   reference: z.string().trim().max(120).optional().or(z.literal('')),

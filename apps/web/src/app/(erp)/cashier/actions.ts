@@ -6,6 +6,7 @@ import { dec, dueDate, deriveInvoiceStatus, exceedsBalance, isPaymentMethod, can
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
+import { num } from '@/lib/num';
 import { allocateInvoiceNumber, nextPaymentNumber, invoiceSettings, type FormState } from '../invoices/shared';
 
 /**
@@ -34,8 +35,8 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
 
   // السطور: متغيّر + كمية + سعر وحدة (مصفوفات متوازية).
   const variantIds = formData.getAll('lineVariantId').map(String);
-  const quantities = formData.getAll('lineQuantity').map((v) => Math.max(1, Math.round(Number(v) || 0)));
-  const unitPrices = formData.getAll('lineUnitPrice').map((v) => Number(v) || 0);
+  const quantities = formData.getAll('lineQuantity').map((v) => Math.max(1, Math.round(num(v))));
+  const unitPrices = formData.getAll('lineUnitPrice').map((v) => num(v));
   const rawLines = variantIds
     .map((variantId, i) => ({ variantId, quantity: quantities[i] ?? 1, unitPrice: unitPrices[i] ?? 0 }))
     .filter((l) => l.variantId && l.quantity > 0);
@@ -55,7 +56,7 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
   const computed = rawLines.map((l) => ({ ...l, lineTotal: dec(l.quantity).times(dec(l.unitPrice)) }));
   const total = computed.reduce((s, l) => s.plus(l.lineTotal), dec(0));
 
-  const payAmount = dec(Number(formData.get('paymentAmount') ?? 0) || 0);
+  const payAmount = dec(num(formData.get('paymentAmount')));
   const payMethod = String(formData.get('paymentMethod') ?? 'CASH');
   const wantsPayment = payAmount.gt(0);
   if (wantsPayment) {

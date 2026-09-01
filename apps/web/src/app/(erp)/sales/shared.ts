@@ -61,22 +61,9 @@ export async function timeline(input: {
   });
 }
 
-/**
- * يحوّل الأرقام العربية-الهندية (٠-٩) والفارسية إلى لاتينية، ويوحّد الفاصلة
- * العربية والعشرية.
- *
- * المستخدم العراقي يكتب «١٢٥» أو «١٢٫٥»، و`Number()` لا يفهمها فيعيد NaN،
- * فيسقط السطر بصمت — وهو تماماً «الحساب لا يسمع». التطبيع هنا يجعل ما يكتبه
- * رقماً حقيقياً.
- */
-export function normalizeDigits(input: string): string {
-  return input
-    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660)) // ٠-٩
-    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0)) // ۰-۹ الفارسية
-    .replace(/٫/g, '.') // الفاصلة العشرية العربية ٫
-    .replace(/[٬,]/g, '') // فاصلة الآلاف العربية ٬ واللاتينية
-    .trim();
-}
+// التطبيع صار عامّاً في lib/num — يُعاد تصديره هنا إبقاءً على مستورديه.
+export { normalizeDigits } from '@/lib/num';
+import { normalizeDigits } from '@/lib/num';
 
 /** Parse a decimal form value, defaulting to 0. */
 export function decimal(value: FormDataEntryValue | null): number {

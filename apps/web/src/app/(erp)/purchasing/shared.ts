@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { prisma } from '@/lib/prisma';
+import { num } from '@/lib/num';
 
 /** Types and helpers a `'use server'` module cannot export. */
 
@@ -48,10 +49,10 @@ export function readPurchaseLines(formData: FormData) {
     .map((target, i) => ({
       target,
       ref: refs[i] ?? '',
-      quantity: Number(quantities[i] ?? 0),
-      unitPrice: Number(prices[i] ?? 0),
-      discountAmount: Number(discounts[i] ?? 0),
-      taxRate: Number(taxes[i] ?? 0),
+      quantity: num(quantities[i]),
+      unitPrice: num(prices[i]),
+      discountAmount: num(discounts[i]),
+      taxRate: num(taxes[i]),
       description: descriptions[i]?.trim() || null,
     }))
     .filter((l) => l.ref && l.quantity > 0);

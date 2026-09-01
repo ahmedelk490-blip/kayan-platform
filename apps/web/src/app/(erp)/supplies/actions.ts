@@ -6,6 +6,7 @@ import { dec, isSupplyKind, isSupplyTxType, supplyDelta, SUPPLY_CATEGORIES } fro
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
+import { numeric } from '@/lib/num';
 import { parseDateOr, type FormState } from '@/lib/ops';
 
 const SupplySchema = z
@@ -14,7 +15,7 @@ const SupplySchema = z
     kind: z.string().refine(isSupplyKind, 'نوع غير معروف.'),
     category: z.string().min(1, 'الفئة مطلوبة.'),
     unit: z.string().trim().max(24).optional().or(z.literal('')),
-    minStock: z.coerce.number().min(0).optional(),
+    minStock: numeric(z.coerce.number().min(0).optional()),
   })
   // A thread is not a printing supply. Validating the pair, not each field
   // alone, is what stops the two lists quietly merging.
@@ -158,8 +159,8 @@ const TxSchema = z.object({
   supplyId: z.string().min(1, 'اختر المستلزم.'),
   type: z.string().refine(isSupplyTxType, 'نوع حركة غير معروف.'),
   txDate: z.string().optional(),
-  quantity: z.coerce.number().positive('الكمية يجب أن تكون أكبر من صفر.'),
-  unitCost: z.coerce.number().min(0, 'التكلفة لا يمكن أن تكون سالبة.'),
+  quantity: numeric(z.coerce.number().positive('الكمية يجب أن تكون أكبر من صفر.')),
+  unitCost: numeric(z.coerce.number().min(0, 'التكلفة لا يمكن أن تكون سالبة.')),
   productionOrderId: z.string().optional(),
   notes: z.string().trim().max(500).optional().or(z.literal('')),
 });

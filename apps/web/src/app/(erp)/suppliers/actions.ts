@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { audit, fieldErrors, nextCode } from '@/lib/audit';
+import { num } from '@/lib/num';
 
 export interface FormState {
   error?: string;
@@ -176,8 +177,8 @@ export async function linkProduct(
       supplierId,
       productId,
       supplierSku: String(formData.get('supplierSku') ?? '') || null,
-      lastPrice: Number(formData.get('lastPrice')) || null,
-      leadTimeDays: Number(formData.get('leadTimeDays')) || null,
+      lastPrice: num(formData.get('lastPrice')) || null,
+      leadTimeDays: num(formData.get('leadTimeDays')) || null,
     },
   });
 

@@ -6,6 +6,7 @@ import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { dec, formatQty } from '@erp/domain';
 import { audit, fieldErrors } from '@/lib/audit';
+import { num, numeric } from '@/lib/num';
 import { TYPES, type MovementType } from './types';
 
 export interface FormState {
@@ -53,7 +54,7 @@ async function applyStockDelta(
 const MovementSchema = z.object({
   variantId: z.string().min(1, 'المتغيّر مطلوب.'),
   type: z.enum(Object.keys(TYPES) as [MovementType, ...MovementType[]]),
-  quantity: z.coerce.number().positive('الكمية يجب أن تكون أكبر من صفر.'),
+  quantity: numeric(z.coerce.number().positive('الكمية يجب أن تكون أكبر من صفر.')),
   reference: z.string().trim().max(120).optional().or(z.literal('')),
   reason: z.string().trim().max(400).optional().or(z.literal('')),
 });
@@ -212,7 +213,7 @@ export async function reverseMovement(movementId: string): Promise<void> {
 
 const LevelSchema = z.object({
   stockId: z.string().min(1),
-  minStock: z.coerce.number().min(0),
+  minStock: numeric(z.coerce.number().min(0)),
   maxStock: z.string().trim().optional(),
 });
 
@@ -226,7 +227,7 @@ export async function setLevels(_prev: FormState, formData: FormData): Promise<F
   });
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
 
-  const max = parsed.data.maxStock ? Number(parsed.data.maxStock) : null;
+  const max = parsed.data.maxStock ? num(parsed.data.maxStock) : null;
   if (max !== null && Number.isFinite(max) && max < parsed.data.minStock) {
     return { fieldErrors: { maxStock: 'الحد الأقصى يجب أن يكون أكبر من الأدنى.' } };
   }
@@ -254,7 +255,7 @@ export async function setLevels(_prev: FormState, formData: FormData): Promise<F
  */
 export async function setMinStock(stockId: string, _prev: FormState, formData: FormData): Promise<FormState> {
   const user = await requirePermission('inventory.write');
-  const value = Math.max(0, Math.round(Number(formData.get('minStock') ?? 0) || 0));
+  const value = Math.max(0, Math.round(num(formData.get('minStock'))));
   const st = await prisma.stock.findFirst({
     where: { id: stockId, variant: { product: { tenantId: user.tenantId } } },
     select: { id: true },

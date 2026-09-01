@@ -12,6 +12,7 @@ import {
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
+import { numeric } from '@/lib/num';
 import { nextFormulaCode, type FormState } from './shared';
 
 // ── Formula header ──────────────────────────────────────────
@@ -265,10 +266,10 @@ const LineSchema = z
     category: z.string().refine(isCostCategory, 'بند تكلفة غير معروف.'),
     nameAr: z.string().trim().min(2, 'اسم البند مطلوب.').max(120),
     basis: z.string().refine(isCostBasis, 'أساس حساب غير معروف.'),
-    quantity: z.coerce.number().min(0, 'الكمية لا يمكن أن تكون سالبة.'),
-    yieldQty: z.coerce.number().min(0).optional(),
+    quantity: numeric(z.coerce.number().min(0, 'الكمية لا يمكن أن تكون سالبة.')),
+    yieldQty: numeric(z.coerce.number().min(0).optional()),
     unit: z.string().trim().max(24).optional().or(z.literal('')),
-    unitCost: z.coerce.number().min(0, 'التكلفة لا يمكن أن تكون سالبة.'),
+    unitCost: numeric(z.coerce.number().min(0, 'التكلفة لا يمكن أن تكون سالبة.')),
     materialId: z.string().optional(),
     notes: z.string().trim().max(500).optional().or(z.literal('')),
   })
@@ -475,7 +476,7 @@ const ParamSchema = z.object({
     .max(40)
     .regex(/^[a-zA-Z][a-zA-Z0-9_]*$/, 'المفتاح بالإنجليزية بدون مسافات.'),
   nameAr: z.string().trim().min(2, 'الاسم مطلوب.').max(120),
-  value: z.coerce.number().min(0, 'القيمة لا يمكن أن تكون سالبة.'),
+  value: numeric(z.coerce.number().min(0, 'القيمة لا يمكن أن تكون سالبة.')),
   unit: z.string().trim().max(24).optional().or(z.literal('')),
 });
 

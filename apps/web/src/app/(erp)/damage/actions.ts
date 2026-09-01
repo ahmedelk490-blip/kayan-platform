@@ -18,6 +18,7 @@ import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 import { nextOpsNumber, parseDateOr, type FormState } from '@/lib/ops';
+import { numeric } from '@/lib/num';
 
 // ── Damage records ──────────────────────────────────────────
 
@@ -25,8 +26,8 @@ const Schema = z.object({
   productId: z.string().trim().min(1, 'اختر المنتج.'),
   colorId: z.string().trim().optional().or(z.literal('')),
   service: z.string().trim().optional().or(z.literal('')),
-  quantity: z.coerce.number().positive('العدد يجب أن يكون أكبر من صفر.'),
-  manualCost: z.coerce.number().nonnegative('التكلفة لا تكون سالبة.').optional(),
+  quantity: numeric(z.coerce.number().positive('العدد يجب أن يكون أكبر من صفر.')),
+  manualCost: numeric(z.coerce.number().nonnegative('التكلفة لا تكون سالبة.').optional()),
 });
 
 function read(formData: FormData) {
@@ -184,7 +185,7 @@ export async function deleteDamage(id: string): Promise<void> {
 
 const PenaltySchema = z.object({
   employeeId: z.string().min(1, 'الموظف مطلوب.'),
-  amount: z.coerce.number().positive('المبلغ يجب أن يكون أكبر من صفر.'),
+  amount: numeric(z.coerce.number().positive('المبلغ يجب أن يكون أكبر من صفر.')),
   reason: z.string().trim().min(5, 'سبب الجزاء مطلوب.').max(1000),
 });
 

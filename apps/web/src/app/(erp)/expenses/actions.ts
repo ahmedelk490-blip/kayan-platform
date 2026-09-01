@@ -8,11 +8,12 @@ import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 import { nextOpsNumber, parseDateOr, type FormState } from '@/lib/ops';
+import { numeric } from '@/lib/num';
 
 const Schema = z.object({
   expenseDate: z.string().optional(),
   category: z.string().refine(isExpenseCategory, 'بند مصروف غير معروف.'),
-  amount: z.coerce.number().positive('المبلغ يجب أن يكون أكبر من صفر.'),
+  amount: numeric(z.coerce.number().positive('المبلغ يجب أن يكون أكبر من صفر.')),
   employeeId: z.string().optional(),
   notes: z.string().trim().max(1000).optional().or(z.literal('')),
 });
@@ -133,7 +134,7 @@ import { can, isExpenseCategory as isCat } from '@erp/domain';
 const RecurringSchema = z.object({
   nameAr: z.string().trim().min(2, 'اسم المصروف مطلوب.').max(120),
   category: z.string().refine(isCat, 'بند مصروف غير معروف.'),
-  amount: z.coerce.number().positive('المبلغ يجب أن يكون أكبر من صفر.'),
+  amount: numeric(z.coerce.number().positive('المبلغ يجب أن يكون أكبر من صفر.')),
 });
 
 /** إضافة مصروف ثابت (قالب) — لا يُخصَم حتى يُسجَّل للشهر. */

@@ -17,6 +17,7 @@ import {
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
+import { num } from '@/lib/num';
 import { nextPurchaseNumber, readPurchaseLines, type FormState } from './shared';
 
 const HeaderSchema = z.object({
@@ -237,7 +238,7 @@ export async function receiveGoods(
   const deliveries = order.lines
     .map((line) => ({
       line,
-      quantity: Number(String(formData.get(`qty__${line.id}`) ?? '0')),
+      quantity: num(formData.get(`qty__${line.id}`)),
     }))
     .filter((d) => Number.isFinite(d.quantity) && d.quantity > 0);
 

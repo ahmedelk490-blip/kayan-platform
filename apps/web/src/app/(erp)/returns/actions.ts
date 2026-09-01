@@ -6,6 +6,7 @@ import { dec, deriveInvoiceStatus, type InvoiceStatus } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
+import { num } from '@/lib/num';
 import type { FormState } from '@/lib/ops';
 import { nextPaymentNumber } from '@/app/(erp)/invoices/shared';
 
@@ -70,7 +71,7 @@ export async function createReturn(
 
   const retLines: { line: (typeof invoice.lines)[number]; qty: number }[] = [];
   for (const l of invoice.lines) {
-    const q = Math.max(0, Number(formData.get(`qty_${l.id}`) ?? 0) || 0);
+    const q = Math.max(0, num(formData.get(`qty_${l.id}`)));
     if (q <= 0) continue;
     const prior = returnedByLine.get(l.id) ?? dec(0);
     const remaining = dec(l.quantity).minus(prior);

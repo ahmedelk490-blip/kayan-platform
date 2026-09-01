@@ -8,6 +8,7 @@ import { isPriceService } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
+import { normalizeDigits } from '@/lib/num';
 
 export interface FormState {
   error?: string;
@@ -33,7 +34,8 @@ const ProductSchema = z.object({
 
 function num(value?: string): number | null {
   if (!value) return null;
-  const n = Number(value);
+  // التطبيع يجعل «١٦٠٠٠» المكتوبة بالأرقام العربية رقماً مقبولاً.
+  const n = Number(normalizeDigits(value));
   return Number.isFinite(n) ? n : null;
 }
 
@@ -574,12 +576,12 @@ export async function addPriceTier(
 ): Promise<FormState> {
   const user = await requirePermission('products.write');
 
-  const rawMax = String(formData.get('maxQty') ?? '').trim();
+  const rawMax = normalizeDigits(String(formData.get('maxQty') ?? ''));
   const parsed = TierSchema.safeParse({
     service: String(formData.get('service') ?? ''),
-    minQty: Number(String(formData.get('minQty') ?? '')),
+    minQty: Number(normalizeDigits(String(formData.get('minQty') ?? ''))),
     maxQty: rawMax === '' ? null : Number(rawMax),
-    price: Number(String(formData.get('price') ?? '')),
+    price: Number(normalizeDigits(String(formData.get('price') ?? ''))),
     variantId: String(formData.get('variantId') ?? '') || undefined,
   });
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };

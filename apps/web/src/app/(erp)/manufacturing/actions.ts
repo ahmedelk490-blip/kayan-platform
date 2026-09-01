@@ -14,11 +14,12 @@ import {
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
+import { numeric } from '@/lib/num';
 import { nextProductionNumber, type FormState } from './shared';
 
 const Schema = z.object({
   variantId: z.string().min(1, 'المتغيّر مطلوب.'),
-  quantity: z.coerce.number().positive('الكمية يجب أن تكون أكبر من صفر.'),
+  quantity: numeric(z.coerce.number().positive('الكمية يجب أن تكون أكبر من صفر.')),
   priority: z.string().refine(isPriority, 'أولوية غير معروفة.'),
   salesOrderId: z.string().optional(),
   customerId: z.string().optional(),
