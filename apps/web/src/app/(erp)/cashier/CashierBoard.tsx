@@ -90,7 +90,7 @@ export function CashierBoard({
       </div>
 
       {/* الفاتورة */}
-      <form action={formAction} className="erp-card flex h-fit flex-col gap-4 p-5 lg:sticky lg:top-6">
+      <form id="cashier-cart" action={formAction} className="erp-card flex h-fit scroll-mt-24 flex-col gap-4 p-5 lg:sticky lg:top-6">
         <FormError message={state.error} />
         <input type="hidden" name="warehouseId" value={warehouseId} />
         {cart.map((l) => (
@@ -113,16 +113,17 @@ export function CashierBoard({
                   <span className="truncate text-xs text-txt">{l.label}</span>
                   <button type="button" onClick={() => setCart((p) => p.filter((x) => x.key !== l.key))} className="text-[0.7rem] text-bad hover:underline">حذف</button>
                 </div>
+                {/* أزرار لمس كبيرة (≥40px) — الكاشير غالباً على جوال أو شاشة لمس. */}
                 <div className="mt-1.5 flex items-center justify-between gap-2">
-                  <div className="flex items-center rounded-lg border border-line-2">
-                    <button type="button" onClick={() => setCart((p) => p.map((x) => x.key === l.key ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x))} className="px-2 py-0.5 text-txt-3">−</button>
-                    <span className="tnum min-w-7 text-center text-xs text-txt">{l.quantity}</span>
-                    <button type="button" onClick={() => setCart((p) => p.map((x) => x.key === l.key ? { ...x, quantity: x.quantity + 1 } : x))} className="px-2 py-0.5 text-txt-3">+</button>
+                  <div className="flex items-center overflow-hidden rounded-lg border border-line-2">
+                    <button type="button" aria-label="أنقص" onClick={() => setCart((p) => p.map((x) => x.key === l.key ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x))} className="grid h-10 w-10 place-items-center text-lg text-txt-2 active:bg-card">−</button>
+                    <span className="tnum min-w-8 text-center text-sm font-medium text-txt">{l.quantity}</span>
+                    <button type="button" aria-label="زد" onClick={() => setCart((p) => p.map((x) => x.key === l.key ? { ...x, quantity: x.quantity + 1 } : x))} className="grid h-10 w-10 place-items-center text-lg text-txt-2 active:bg-card">+</button>
                   </div>
                   <input
                     type="number" value={l.unitPrice} dir="ltr"
                     onChange={(e) => setCart((p) => p.map((x) => x.key === l.key ? { ...x, unitPrice: Math.max(0, Number(e.target.value) || 0) } : x))}
-                    className="erp-input w-24 py-1 text-start text-xs"
+                    className="erp-input w-24 py-2 text-start text-xs"
                   />
                   <span className="tnum text-xs font-medium text-brand">{formatMoney(dec(l.quantity).times(dec(l.unitPrice)))}</span>
                 </div>
@@ -174,6 +175,22 @@ export function CashierBoard({
           onClose={() => setPicking(null)}
           onAdd={addLines}
         />
+      )}
+
+      {/* شريط سفلي ثابت للجوال: الإجمالي دائماً أمام العين، وضغطة تنزل
+          للفاتورة — بدل التمرير الطويل تحت شبكة المنتجات. */}
+      {cart.length > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-between gap-3 border-t border-line bg-card px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.12)] lg:hidden">
+          <div>
+            <p className="text-[0.65rem] text-txt-4">
+              {cart.reduce((s, l) => s + l.quantity, 0)} قطعة · {cart.length} صنف
+            </p>
+            <p className="tnum text-lg font-bold text-brand">{formatMoney(total)}</p>
+          </div>
+          <a href="#cashier-cart" className="erp-btn px-6 py-3">
+            إتمام البيع ↓
+          </a>
+        </div>
       )}
     </div>
   );
@@ -272,10 +289,10 @@ function VariantPicker({
                     {r.variant ? (
                       <div className="flex items-center gap-3">
                         <span className="tnum text-[0.7rem] text-txt-4">{formatMoney(priceFor(r.variant, q || 1, service))}</span>
-                        <div className="flex items-center rounded-lg border border-line-2">
-                          <button type="button" onClick={() => setQ(r.key, q - 1)} className="px-3 py-1.5 text-txt-3">−</button>
-                          <span className="tnum min-w-8 text-center text-sm text-txt">{q}</span>
-                          <button type="button" onClick={() => setQ(r.key, q + 1)} className="px-3 py-1.5 text-txt-3">+</button>
+                        <div className="flex items-center overflow-hidden rounded-lg border border-line-2">
+                          <button type="button" aria-label="أنقص" onClick={() => setQ(r.key, q - 1)} className="grid h-11 w-11 place-items-center text-xl text-txt-2 active:bg-card">−</button>
+                          <span className="tnum min-w-9 text-center text-base font-medium text-txt">{q}</span>
+                          <button type="button" aria-label="زد" onClick={() => setQ(r.key, q + 1)} className="grid h-11 w-11 place-items-center text-xl text-txt-2 active:bg-card">+</button>
                         </div>
                       </div>
                     ) : (

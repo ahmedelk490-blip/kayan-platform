@@ -15,10 +15,15 @@ import { useState, type ReactNode } from 'react';
  */
 export function SegmentedTabs({
   tabs,
+  defaultKey,
 }: {
   tabs: { key: string; label: string; badge?: number; content: ReactNode }[];
+  /** التبويب المفتوح ابتداءً — يُمرَّر من ?tab= ليقفز رابطٌ خارجي لقسمٍ بعينه. */
+  defaultKey?: string;
 }) {
-  const [active, setActive] = useState(tabs[0]?.key);
+  const [active, setActive] = useState(
+    defaultKey && tabs.some((t) => t.key === defaultKey) ? defaultKey : tabs[0]?.key,
+  );
 
   return (
     <div>

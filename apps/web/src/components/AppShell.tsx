@@ -81,6 +81,8 @@ const NAV: NavItem[] = [
   { href: '/customers', label: 'العملاء', permission: 'customers.read', built: true, group: 'العملاء' },
   { href: '/portal', label: 'بوابة العميل', permission: 'portal.view', built: true, group: 'العملاء' },
 
+  // يومية اليوم — صفحة تقفيل واحدة: مبيعات ومقبوض ومرتجعات ومصاريف اليوم.
+  { href: '/reports/daily', label: 'يومية اليوم', permission: 'reports.view', built: true, group: 'التقارير' },
   { href: '/reports', label: 'التقارير', permission: 'reports.view', built: true, group: 'التقارير' },
 
   // الرواتب قسم مستقل بذاته — بطلب المالك، منفصل عن الإدارة.
@@ -196,7 +198,7 @@ export async function AppShell({
       where: { onHand: { lte: 0 }, warehouse: { tenantId: user.tenantId, isDeleted: false } },
     });
     const outAlert: Alert[] = outCount > 0
-      ? [{ id: 'stock-out', label: `${outCount} صنف نافذ من المخزون`, detail: 'رصيدها صفر — راجع «نواقص وإعادة الطلب» لتوفيرها', href: '/inventory' }]
+      ? [{ id: 'stock-out', label: `${outCount} صنف نافذ من المخزون`, detail: 'رصيدها صفر — اضغط لفتح قائمة النواقص وما يجب طلبه', href: '/inventory?tab=reorder' }]
       : [];
     alerts = [...alerts, ...outAlert, ...stockAlerts, ...supplyAlerts];
   }

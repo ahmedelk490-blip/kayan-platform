@@ -8,6 +8,7 @@ import { SegmentedTabs } from '@/components/SegmentedTabs';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import { MovementModal } from './MovementModal';
 import { MinStockCell } from './MinStockCell';
+import { ShareShortages } from './ShareShortages';
 import { reverseMovement } from './actions';
 import { TYPE_LABELS } from './types';
 
@@ -25,8 +26,15 @@ function variantLabel(v: {
   return `${parts.join(' · ')} (${v.sku})`;
 }
 
-export default async function InventoryPage() {
+export default async function InventoryPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ tab?: string | string[] }>;
+}) {
   const user = await requirePermission('inventory.read');
+  // ?tab=reorder يفتح «نواقص وإعادة الطلب» مباشرة — رابط جرس التنبيهات.
+  const sp = (await searchParams) ?? {};
+  const initialTab = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab;
   const canWrite = can(user.role, 'inventory.write');
   // إدخال المنتجات يعيش في الكتالوج، لكنه موصولٌ من هنا ليبقى المخزون
   // والمنتجات في مكان واحد — بطلب المالك.
@@ -181,6 +189,18 @@ export default async function InventoryPage() {
     })),
   ].sort((a, b) => b.shortfall.minus(a.shortfall).toNumber());
 
+  // نص القائمة للمشاركة (نسخ/واتساب للمورّد) — يُبنى هنا من الجدول الكامل.
+  const shortageText =
+    reorderRows.length === 0
+      ? ''
+      : [
+          'قائمة النواقص وإعادة الطلب — كيان:',
+          ...reorderRows.map(
+            (r, i) =>
+              `${i + 1}. ${r.label} — الرصيد ${formatQty(r.onHand)}، المطلوب ${formatQty(r.shortfall)} ${r.unit}`,
+          ),
+        ].join('\n');
+
   // الجرد الكامل: كل رصيد بالدست والقطعة، حسب قطع دستة كل منتج.
   const stocktakeRows = fullStock.map((s) => {
     const ppd = s.variant.product.piecesPerDozen || 12;
@@ -254,6 +274,7 @@ export default async function InventoryPage() {
       {/* تبويبات داخلية: المخزون كله من فوق بلا تمرير طويل — أرصدة المنتجات،
           والخامات، وسجل الحركات، كلٌّ بضغطة. */}
       <SegmentedTabs
+        defaultKey={initialTab}
         tabs={[
           {
             key: 'stocktake',
@@ -301,13 +322,16 @@ export default async function InventoryPage() {
             badge: reorderRows.length,
             content: (
               <section>
-                <div className="mb-3 flex items-center justify-between">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold text-brand">جدول ما يجب طلبه</h3>
-                  <span className="text-[0.7rem] text-txt-4">
-                    {reorderRows.length === 0
-                      ? 'كل الأصناف فوق حدّها الأدنى'
-                      : `${reorderRows.length} صنف تحت الحدّ · ${reorderRows.filter((r) => r.empty).length} نفد`}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-[0.7rem] text-txt-4">
+                      {reorderRows.length === 0
+                        ? 'كل الأصناف فوق حدّها الأدنى'
+                        : `${reorderRows.length} صنف تحت الحدّ · ${reorderRows.filter((r) => r.empty).length} نفد`}
+                    </span>
+                    <ShareShortages text={shortageText} />
+                  </div>
                 </div>
                 <Table
                   headers={['الصنف', 'النوع', 'الموقع', 'الرصيد', 'الحدّ الأدنى', 'النقص', 'الحالة']}
@@ -332,9 +356,9 @@ export default async function InventoryPage() {
                   ))}
                 </Table>
                 <p className="mt-2 text-[0.7rem] leading-[1.8] text-txt-4">
-                  النقص = الحدّ الأدنى − الرصيد الحالي — أي الكمية اللازمة لبلوغ الحدّ. القائمة
-                  كاملة (كل الأصناف ذات حدٍّ أدنى)، لا عيّنة من المعروض في تبويب الأرصدة. الأصناف
-                  بلا حدٍّ أدنى مضبوط لا تظهر هنا — اضبط حدَّها ليُنبّهك النظام قبل نفادها.
+                  النقص = الحدّ الأدنى − الرصيد الحالي — أي الكمية اللازمة لبلوغ الحدّ. النافذ
+                  (رصيد صفر) يظهر دائماً ولو بلا حدّ مضبوط؛ واضبط الحدّ الأدنى لكل صنف ليُنبّهك
+                  النظام قبل نفاده لا بعده. «نسخ القائمة» أو «إرسال واتساب» يجهّزان طلبية المورّد.
                 </p>
               </section>
             ),
