@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from 'react';
 import { Field, Select, TextArea, SubmitButton, FormError } from '@/components/crud/Form';
+import { SearchableSelect } from '@/components/crud/SearchableSelect';
 import { useFormSuccess } from '@/components/crud/useFormSuccess';
 import { postMovement, type FormState } from './actions';
 import { MOVEMENT_OPTIONS } from './types';
@@ -40,20 +41,16 @@ export function MovementForm({
         </p>
       )}
 
-      {/* المتغيّر — native select لنعرف قطع دستته ونحسب الكمية. */}
+      {/* المتغيّر — بحثٌ بالكتابة: اكتب «يلك أسود L» بدل التمرير بين مئات
+          المقاسات والألوان. الاختيار يُعلمنا قطع الدستة لحساب الكمية. */}
       <label className="block">
         <span className="mb-1.5 block text-xs text-txt-2">المتغيّر</span>
-        <select
-          value={variantId}
-          onChange={(e) => setVariantId(e.target.value)}
-          className="erp-input py-2.5"
-        >
-          <option value="">اختر المتغيّر</option>
-          {variants.map((v) => (
-            <option key={v.value} value={v.value}>{v.label}</option>
-          ))}
-        </select>
-        <input type="hidden" name="variantId" value={variantId} />
+        <SearchableSelect
+          name="variantId"
+          options={variants.map((v) => ({ value: v.value, label: v.label }))}
+          placeholder="اكتب اسم الصنف أو اللون أو المقاس…"
+          onSelect={setVariantId}
+        />
         {state.fieldErrors?.variantId && (
           <span className="mt-1 block text-[0.7rem] text-bad">{state.fieldErrors.variantId}</span>
         )}

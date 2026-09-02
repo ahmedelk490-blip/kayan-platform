@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: 'محضر هالك جديد' };
 export default async function NewDamagePage() {
   const user = await requirePermission('damage.write');
 
-  const [products, colorRows] = await Promise.all([
+  const [products, colorRows, employeeRows] = await Promise.all([
     prisma.product.findMany({
       where: { tenantId: user.tenantId, isDeleted: false, status: 'ACTIVE' },
       select: { id: true, nameAr: true, cost: true },
@@ -24,6 +24,12 @@ export default async function NewDamagePage() {
       where: { tenantId: user.tenantId, isDeleted: false },
       select: { id: true, nameAr: true },
       orderBy: { sortOrder: 'asc' },
+    }),
+    // الموظفون — للموظف المتسبب الذي يُخصم الهالك من راتبه عند الاعتماد.
+    prisma.user.findMany({
+      where: { tenantId: user.tenantId, isActive: true },
+      select: { id: true, name: true, nameAr: true },
+      orderBy: { name: 'asc' },
     }),
   ]);
 
@@ -43,7 +49,13 @@ export default async function NewDamagePage() {
         action={<Link href="/damage" className="erp-btn-ghost">رجوع</Link>}
       />
       <div className="erp-card max-w-2xl p-6">
-        <DamageForm action={createDamage} products={productList} colors={colors} services={services} />
+        <DamageForm
+          action={createDamage}
+          products={productList}
+          colors={colors}
+          services={services}
+          employees={employeeRows.map((e) => ({ value: e.id, label: e.nameAr ?? e.name }))}
+        />
       </div>
     </AppShell>
   );

@@ -28,6 +28,10 @@ const Schema = z.object({
   service: z.string().trim().optional().or(z.literal('')),
   quantity: numeric(z.coerce.number().positive('العدد يجب أن يكون أكبر من صفر.')),
   manualCost: numeric(z.coerce.number().nonnegative('التكلفة لا تكون سالبة.').optional()),
+  /** الموظف المتسبب (اختياري) — عند اعتماد الهالك يُنشأ له جزاء بقيمة التكلفة. */
+  employeeId: z.string().trim().optional().or(z.literal('')),
+  /** سبب حرّ يكتبه المسجِّل — يتصدّر سبب السجل. */
+  reasonNote: z.string().trim().max(500).optional().or(z.literal('')),
 });
 
 function read(formData: FormData) {
@@ -39,6 +43,8 @@ function read(formData: FormData) {
     quantity: String(formData.get('quantity') ?? ''),
     // فارغ ⇒ تلقائي. نمرّره undefined لا 0 حتى لا يُفهم صفراً مقصوداً.
     manualCost: manual === '' ? undefined : manual,
+    employeeId: String(formData.get('employeeId') ?? ''),
+    reasonNote: String(formData.get('reasonNote') ?? ''),
   };
 }
 
@@ -72,8 +78,22 @@ export async function createDamage(_prev: FormState, formData: FormData): Promis
     ? PRICE_SERVICE_AR[parsed.data.service]
     : null;
 
-  // السبب من اللون والخدمة — يبقى مُفسَّراً بلا حقل سبب منفصل.
-  const reason = [colorName, serviceName].filter(Boolean).join(' · ') || product.nameAr;
+  // الموظف المتسبب (اختياري) — يُتحقّق أنه من نفس المستأجر، ويُخزَّن على
+  // المحضر؛ الجزاء يُنشأ عند الاعتماد لا الآن (المحضر قد يُرفض).
+  let employeeId: string | null = null;
+  if (parsed.data.employeeId) {
+    const employee = await prisma.user.findFirst({
+      where: { id: parsed.data.employeeId, tenantId: user.tenantId },
+      select: { id: true },
+    });
+    if (!employee) return { fieldErrors: { employeeId: 'الموظف غير موجود.' } };
+    employeeId = employee.id;
+  }
+
+  // السبب: النص الحرّ أولاً إن كُتب، ثم اللون والخدمة — يبقى مُفسَّراً.
+  const reason =
+    [parsed.data.reasonNote || null, colorName, serviceName].filter(Boolean).join(' · ') ||
+    product.nameAr;
 
   // التكلفة: يدوية إن كُتبت، وإلا تلقائياً = تكلفة قطعة المنتج × العدد.
   const total =
@@ -86,6 +106,7 @@ export async function createDamage(_prev: FormState, formData: FormData): Promis
       tenantId: user.tenantId,
       number: await nextOpsNumber('damageRecord', 'DMG', user.tenantId),
       damageDate: new Date(),
+      employeeId,
       productId: product.id,
       productLabel: [product.nameAr, colorName].filter(Boolean).join(' · '),
       quantity: parsed.data.quantity,
@@ -137,6 +158,39 @@ export async function setDamageStatus(id: string, next: string): Promise<void> {
       approvedAt: next === 'APPROVED' ? new Date() : null,
     },
   });
+
+  // اعتمادُ هالكٍ له موظف متسبب يولّد جزاءً تلقائياً بقيمة التكلفة (سعر
+  // الجملة) — بانتظار اعتماد الجزاء نفسه، فيمرّ بدورته المعتادة ثم يُخصم
+  // من راتب الموظف في تحليله. لا يتكرر لو أُعيد الاعتماد.
+  if (next === 'APPROVED' && damage.employeeId) {
+    const existing = await prisma.penalty.findFirst({
+      where: { tenantId: user.tenantId, damageId: id },
+      select: { id: true },
+    });
+    if (!existing) {
+      const penalty = await prisma.penalty.create({
+        data: {
+          tenantId: user.tenantId,
+          number: await nextOpsNumber('penalty', 'PEN', user.tenantId),
+          damageId: id,
+          employeeId: damage.employeeId,
+          amount: damage.totalCost,
+          reason: `هالك ${damage.number} — ${damage.reason}`,
+          status: 'PENDING',
+          createdById: user.id,
+          events: { create: { toStatus: 'PENDING', note: 'جزاء تلقائي من اعتماد الهالك', userId: user.id } },
+        },
+      });
+      await audit({
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: 'penalty.create',
+        entityType: 'Penalty',
+        entityId: penalty.id,
+        detail: `${penalty.number} تلقائي من ${damage.number}`,
+      });
+    }
+  }
 
   await audit({
     tenantId: user.tenantId,

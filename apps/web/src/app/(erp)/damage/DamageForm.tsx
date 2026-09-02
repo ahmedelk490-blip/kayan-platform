@@ -28,11 +28,14 @@ export function DamageForm({
   products,
   colors,
   services,
+  employees = [],
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
   products: DamageProduct[];
   colors: Option[];
   services: Option[];
+  /** الموظف المتسبب (اختياري) — عند اعتماد الهالك يُنشأ له جزاء بقيمة التكلفة. */
+  employees?: Option[];
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const [productId, setProductId] = useState('');
@@ -111,7 +114,31 @@ export function DamageForm({
             <span className="mt-1 block text-[0.7rem] text-bad">{state.fieldErrors.manualCost}</span>
           )}
         </label>
+
+        {/* ٦) الموظف المتسبب (اختياري) — يتولّد له جزاء تلقائي عند الاعتماد */}
+        {employees.length > 0 && (
+          <label className="block">
+            <span className="mb-1.5 block text-xs text-txt-2">
+              الموظف المتسبب <span className="text-txt-4">(اختياري — يُخصم من راتبه)</span>
+            </span>
+            <SearchableSelect name="employeeId" options={employees} placeholder="ابحث عن الموظف…" />
+            {state.fieldErrors?.employeeId && (
+              <span className="mt-1 block text-[0.7rem] text-bad">{state.fieldErrors.employeeId}</span>
+            )}
+          </label>
+        )}
       </div>
+
+      {/* ٧) سبب الهالك — نص حرّ يتصدّر سبب السجل. */}
+      <label className="block">
+        <span className="mb-1.5 block text-xs text-txt-2">سبب الهالك — اكتبه بحرية</span>
+        <textarea
+          name="reasonNote"
+          rows={2}
+          placeholder="مثال: خطأ في الطباعة، حرق أثناء الكوي، قصّ خاطئ…"
+          className="erp-input resize-y py-2.5"
+        />
+      </label>
 
       {/* إجمالي الهالك — يظهر حيّاً قبل الحفظ */}
       <div className="flex items-center justify-between rounded-xl border border-line bg-card-2 px-4 py-3">
@@ -131,6 +158,8 @@ export function DamageForm({
       <p className="text-[0.7rem] leading-[1.8] text-txt-4">
         التكلفة تُحسب تلقائياً من تكلفة قطعة المنتج × العدد — أو اكتبها يدوياً في خانة «التكلفة»
         لتتجاوز الحساب التلقائي. يُسجَّل الهالك بانتظار الاعتماد، ويظهر في «الهالك» بالبيان المالي بعد اعتماده.
+        ولو حُدّد موظف متسبب، فعند اعتماد الهالك يُنشأ له <span className="font-medium text-warn">جزاء تلقائي بقيمة التكلفة</span> (بانتظار
+        اعتماد الجزاء) فيُخصم من راتبه في تحليل الموظفين.
       </p>
     </form>
   );

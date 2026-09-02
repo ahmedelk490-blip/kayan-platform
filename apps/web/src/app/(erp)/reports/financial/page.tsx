@@ -76,6 +76,42 @@ export default async function FinancialReport({
     }),
   ]);
 
+  // بنود «الربح الصافي الشامل» — كل ما خرج فعلاً في المدى: رواتب ومدفوعات
+  // الموظفين، تكلفة الهالك المعتمد، والمشتريات المؤكَّدة؛ والجزاءات المحصَّلة
+  // تُردّ للربح لأنها استُرجعت من المتسببين.
+  const [salariesAgg, damageAgg, penaltiesAgg, purchasesAgg] = await Promise.all([
+    prisma.employeePayment.aggregate({
+      where: { tenantId: user.tenantId, isDeleted: false, paidAt: { gte: from, lte: to } },
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+    prisma.damageRecord.aggregate({
+      where: {
+        tenantId: user.tenantId,
+        isDeleted: false,
+        status: 'APPROVED',
+        damageDate: { gte: from, lte: to },
+      },
+      _sum: { totalCost: true },
+      _count: { _all: true },
+    }),
+    prisma.penalty.aggregate({
+      where: { tenantId: user.tenantId, status: 'PAID', paidAt: { gte: from, lte: to } },
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+    prisma.purchaseOrder.aggregate({
+      where: {
+        tenantId: user.tenantId,
+        isDeleted: false,
+        status: { in: ['CONFIRMED', 'PARTIALLY_RECEIVED', 'RECEIVED'] },
+        orderDate: { gte: from, lte: to },
+      },
+      _sum: { total: true },
+      _count: { _all: true },
+    }),
+  ]);
+
   // عدد القطع الكلي + تفصيله حسب النوع بصورة عامة (بلا ألوان وموديلات) —
   // بطلب المالك لحساب عائد الاستثمار لكل صنف عبر أي مدى يختاره.
   const totalPieces = lines.reduce((s, l) => s + Number(l.quantity), 0);
@@ -95,6 +131,19 @@ export default async function FinancialReport({
   const expenseTotal = expenses.reduce((s, e) => s.plus(dec(e.amount)), dec(0));
   const net = invoiced.minus(expenseTotal);
   const cashFlow = collected.minus(expenseTotal);
+
+  // الربح الصافي الشامل: المبيعات ناقص كل ما خرج (مصروفات، رواتب، هالك،
+  // مشتريات) زائد الجزاءات المستردّة — بطلب المالك: رقم واحد لأي مدى.
+  const salariesOut = dec(salariesAgg._sum.amount ?? 0);
+  const damageOut = dec(damageAgg._sum.totalCost ?? 0);
+  const penaltiesIn = dec(penaltiesAgg._sum.amount ?? 0);
+  const purchasesOut = dec(purchasesAgg._sum.total ?? 0);
+  const fullNet = invoiced
+    .minus(expenseTotal)
+    .minus(salariesOut)
+    .minus(damageOut)
+    .minus(purchasesOut)
+    .plus(penaltiesIn);
 
   // المصروفات حسب البند.
   const byCategory = new Map<string, ReturnType<typeof dec>>();
@@ -223,6 +272,50 @@ export default async function FinancialReport({
               tone={cashFlow.lt(0) ? 'bad' : undefined}
             />
           </div>
+
+          {/* الربح الصافي الشامل — كل الالتزامات مخصومة، بنداً بنداً ثم الرقم. */}
+          <section className="erp-card mb-8 border-s-4 border-s-brand p-5">
+            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
+              <h3 className="text-sm font-semibold text-brand">💰 الربح الصافي الشامل للمدى</h3>
+              <span className="tnum text-xs text-txt-3">{range.fromStr} ← {range.toStr}</span>
+            </div>
+            <dl className="space-y-2 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-txt-2">المبيعات المفوترة</dt>
+                <dd className="tnum text-ok">+ {formatMoney(invoiced)}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-txt-2">المصروفات المعتمدة</dt>
+                <dd className="tnum text-bad">− {formatMoney(expenseTotal)}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-txt-2">الرواتب ومدفوعات الموظفين <span className="text-[0.7rem] text-txt-4">({salariesAgg._count._all} دفعة)</span></dt>
+                <dd className="tnum text-bad">− {formatMoney(salariesOut)}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-txt-2">تكلفة الهالك المعتمد <span className="text-[0.7rem] text-txt-4">({damageAgg._count._all} محضر)</span></dt>
+                <dd className="tnum text-bad">− {formatMoney(damageOut)}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-txt-2">المشتريات المؤكَّدة <span className="text-[0.7rem] text-txt-4">({purchasesAgg._count._all} أمر)</span></dt>
+                <dd className="tnum text-bad">− {formatMoney(purchasesOut)}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-txt-2">جزاءات محصَّلة من الموظفين</dt>
+                <dd className="tnum text-ok">+ {formatMoney(penaltiesIn)}</dd>
+              </div>
+              <div className="flex justify-between gap-4 border-t border-line pt-3">
+                <dt className="text-base font-bold text-txt">= الربح الصافي الشامل</dt>
+                <dd className={`tnum text-xl font-bold ${fullNet.lt(0) ? 'text-bad' : 'text-ok'}`}>
+                  {formatMoney(fullNet)}
+                </dd>
+              </div>
+            </dl>
+            <p className="mt-3 text-[0.7rem] leading-[1.8] text-txt-4">
+              المشتريات تُخصم كإنفاق نقدي في مداها (لا كتكلفة بضاعة مباعة) — فبضاعة اشتريتها
+              اليوم وستبيعها الشهر القادم تُخصم اليوم. غيّر المدى أعلاه فيتغيّر كل شيء معه.
+            </p>
+          </section>
 
           <div className="mb-8 grid gap-4 lg:grid-cols-2">
             <section className="erp-card p-6">
