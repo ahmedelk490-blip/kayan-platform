@@ -18,6 +18,7 @@ import { BarChartInteractive } from '@/components/dashboard/BarChartInteractive'
 import type { SearchParams } from '@/lib/query';
 import { ReportFilter, Figure, Empty } from '../Shell';
 import { resolveRange } from '../range';
+import { categoryOf } from '@/app/(erp)/returns/category';
 
 export const metadata: Metadata = { title: 'التقرير المالي' };
 
@@ -38,7 +39,7 @@ export default async function FinancialReport({
   const range = resolveRange(params);
   const { from, to } = range;
 
-  const [invoices, receivable, expenses] = await Promise.all([
+  const [invoices, lines, receivable, expenses] = await Promise.all([
     prisma.invoice.findMany({
       where: {
         tenantId: user.tenantId,
@@ -47,6 +48,18 @@ export default async function FinancialReport({
         issueDate: { gte: from, lte: to },
       },
       select: { total: true, paidAmount: true, issueDate: true },
+    }),
+    // بنود فواتير الفترة — لعدد القطع الكلي وتفصيله حسب النوع (يلكات/تيشيرتات…).
+    prisma.invoiceLine.findMany({
+      where: {
+        invoice: {
+          tenantId: user.tenantId,
+          isDeleted: false,
+          status: { notIn: ['DRAFT', 'VOID'] },
+          issueDate: { gte: from, lte: to },
+        },
+      },
+      select: { description: true, quantity: true, lineTotal: true },
     }),
     prisma.invoice.findMany({
       where: { tenantId: user.tenantId, isDeleted: false, status: { in: RECEIVABLE_STATUSES } },
@@ -62,6 +75,19 @@ export default async function FinancialReport({
       select: { amount: true, category: true, expenseDate: true },
     }),
   ]);
+
+  // عدد القطع الكلي + تفصيله حسب النوع بصورة عامة (بلا ألوان وموديلات) —
+  // بطلب المالك لحساب عائد الاستثمار لكل صنف عبر أي مدى يختاره.
+  const totalPieces = lines.reduce((s, l) => s + Number(l.quantity), 0);
+  const families = new Map<string, { pieces: number; value: ReturnType<typeof dec> }>();
+  for (const l of lines) {
+    const key = categoryOf(l.description);
+    const f = families.get(key) ?? { pieces: 0, value: dec(0) };
+    f.pieces += Number(l.quantity);
+    f.value = f.value.plus(dec(l.lineTotal));
+    families.set(key, f);
+  }
+  const familyRows = [...families.entries()].sort((a, b) => b[1].pieces - a[1].pieces);
 
   const invoiced = invoices.reduce((s, i) => s.plus(dec(i.total)), dec(0));
   const collected = invoices.reduce((s, i) => s.plus(dec(i.paidAmount)), dec(0));
@@ -123,7 +149,7 @@ export default async function FinancialReport({
       ) : (
         <>
           <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Figure label="المبيعات المفوترة" value={formatMoney(invoiced)} hint={`${invoices.length} فاتورة`} strong />
+            <Figure label="المبيعات المفوترة" value={formatMoney(invoiced)} hint={`${invoices.length} فاتورة · ${totalPieces} قطعة`} strong />
             <Figure label="المحصَّل" value={formatMoney(collected)} hint="من فواتير الفترة" />
             <Figure
               label="المستحق حالياً"
@@ -133,6 +159,53 @@ export default async function FinancialReport({
             />
             <Figure label="المصروفات المعتمدة" value={formatMoney(expenseTotal)} hint={`${expenses.length} مصروف`} />
           </div>
+
+          {/* تفصيل القطع حسب النوع — يلكات وتيشيرتات ومرايل… بصورة عامة، بلا
+              ألوان ولا موديلات، للمدى المختار نفسه: أساس عائد الاستثمار. */}
+          {familyRows.length > 0 && (
+            <section className="erp-card mb-6 p-5">
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
+                <h3 className="text-sm font-semibold text-brand">تفصيل القطع المباعة حسب النوع</h3>
+                <span className="tnum text-xs text-txt-3">
+                  {totalPieces} قطعة · {range.fromStr} ← {range.toStr}
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-line text-[0.7rem] text-txt-3">
+                      <th className="px-3 py-2 text-start font-medium">النوع</th>
+                      <th className="px-3 py-2 text-start font-medium">القطع</th>
+                      <th className="px-3 py-2 text-start font-medium">القيمة</th>
+                      <th className="px-3 py-2 text-start font-medium">نسبة القطع</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {familyRows.map(([name, f]) => (
+                      <tr key={name} className="border-b border-line/60">
+                        <td className="px-3 py-2.5 font-medium text-txt">{name}</td>
+                        <td className="tnum px-3 py-2.5 font-semibold text-brand">{f.pieces}</td>
+                        <td className="tnum px-3 py-2.5 text-txt-2">{formatMoney(f.value)}</td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-28 overflow-hidden rounded-full bg-card-2">
+                              <div
+                                className="h-full rounded-full bg-brand"
+                                style={{ width: `${totalPieces > 0 ? Math.round((f.pieces / totalPieces) * 100) : 0}%` }}
+                              />
+                            </div>
+                            <span className="tnum text-[0.7rem] text-txt-3">
+                              {totalPieces > 0 ? Math.round((f.pieces / totalPieces) * 100) : 0}%
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           <div className="mb-8 grid gap-4 sm:grid-cols-2">
             <Figure
