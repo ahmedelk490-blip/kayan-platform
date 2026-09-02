@@ -319,12 +319,12 @@ export default async function InventoryPage({
         tabs={[
           {
             key: 'stocktake',
-            label: 'الجرد الكامل',
+            label: '📦 الجرد الكامل',
             content: <StocktakeTable rows={stocktakeRows} totalValue={formatMoney(stocktakeValue)} />,
           },
           {
             key: 'reorder',
-            label: 'نواقص وإعادة الطلب',
+            label: '⚠️ النواقص وإعادة الطلب',
             badge: reorderRows.length,
             content: (
               <section>
@@ -344,7 +344,8 @@ export default async function InventoryPage({
                   empty={reorderRows.length === 0}
                 >
                   {reorderRows.map((r) => (
-                    <tr key={r.key} className="hover:bg-card-2">
+                    // النافذ تماماً بخلفية حمراء خافتة — يقفز للعين قبل قراءة الأرقام.
+                    <tr key={r.key} className={r.empty ? 'bg-bad-soft/50 hover:bg-bad-soft' : 'hover:bg-card-2'}>
                       <td className="px-4 py-3 text-txt">{r.label}</td>
                       <td className="px-4 py-3 text-txt-3">{r.kind}</td>
                       <td className="px-4 py-3 text-txt-3">{r.where}</td>
@@ -371,7 +372,7 @@ export default async function InventoryPage({
           },
           {
             key: 'balances',
-            label: 'أرصدة المنتجات',
+            label: '📋 أرصدة المنتجات',
             badge: lowStock.length,
             content: (
               <section>
@@ -423,7 +424,7 @@ export default async function InventoryPage({
           },
           {
             key: 'movements',
-            label: 'سجل حركات المنتجات',
+            label: '🔄 سجل الحركات',
             content: (
               <section>
             <Table
@@ -468,7 +469,7 @@ export default async function InventoryPage({
             ? [
                 {
                   key: 'supplies',
-                  label: 'الخامات والمستلزمات',
+                  label: '🧵 الخامات والمستلزمات',
                   badge: lowSupplies.length,
                   content: (
                     <>

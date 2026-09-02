@@ -278,6 +278,24 @@ export default async function ExpensesPage({
         />
       </div>
 
+      {/* تسجيل مصروف — الفعل اليومي الأول، فصار أول ما تقع عليه اليد. */}
+      {canWrite && (
+        <section className="erp-card mb-6 border-s-4 border-s-brand p-5">
+          <h3 className="mb-4 text-sm font-semibold text-brand">➕ تسجيل مصروف جديد</h3>
+          <ExpenseForm
+            action={createExpense}
+            today={dateInput(new Date())}
+            employees={employees.map((e) => ({ value: e.id, label: e.nameAr ?? e.name }))}
+          />
+        </section>
+      )}
+
+      {/* التحليل مطويّ — الرسوم والتوزيع لمن يدقّق، بلا إطالة الشاشة اليومية. */}
+      <details className="erp-card mb-6 px-5 py-4">
+        <summary className="cursor-pointer select-none text-sm font-semibold text-brand">
+          📊 التحليل والتوزيع — {range.label}
+        </summary>
+        <div className="mt-5 space-y-6">
       {approvedTotal.gt(0) && (
         <div className="mb-6 grid gap-4 lg:grid-cols-2">
           <section className="erp-card p-6">
@@ -312,11 +330,19 @@ export default async function ExpensesPage({
         </div>
       )}
 
-      {/* المصروفات الثابتة — تُعرّف مرة، وتُسجَّل بضغطة كل شهر. */}
+        </div>
+      </details>
+
+      {/* الثابتة الشهرية مطويّة — تُفتح مرة بالشهر لتسجيلها بضغطة. */}
       {canWrite && (
-        <section className="erp-card mb-6 p-5">
+        <details className="erp-card mb-6 px-5 py-4">
+          <summary className="cursor-pointer select-none text-sm font-semibold text-brand">
+            📅 المصروفات الثابتة الشهرية — {recurring.filter((r) => r.isActive).length} بند نشط
+          </summary>
+          <div className="mt-4">
+        <section>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold text-brand">المصروفات الثابتة (تُخصَم كل شهر)</h3>
+            <h3 className="sr-only">المصروفات الثابتة (تُخصَم كل شهر)</h3>
             {recurring.some((r) => r.isActive) && (
               <form action={postRecurring.bind(null, thisMonthKey)}>
                 <button type="submit" className="erp-btn py-2 text-xs">سجّل مصروفات هذا الشهر ({thisMonthKey})</button>
@@ -353,12 +379,20 @@ export default async function ExpensesPage({
             ضغطته مرتين). يُخصَم فور تسجيله لأنك تملك اعتماد المصروفات.
           </p>
         </section>
+          </div>
+        </details>
       )}
 
-      <section className="erp-card mb-6 p-5">
+      {/* أثر الربح مطويّ — أربعة أرقام لمن يدقّق. */}
+      <details className="erp-card mb-6 px-5 py-4">
+        <summary className="cursor-pointer select-none text-sm font-semibold text-brand">
+          💰 أثر المدى على صافي الربح — {range.label}
+        </summary>
+        <div className="mt-4">
+      <section>
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
-          <h3 className="text-sm font-semibold text-brand">أثر المدى على صافي الربح (المعتمد فقط)</h3>
-          <span className="tnum text-xs text-txt-3">{range.label}</span>
+          <h3 className="sr-only">أثر المدى على صافي الربح (المعتمد فقط)</h3>
+          <span className="tnum text-xs text-txt-3">المعتمد فقط · {range.label}</span>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -373,43 +407,24 @@ export default async function ExpensesPage({
         </div>
 
         <p className="mt-3 text-[0.7rem] text-txt-4">
-          هذه الخصومات المعتمدة فقط. توزيع كل المصروفات حسب البند في الشرايح أعلى.
+          هذه الخصومات المعتمدة فقط. توزيع كل المصروفات حسب البند في شرايح التحليل.
         </p>
       </section>
+        </div>
+      </details>
 
-      {canWrite && (
-        <section className="erp-card mb-6 p-5">
-          <h3 className="mb-4 text-sm font-semibold text-brand">تسجيل مصروف</h3>
-          <ExpenseForm
-            action={createExpense}
-            today={dateInput(new Date())}
-            employees={employees.map((e) => ({ value: e.id, label: e.nameAr ?? e.name }))}
-          />
-        </section>
-      )}
-
+      <h3 className="mb-3 text-sm font-semibold text-brand">🧾 سجل المصروفات</h3>
       <Toolbar placeholder="ابحث بالرقم أو الملاحظات…" sorts={SORTS} />
 
       <div className="mb-4 flex flex-wrap gap-2">
-        <Link
-          href="/expenses"
-          className={
-            statusFilter
-              ? 'rounded-full border border-line-2 px-3 py-1.5 text-xs text-txt-2'
-              : 'rounded-full bg-brand px-3 py-1.5 text-xs text-white'
-          }
-        >
+        <Link href="/expenses" className={statusFilter ? 'erp-pill' : 'erp-pill-active'}>
           الكل
         </Link>
         {(['PENDING', 'APPROVED', 'REJECTED'] as const).map((s) => (
           <Link
             key={s}
             href={`/expenses?status=${s}`}
-            className={
-              statusFilter === s
-                ? 'rounded-full bg-brand px-3 py-1.5 text-xs text-white'
-                : 'rounded-full border border-line-2 px-3 py-1.5 text-xs text-txt-2 hover:border-brand hover:text-brand'
-            }
+            className={statusFilter === s ? 'erp-pill-active' : 'erp-pill'}
           >
             {APPROVAL_STATUS_AR[s]}
           </Link>
