@@ -63,22 +63,55 @@ export default async function InvoicesPage({
   const seeAll = userCan(user.role, user.overrides, 'invoices.viewAll');
   const ownerScope: Prisma.InvoiceWhereInput = seeAll ? {} : { createdById: user.id };
 
+  const searchScope: Prisma.InvoiceWhereInput = query.q
+    ? {
+        OR: [
+          { number: { contains: query.q } },
+          { customer: { contactName: { contains: query.q } } },
+          { customer: { companyName: { contains: query.q } } },
+        ],
+      }
+    : {};
+
   const where: Prisma.InvoiceWhereInput = {
     tenantId: user.tenantId,
     isDeleted: false,
     ...ownerScope,
     ...(statusFilter ? { status: statusFilter } : {}),
     ...(sourceFilter ? { source: sourceFilter } : {}),
-    ...(query.q
-      ? {
-          OR: [
-            { number: { contains: query.q } },
-            { customer: { contactName: { contains: query.q } } },
-            { customer: { companyName: { contains: query.q } } },
-          ],
-        }
-      : {}),
+    ...searchScope,
   };
+
+  // عدّادات الشرائح: كل مصدر بعدد فواتيره (ضمن الحالة والبحث الحاليين)، وكل
+  // حالة بعدد فواتيرها (ضمن المصدر والبحث) — لا عدّ يدوي حين تصير بالآلاف.
+  const [bySource, byStatus] = await Promise.all([
+    prisma.invoice.groupBy({
+      by: ['source'],
+      where: {
+        tenantId: user.tenantId,
+        isDeleted: false,
+        ...ownerScope,
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...searchScope,
+      },
+      _count: { _all: true },
+    }),
+    prisma.invoice.groupBy({
+      by: ['status'],
+      where: {
+        tenantId: user.tenantId,
+        isDeleted: false,
+        ...ownerScope,
+        ...(sourceFilter ? { source: sourceFilter } : {}),
+        ...searchScope,
+      },
+      _count: { _all: true },
+    }),
+  ]);
+  const sourceCount = new Map(bySource.map((g) => [g.source ?? '', g._count._all]));
+  const sourceTotal = bySource.reduce((s, g) => s + g._count._all, 0);
+  const statusCount = new Map(byStatus.map((g) => [g.status, g._count._all]));
+  const statusTotal = byStatus.reduce((s, g) => s + g._count._all, 0);
 
   const [rows, count, receivable] = await Promise.all([
     prisma.invoice.findMany({
@@ -197,51 +230,39 @@ export default async function InvoicesPage({
 
       <Toolbar placeholder="ابحث بالرقم أو العميل…" sorts={SORTS} defaultDir="desc" />
 
+      {/* كل شريحة بعددها — لا عدّ يدوي حين تصير الفواتير بالآلاف. */}
       <div className="mb-4 flex flex-wrap gap-2">
-        <Link
-          href="/invoices"
-          className={
-            statusFilter
-              ? 'rounded-full border border-line-2 px-3 py-1.5 text-xs text-txt-2'
-              : 'rounded-full bg-brand px-3 py-1.5 text-xs text-white'
-          }
-        >
-          الكل
+        <Link href="/invoices" className={statusFilter ? 'erp-pill' : 'erp-pill-active'}>
+          الكل <span className="tnum ms-1 opacity-80">({statusTotal})</span>
         </Link>
         {INVOICE_STATUSES.map((s) => (
           <Link
             key={s}
             href={`/invoices?status=${s}`}
-            className={
-              statusFilter === s
-                ? 'rounded-full bg-brand px-3 py-1.5 text-xs text-white'
-                : 'rounded-full border border-line-2 px-3 py-1.5 text-xs text-txt-2 hover:border-brand hover:text-brand'
-            }
+            className={statusFilter === s ? 'erp-pill-active' : 'erp-pill'}
           >
             {INVOICE_STATUS_AR[s]}
+            <span className="tnum ms-1 opacity-80">({statusCount.get(s) ?? 0})</span>
           </Link>
         ))}
       </div>
 
-      {/* فلتر مصدر الطلب — لمعرفة أكثر قناة تجلب الطلبات. */}
+      {/* فلتر مصدر الطلب — لمعرفة أكثر قناة تجلب الطلبات، وبعدد كل مصدر. */}
       <div className="mb-4 flex flex-wrap gap-2">
         <Link
           href={statusFilter ? `/invoices?status=${statusFilter}` : '/invoices'}
-          className={sourceFilter ? 'rounded-full border border-line-2 px-3 py-1.5 text-xs text-txt-2' : 'rounded-full bg-brand px-3 py-1.5 text-xs text-white'}
+          className={sourceFilter ? 'erp-pill' : 'erp-pill-active'}
         >
-          كل المصادر
+          كل المصادر <span className="tnum ms-1 opacity-80">({sourceTotal})</span>
         </Link>
         {ORDER_SOURCES.map((s) => (
           <Link
             key={s}
             href={`/invoices?source=${s}${statusFilter ? `&status=${statusFilter}` : ''}`}
-            className={
-              sourceFilter === s
-                ? 'rounded-full bg-brand px-3 py-1.5 text-xs text-white'
-                : 'rounded-full border border-line-2 px-3 py-1.5 text-xs text-txt-2 hover:border-brand hover:text-brand'
-            }
+            className={sourceFilter === s ? 'erp-pill-active' : 'erp-pill'}
           >
             {ORDER_SOURCE_AR[s]}
+            <span className="tnum ms-1 opacity-80">({sourceCount.get(s) ?? 0})</span>
           </Link>
         ))}
       </div>
