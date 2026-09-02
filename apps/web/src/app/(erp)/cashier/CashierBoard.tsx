@@ -4,7 +4,15 @@ import { useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { formatMoney, PAYMENT_METHODS, PAYMENT_METHOD_AR, PRICE_SERVICE_AR, dec } from '@erp/domain';
+import {
+  formatMoney,
+  PAYMENT_METHODS,
+  PAYMENT_METHOD_AR,
+  PRICE_SERVICE_AR,
+  MANUAL_ORDER_SOURCES,
+  ORDER_SOURCE_AR,
+  dec,
+} from '@erp/domain';
 import { FormError } from '@/components/crud/Form';
 import { SearchableSelect } from '@/components/crud/SearchableSelect';
 import type { VariantOption } from '@/app/(erp)/sales/DocumentForm';
@@ -294,6 +302,29 @@ export function CashierBoard({
             </span>
           )}
         </div>
+
+        {/* مصدر الطلب — الافتراضي «كاشير»، وضغطة تغيّره لزبون جاء من ماسنجر
+            أو انستا ودفع على الكاونتر، فتحليل المصادر يبقى دقيقاً. */}
+        <fieldset>
+          <legend className="mb-1.5 block text-[0.7rem] text-txt-3">مصدر الطلب</legend>
+          <div className="flex flex-wrap gap-1.5">
+            {(['CASHIER', ...MANUAL_ORDER_SOURCES] as const).map((s) => (
+              <label
+                key={s}
+                className="cursor-pointer rounded-full border border-line-2 px-3 py-1.5 text-[0.7rem] font-medium text-txt-2 transition-colors has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:checked]:text-brand"
+              >
+                <input
+                  type="radio"
+                  name="source"
+                  value={s}
+                  defaultChecked={s === 'CASHIER'}
+                  className="sr-only"
+                />
+                {ORDER_SOURCE_AR[s]}
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
         <div className="flex items-center justify-between border-t border-line pt-3">
           <span className="text-sm text-txt-2">الإجمالي</span>

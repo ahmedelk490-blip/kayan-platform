@@ -233,6 +233,72 @@ export function DocumentForm({
     }
   }, [customerId, lines, lastPriceAction, newCustomer]);
 
+  // إضافة بالمقاسات: منتج ← لون ← كمية لكل مقاس ← أضف — كما في الكاشير.
+  // كان إدخال المقاسات سطراً سطراً (منتج/لون/مقاس لكل سطر) وهو أبطأ ما في
+  // الفورم؛ الآن توزيعة كاملة (2×L و3×XL…) تدخل دفعة واحدة.
+  const [szProductId, setSzProductId] = useState('');
+  const [szColorId, setSzColorId] = useState('');
+  const [szQty, setSzQty] = useState<Record<string, number>>({});
+  const [szMsg, setSzMsg] = useState<string | null>(null);
+  const szColors = szProductId ? colorsOf(variants, szProductId) : [];
+  const szSizes = szProductId ? sizesOf(variants, szProductId, szColorId) : [];
+
+  function addBySizes() {
+    const makeLine = (sizeId: string, qty: number): DocLine | null => {
+      const v = resolveVariant(variants, szProductId, szColorId, sizeId);
+      if (!v) return null;
+      const services = servicesOf(v);
+      const line: DocLine = {
+        productId: szProductId,
+        colorId: szColorId,
+        sizeId,
+        variantId: v.value,
+        service: services[0] ?? '',
+        quantity: qty,
+        unitPrice: 0,
+        discountAmount: 0,
+        taxRate: 0,
+        notes: '',
+      };
+      // السعر المقترح يملأ الخانة توفيراً للكتابة — ويبقى قابلاً للتعديل بيد البائع.
+      line.unitPrice = suggestedPrice(line) ?? 0;
+      return line;
+    };
+
+    const added: DocLine[] = [];
+    if (szSizes.length === 0) {
+      const qty = szQty['__base'] || 0;
+      if (qty <= 0) {
+        setSzMsg('حدّد كمية أولاً.');
+        return;
+      }
+      const line = makeLine('', qty);
+      if (!line) {
+        setSzMsg('اختر اللون أولاً — لا متغيّر مطابق.');
+        return;
+      }
+      added.push(line);
+    } else {
+      for (const s of szSizes) {
+        const qty = szQty[s.id] || 0;
+        if (qty <= 0) continue;
+        const line = makeLine(s.id, qty);
+        if (line) added.push(line);
+      }
+      if (added.length === 0) {
+        setSzMsg('حدّد كمية لمقاس واحد على الأقل.');
+        return;
+      }
+    }
+
+    setLines((prev) => {
+      const base = prev.length === 1 && !prev[0].variantId ? [] : prev;
+      return [...base, ...added];
+    });
+    setSzQty({});
+    setSzMsg(`أُضيف ${added.length} سطر — ${added.reduce((s, l) => s + l.quantity, 0)} قطعة.`);
+  }
+
   // منتقي السيريه: منتج ← لون ← سيريه ← عدد الأطقم، يتوسّع إلى سطور.
   const [seriesProductId, setSeriesProductId] = useState('');
   const [seriesColorId, setSeriesColorId] = useState('');
@@ -449,6 +515,105 @@ export function DocumentForm({
             ))}
           </div>
         </fieldset>
+      )}
+
+      {/* ١.٤ إضافة بالمقاسات — منتج ولون ثم كمية لكل مقاس، كما في الكاشير:
+          التوزيعة كلها (2×L و3×XL…) تدخل دفعة واحدة بدل سطرٍ لكل مقاس. */}
+      {products.length > 0 && (
+        <section className="rounded-xl border border-ok/40 bg-ok-soft/40 p-4">
+          <h3 className="mb-3 text-sm font-semibold text-ok">إضافة بالمقاسات — كمية لكل مقاس</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1.5 block text-xs text-txt-2">المنتج</span>
+              <select
+                value={szProductId}
+                onChange={(e) => {
+                  const pid = e.target.value;
+                  setSzProductId(pid);
+                  const colors = colorsOf(variants, pid);
+                  setSzColorId(colors.length === 1 ? colors[0].id : '');
+                  setSzQty({});
+                  setSzMsg(null);
+                }}
+                className="erp-input py-2.5"
+              >
+                <option value="">اختر المنتج…</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>{p.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs text-txt-2">اللون</span>
+              <select
+                value={szColorId}
+                onChange={(e) => {
+                  setSzColorId(e.target.value);
+                  setSzQty({});
+                }}
+                disabled={szColors.length === 0}
+                className="erp-input py-2.5 disabled:opacity-50"
+              >
+                <option value="">{szColors.length ? 'اختر اللون…' : '—'}</option>
+                {szColors.map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {szProductId && (szColors.length === 0 || szColorId) && (
+            <div className="mt-3">
+              <p className="mb-2 text-xs text-txt-3">
+                {szSizes.length > 0 ? 'الكمية لكل مقاس' : 'الكمية'}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {(szSizes.length > 0 ? szSizes : [{ id: '__base', label: 'الكمية' }]).map((s) => {
+                  const q = szQty[s.id] || 0;
+                  return (
+                    <div
+                      key={s.id}
+                      className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 ${q > 0 ? 'border-ok bg-card' : 'border-line bg-card'}`}
+                    >
+                      <span className="min-w-8 text-center text-xs font-semibold text-txt">{s.label}</span>
+                      <button
+                        type="button"
+                        aria-label="أنقص"
+                        onClick={() => setSzQty((p) => ({ ...p, [s.id]: Math.max(0, (p[s.id] || 0) - 1) }))}
+                        className="grid h-9 w-9 place-items-center rounded-md border border-line-2 text-base text-txt-2 active:bg-card-2"
+                      >
+                        −
+                      </button>
+                      <span className="tnum min-w-6 text-center text-sm font-medium text-txt">{q}</span>
+                      <button
+                        type="button"
+                        aria-label="زد"
+                        onClick={() => setSzQty((p) => ({ ...p, [s.id]: (p[s.id] || 0) + 1 }))}
+                        className="grid h-9 w-9 place-items-center rounded-md border border-line-2 text-base text-txt-2 active:bg-card-2"
+                      >
+                        +
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <span className="tnum text-xs text-txt-3">
+                  {Object.values(szQty).reduce((s, n) => s + n, 0)} قطعة محددة
+                </span>
+                <button
+                  type="button"
+                  onClick={addBySizes}
+                  disabled={Object.values(szQty).every((n) => !n)}
+                  className="rounded-lg bg-ok px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                >
+                  أضف للفاتورة
+                </button>
+              </div>
+            </div>
+          )}
+          {szMsg && <p className="mt-2 text-[0.7rem] font-medium text-ok">{szMsg}</p>}
+        </section>
       )}
 
       {/* ١.٥ السيريه/الطقم — إضافة توزيع مقاسات دفعة واحدة. يظهر فقط حين توجد

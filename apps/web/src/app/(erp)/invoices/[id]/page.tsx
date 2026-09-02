@@ -201,6 +201,10 @@ export default async function InvoicePage({
             </Table>
 
             <dl className="erp-card ms-auto mt-4 max-w-xs space-y-2 p-5 text-sm">
+              <Row
+                label="عدد القطع"
+                value={`${invoice.lines.reduce((s, l) => s + Number(l.quantity), 0)} قطعة`}
+              />
               <Row label="المجموع" value={formatMoney(invoice.subtotal)} />
               <Row label="الخصم" value={formatMoney(invoice.discountAmount)} />
               <Row label="الضريبة" value={formatMoney(invoice.taxAmount)} />

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { dec, dueDate, deriveInvoiceStatus, exceedsBalance, isPaymentMethod, can } from '@erp/domain';
+import { dec, dueDate, deriveInvoiceStatus, exceedsBalance, isPaymentMethod, isOrderSource, can } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, nextCode } from '@/lib/audit';
@@ -122,7 +122,12 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
         discountAmount: '0',
         taxAmount: '0',
         total: total.toString(),
-        source: 'CASHIER',
+        // المصدر من الفورم إن اختير (زبون ماسنجر يدفع على الكاونتر مثلاً)،
+        // وإلا «كاشير» — فتحليل المصادر يبقى صادقاً.
+        source: (() => {
+          const raw = String(formData.get('source') ?? '').trim();
+          return isOrderSource(raw) ? raw : 'CASHIER';
+        })(),
         issueDate: issuedAt,
         dueDate: dueDate(issuedAt, settings.termDays),
         issuedById: user.id,

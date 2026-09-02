@@ -88,6 +88,8 @@ export default async function InvoicesPage({
       include: {
         customer: { select: { contactName: true, companyName: true } },
         _count: { select: { lines: true, payments: true } },
+        // كميات السطور — لعمود «القطع»: كم قطعة في كل فاتورة، بطلب المالك.
+        lines: { select: { quantity: true } },
       },
     }),
     prisma.invoice.count({ where }),
@@ -245,12 +247,13 @@ export default async function InvoicesPage({
       </div>
 
       <Table
-        headers={['الرقم', 'العميل', 'المصدر', 'الإصدار', 'الاستحقاق', 'الإجمالي', 'المدفوع', 'المتبقي', 'الحالة', '']}
+        headers={['الرقم', 'العميل', 'المصدر', 'القطع', 'الإصدار', 'الاستحقاق', 'الإجمالي', 'المدفوع', 'المتبقي', 'الحالة', '']}
         empty={rows.length === 0}
       >
         {rows.map((row) => {
           const left = balance(row.total, row.paidAmount);
           const late = daysOverdue(row.dueDate, left);
+          const pieces = row.lines.reduce((s, l) => s + Number(l.quantity), 0);
           return (
             <tr key={row.id} className="hover:bg-card-2">
               <td dir="ltr" className="tnum px-4 py-3 text-start font-medium text-txt">
@@ -262,6 +265,7 @@ export default async function InvoicesPage({
               <td className="px-4 py-3 text-[0.7rem] text-txt-3">
                 {row.source ? (ORDER_SOURCE_AR as Record<string, string>)[row.source] ?? row.source : '—'}
               </td>
+              <td className="tnum px-4 py-3 font-medium text-txt-2">{pieces}</td>
               <td className="tnum px-4 py-3 text-txt-3">
                 {row.issueDate ? row.issueDate.toLocaleDateString('ar-EG') : '—'}
               </td>

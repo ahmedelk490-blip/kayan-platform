@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
+import { categoryOf } from '@/app/(erp)/returns/category';
 
 export const metadata: Metadata = { title: 'يومية اليوم' };
 
@@ -32,7 +33,14 @@ export default async function DailyPage() {
   const { start, end, label } = iraqDayWindow();
   const window = { gte: start, lt: end };
 
-  const [invoices, payments, returns, expenses] = await Promise.all([
+  // أول الشهر بتوقيت بغداد — لمبيعات الشهر حسب النوع.
+  const monthStart = (() => {
+    const OFFSET = 3 * 60 * 60 * 1000;
+    const ref = new Date(Date.now() + OFFSET);
+    return new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), 1) - OFFSET);
+  })();
+
+  const [invoices, payments, returns, expenses, monthLines] = await Promise.all([
     prisma.invoice.findMany({
       where: {
         tenantId: user.tenantId,
@@ -68,6 +76,19 @@ export default async function DailyPage() {
       },
       select: { amount: true, status: true },
     }),
+
+    // بنود فواتير الشهر كله — لمبيعات كل نوع (يلكات/تيشيرتات…) بالقطعة والقيمة.
+    prisma.invoiceLine.findMany({
+      where: {
+        invoice: {
+          tenantId: user.tenantId,
+          isDeleted: false,
+          status: { notIn: ['DRAFT', 'VOID'] },
+          issueDate: { gte: monthStart },
+        },
+      },
+      select: { description: true, quantity: true, lineTotal: true },
+    }),
   ]);
 
   const salesTotal = invoices.reduce((s, i) => s.plus(dec(i.total)), dec(0));
@@ -89,6 +110,24 @@ export default async function DailyPage() {
     for (const l of inv.lines)
       byItem.set(l.description, (byItem.get(l.description) ?? 0) + Number(l.quantity));
   const topItems = [...byItem].sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  // مبيعات كل نوع بالقطعة — يلكات وتيشيرتات ومرايل… بصورة عامة، بلا ألوان
+  // ولا موديلات (بطلب المالك لحساب عائد الاستثمار). اليوم من فواتير اليوم،
+  // والشهر من بنود الشهر كله، والقيمة من lineTotal.
+  const families = new Map<string, { today: number; month: number; monthValue: ReturnType<typeof dec> }>();
+  const bump = (key: string) => {
+    if (!families.has(key)) families.set(key, { today: 0, month: 0, monthValue: dec(0) });
+    return families.get(key)!;
+  };
+  for (const inv of invoices)
+    for (const l of inv.lines) bump(categoryOf(l.description)).today += Number(l.quantity);
+  for (const l of monthLines) {
+    const f = bump(categoryOf(l.description));
+    f.month += Number(l.quantity);
+    f.monthValue = f.monthValue.plus(dec(l.lineTotal));
+  }
+  const familyRows = [...families.entries()].sort((a, b) => b[1].month - a[1].month);
+  const monthPieces = familyRows.reduce((s, [, f]) => s + f.month, 0);
 
   const cashNet = (byMethod.get('CASH') ?? dec(0)).minus(expensesTotal);
 
@@ -168,27 +207,71 @@ export default async function DailyPage() {
           </Table>
         </section>
 
-        {/* أفضل أصناف اليوم بعدد القطع. */}
-        <section>
-          <h3 className="mb-3 text-sm font-semibold text-brand">أفضل أصناف اليوم</h3>
-          <div className="erp-card p-5">
-            {topItems.length === 0 ? (
-              <p className="text-sm text-txt-3">لا مبيعات بعد اليوم.</p>
-            ) : (
-              <ol className="space-y-2.5">
-                {topItems.map(([desc, qty], i) => (
-                  <li key={desc} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="text-txt-2">
-                      <span className="tnum me-2 text-txt-4">{i + 1}.</span>
-                      {desc}
-                    </span>
-                    <span className="tnum shrink-0 font-semibold text-brand">{qty} قطعة</span>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </div>
-        </section>
+        <div className="space-y-6">
+          {/* مبيعات كل نوع بالقطعة — يلكات/تيشيرتات/مرايل… بصورة عامة،
+              اليوم وهذا الشهر مع قيمة الشهر: أساس حساب عائد الاستثمار. */}
+          <section>
+            <h3 className="mb-3 text-sm font-semibold text-brand">المبيعات بالقطعة حسب النوع</h3>
+            <div className="erp-card overflow-x-auto p-5">
+              {familyRows.length === 0 ? (
+                <p className="text-sm text-txt-3">لا مبيعات هذا الشهر بعد.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-line text-[0.7rem] text-txt-3">
+                      <th className="px-2 py-2 text-start font-medium">النوع</th>
+                      <th className="px-2 py-2 text-start font-medium">اليوم</th>
+                      <th className="px-2 py-2 text-start font-medium">هذا الشهر</th>
+                      <th className="px-2 py-2 text-start font-medium">قيمة الشهر</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {familyRows.map(([name, f]) => (
+                      <tr key={name} className="border-b border-line/60">
+                        <td className="px-2 py-2.5 font-medium text-txt">{name}</td>
+                        <td className="tnum px-2 py-2.5 text-txt-2">{f.today || '—'}</td>
+                        <td className="tnum px-2 py-2.5 font-semibold text-brand">{f.month}</td>
+                        <td className="tnum px-2 py-2.5 text-txt-3">{formatMoney(f.monthValue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td className="px-2 py-2.5 text-xs font-semibold text-txt">الإجمالي</td>
+                      <td className="tnum px-2 py-2.5 text-xs font-semibold text-txt-2">
+                        {invoices.reduce((s, i) => s + i.lines.reduce((x, l) => x + Number(l.quantity), 0), 0)}
+                      </td>
+                      <td className="tnum px-2 py-2.5 text-xs font-bold text-brand">{monthPieces}</td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </div>
+          </section>
+
+          {/* أفضل أصناف اليوم بعدد القطع. */}
+          <section>
+            <h3 className="mb-3 text-sm font-semibold text-brand">أفضل أصناف اليوم</h3>
+            <div className="erp-card p-5">
+              {topItems.length === 0 ? (
+                <p className="text-sm text-txt-3">لا مبيعات بعد اليوم.</p>
+              ) : (
+                <ol className="space-y-2.5">
+                  {topItems.map(([desc, qty], i) => (
+                    <li key={desc} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-txt-2">
+                        <span className="tnum me-2 text-txt-4">{i + 1}.</span>
+                        {desc}
+                      </span>
+                      <span className="tnum shrink-0 font-semibold text-brand">{qty} قطعة</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          </section>
+        </div>
       </div>
     </AppShell>
   );
