@@ -140,9 +140,16 @@ async function BackupPanel() {
             ? ` آخر نسخة: ${backups[0].mtime.toLocaleString('ar-EG', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.`
             : ' لا نسخ بعد — الأولى ستؤخذ تلقائياً، أو خذها الآن.'}
         </p>
-        <form action={runBackupNow}>
-          <SubmitButton label="نسخة احتياطية الآن" />
-        </form>
+        <div className="flex flex-wrap items-center gap-2">
+          {backups.length > 0 && (
+            <a href="/admin/backup" className="erp-btn-ghost">
+              ⬇ تنزيل آخر نسخة لجهازك
+            </a>
+          )}
+          <form action={runBackupNow}>
+            <SubmitButton label="نسخة احتياطية الآن" />
+          </form>
+        </div>
       </div>
       {backups.length > 0 && (
         <ul className="mt-3 space-y-1.5">

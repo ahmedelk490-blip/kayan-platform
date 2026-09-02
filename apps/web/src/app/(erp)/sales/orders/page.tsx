@@ -46,18 +46,39 @@ export default async function OrdersPage({
       : {}),
   };
 
-  const [rows, count] = await Promise.all([
+  const [rows, count, byStatus] = await Promise.all([
     prisma.salesOrder.findMany({
       where,
       orderBy: { [query.sort]: query.dir },
       ...skipTake(query),
       include: {
         customer: { select: { contactName: true, companyName: true } },
-        _count: { select: { lines: true, movements: true } },
+        _count: { select: { movements: true } },
+        lines: { select: { quantity: true } },
       },
     }),
     prisma.salesOrder.count({ where }),
+    // عدّاد كل حالة (ضمن البحث الحالي) — لا عدّ يدوي.
+    prisma.salesOrder.groupBy({
+      by: ['status'],
+      where: {
+        tenantId: user.tenantId,
+        isDeleted: false,
+        ...(query.q
+          ? {
+              OR: [
+                { number: { contains: query.q } },
+                { customer: { contactName: { contains: query.q } } },
+                { customer: { companyName: { contains: query.q } } },
+              ],
+            }
+          : {}),
+      },
+      _count: { _all: true },
+    }),
   ]);
+  const statusCount = new Map(byStatus.map((g) => [g.status, g._count._all]));
+  const statusTotal = byStatus.reduce((s, g) => s + g._count._all, 0);
 
   const canWrite = can(user.role, 'sales.write');
 
@@ -77,34 +98,25 @@ export default async function OrdersPage({
 
       <Toolbar placeholder="ابحث بالرقم أو العميل…" sorts={SORTS} />
 
+      {/* كل شريحة بعددها — كقائمة الفواتير. */}
       <div className="mb-4 flex flex-wrap gap-2">
-        <Link
-          href="/sales/orders"
-          className={
-            statusFilter
-              ? 'rounded-full border border-line-2 px-3 py-1.5 text-xs text-txt-2'
-              : 'rounded-full bg-brand px-3 py-1.5 text-xs text-white'
-          }
-        >
-          الكل
+        <Link href="/sales/orders" className={statusFilter ? 'erp-pill' : 'erp-pill-active'}>
+          الكل <span className="tnum ms-1 opacity-80">({statusTotal})</span>
         </Link>
         {ORDER_STATUSES.map((s) => (
           <Link
             key={s}
             href={`/sales/orders?status=${s}`}
-            className={
-              statusFilter === s
-                ? 'rounded-full bg-brand px-3 py-1.5 text-xs text-white'
-                : 'rounded-full border border-line-2 px-3 py-1.5 text-xs text-txt-2 hover:border-brand hover:text-brand'
-            }
+            className={statusFilter === s ? 'erp-pill-active' : 'erp-pill'}
           >
             {ORDER_STATUS_AR[s]}
+            <span className="tnum ms-1 opacity-80">({statusCount.get(s) ?? 0})</span>
           </Link>
         ))}
       </div>
 
       <Table
-        headers={['الرقم', 'العميل', 'التاريخ', 'البنود', 'حركات الحجز', 'الإجمالي', 'الحالة', '']}
+        headers={['الرقم', 'العميل', 'التاريخ', 'القطع', 'حركات الحجز', 'الإجمالي', 'الحالة', '']}
         empty={rows.length === 0}
       >
         {rows.map((row) => (
@@ -118,7 +130,9 @@ export default async function OrdersPage({
             <td className="tnum px-4 py-3 text-txt-3">
               {row.orderDate.toLocaleDateString('ar-EG')}
             </td>
-            <td className="tnum px-4 py-3 text-txt-3">{row._count.lines}</td>
+            <td className="tnum px-4 py-3 font-medium text-txt-2">
+              {row.lines.reduce((s, l) => s + Number(l.quantity), 0)}
+            </td>
             <td className="tnum px-4 py-3 text-txt-3">{row._count.movements}</td>
             <td className="tnum px-4 py-3 font-medium text-brand">{formatMoney(row.total)}</td>
             <td className="px-4 py-3">

@@ -84,6 +84,8 @@ export function PrintDocument({
   statusNote?: string | null;
 }) {
   const title = kind === 'invoice' ? 'فاتورة' : 'عرض سعر';
+  // عدد القطع الكلي — يطبع للعميل كما يظهر على الشاشة، بطلب المالك.
+  const totalPieces = lines.reduce((s, l) => s + Number(l.quantity ?? 0), 0);
 
   return (
     <article className="print-doc" dir="rtl">
@@ -156,6 +158,7 @@ export function PrintDocument({
 
       <section className="print-totals">
         <dl>
+          <Row label="عدد القطع" value={`${totalPieces} قطعة`} />
           <Row label="المجموع" value={formatMoney(subtotal as never)} />
           <Row label="الخصم" value={formatMoney(discountAmount as never)} />
           <Row label="الضريبة" value={formatMoney(taxAmount as never)} />

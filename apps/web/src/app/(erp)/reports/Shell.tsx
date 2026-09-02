@@ -11,18 +11,18 @@ import { ReportTabs } from './ReportTabs';
  */
 
 export const REPORTS = [
-  { href: '/reports/financial', title: 'التقرير المالي', body: 'المبيعات والمصروفات والصافي والتدفّق النقدي.' },
-  { href: '/reports/statement', title: 'البيان المالي', body: 'المبيعات حسب المنتج ناقص التكاليف = الربح الصافي.' },
-  { href: '/reports/clients', title: 'تحليل العملاء', body: 'لكل عميل: الفواتير والتحصيل والمتبقّي والربح.' },
-  { href: '/reports/client', title: 'تقرير عميل', body: 'اختر عميلاً لعرض تقريره الكامل وفواتيره.' },
-  { href: '/reports/aging', title: 'تقدّم الديون', body: 'المستحقات موزّعة حسب مدى تأخّرها.' },
-  { href: '/reports/comparison', title: 'مقارنة الفترة', body: 'الفترة الحالية مقابل السابقة ونسبة التغيّر.' },
-  { href: '/reports/cashflow', title: 'التدفق النقدي', body: 'الداخل مقابل الخارج والرصيد التراكمي.' },
-  { href: '/reports/sales', title: 'المبيعات', body: 'الإيراد والفواتير عبر الفترة.' },
-  { href: '/reports/inventory', title: 'تقييم المخزون', body: 'الرصيد الحالي بالتكلفة.' },
-  { href: '/reports/production', title: 'إنتاجية التصنيع', body: 'أوامر الإنتاج وزمن الدورة.' },
-  { href: '/reports/profitability', title: 'ربحية المنتجات', body: 'الإيراد مقابل التكلفة المحفوظة.' },
-  { href: '/reports/employees', title: 'ربحية الموظفين', body: 'ربح كل موظف من فواتيره.' },
+  { href: '/reports/financial', title: '💰 التقرير المالي', body: 'المبيعات والمصروفات والصافي والتدفّق النقدي.' },
+  { href: '/reports/statement', title: '📑 البيان المالي', body: 'المبيعات حسب المنتج ناقص التكاليف = الربح الصافي.' },
+  { href: '/reports/clients', title: '👥 تحليل العملاء', body: 'لكل عميل: الفواتير والتحصيل والمتبقّي والربح.' },
+  { href: '/reports/client', title: '👤 تقرير عميل', body: 'اختر عميلاً لعرض تقريره الكامل وفواتيره.' },
+  { href: '/reports/aging', title: '⏰ تقدّم الديون', body: 'المستحقات موزّعة حسب مدى تأخّرها.' },
+  { href: '/reports/comparison', title: '📊 مقارنة الفترة', body: 'الفترة الحالية مقابل السابقة ونسبة التغيّر.' },
+  { href: '/reports/cashflow', title: '💸 التدفق النقدي', body: 'الداخل مقابل الخارج والرصيد التراكمي.' },
+  { href: '/reports/sales', title: '🧾 المبيعات', body: 'الإيراد والفواتير عبر الفترة.' },
+  { href: '/reports/inventory', title: '📦 تقييم المخزون', body: 'الرصيد الحالي بالتكلفة.' },
+  { href: '/reports/production', title: '🏭 إنتاجية التصنيع', body: 'أوامر الإنتاج وزمن الدورة.' },
+  { href: '/reports/profitability', title: '📈 ربحية المنتجات', body: 'الإيراد مقابل التكلفة المحفوظة.' },
+  { href: '/reports/employees', title: '🧑‍💼 ربحية الموظفين', body: 'ربح كل موظف من فواتيره.' },
 ] as const;
 
 /**
@@ -72,11 +72,7 @@ export function PeriodTabs({ basePath, active }: { basePath: string; active: Per
         <Link
           key={p}
           href={`${basePath}?period=${p}`}
-          className={
-            p === active
-              ? 'rounded-full bg-brand px-3 py-1.5 text-xs text-white'
-              : 'rounded-full border border-line-2 px-3 py-1.5 text-xs text-txt-2 hover:border-brand hover:text-brand'
-          }
+          className={p === active ? 'erp-pill-active' : 'erp-pill'}
         >
           {PERIOD_AR[p]}
         </Link>

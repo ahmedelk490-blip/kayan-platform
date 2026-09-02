@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { dec, formatMoney, paymentSign } from '@erp/domain';
+import { dec, formatMoney, paymentSign, iraqNow, iraqMidnight } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
+import { StatCard } from '@/components/dashboard/StatCard';
+import { IconUsers, IconCategory, IconClock, IconBell } from '@/components/dashboard/Icons';
 import { grantableRoles } from '@/app/(erp)/users/actions';
 import { EmployeeEditModal, EmployeeCreateModal, EmployeeActiveToggle, PaymentModal, SalaryRunModal } from './HRForms';
 
@@ -16,10 +18,12 @@ export const metadata: Metadata = { title: 'الرواتب والموظفين' }
  */
 export default async function HRPage() {
   const user = await requirePermission('users.manage');
-  const year = new Date().getFullYear();
-  const yearStart = new Date(year, 0, 1);
+  // حدود السنة والشهر بيوم بغداد — كباقي النظام.
+  const ref = iraqNow();
+  const yearStart = iraqMidnight(ref.getUTCFullYear(), 0, 1);
+  const monthStart = iraqMidnight(ref.getUTCFullYear(), ref.getUTCMonth(), 1);
 
-  const [employees, payments, roles] = await Promise.all([
+  const [employees, payments, roles, monthAgg, pendingPenalties] = await Promise.all([
     prisma.user.findMany({
       where: { tenantId: user.tenantId },
       orderBy: [{ isActive: 'desc' }, { createdAt: 'asc' }],
@@ -34,6 +38,18 @@ export default async function HRPage() {
       select: { employeeId: true, kind: true, amount: true },
     }),
     grantableRoles(),
+    // مدفوعات هذا الشهر — كم خرج للموظفين فعلاً.
+    prisma.employeePayment.aggregate({
+      where: { tenantId: user.tenantId, isDeleted: false, paidAt: { gte: monthStart } },
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+    // جزاءات لم تُحصَّل بعد (منها التلقائية من الهالك) — تُرى قبل تشغيل الرواتب.
+    prisma.penalty.aggregate({
+      where: { tenantId: user.tenantId, status: { in: ['PENDING', 'APPROVED'] } },
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
   ]);
 
   const paidByEmployee = new Map<string, ReturnType<typeof dec>>();
@@ -44,6 +60,11 @@ export default async function HRPage() {
 
   const activeEmployees = employees.filter((e) => e.isActive);
   const employeeOptions = activeEmployees.map((e) => ({ value: e.id, label: e.nameAr ?? e.name }));
+  // فاتورة الرواتب الشهرية = مجموع رواتب النشطين المضبوطة.
+  const salaryBill = activeEmployees.reduce(
+    (s, e) => s.plus(e.monthlySalary === null ? dec(0) : dec(e.monthlySalary)),
+    dec(0),
+  );
 
   return (
     <AppShell user={user} title="الرواتب والموظفين">
@@ -58,6 +79,47 @@ export default async function HRPage() {
           </div>
         }
       />
+
+      {/* أرقام حيّة — وأهمها الجزاءات المعلقة: تُرى قبل تشغيل رواتب الشهر. */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          index={0}
+          label="الموظفون النشطون"
+          value={activeEmployees.length}
+          unit="موظف"
+          hint={`من ${employees.length} مسجّل`}
+          icon={<IconUsers />}
+          tone="primary"
+        />
+        <StatCard
+          index={1}
+          label="فاتورة الرواتب الشهرية"
+          value={formatMoney(salaryBill)}
+          hint="مجموع رواتب النشطين"
+          icon={<IconCategory />}
+          tone="neutral"
+        />
+        <StatCard
+          index={2}
+          label="مدفوع هذا الشهر"
+          value={formatMoney(dec(monthAgg._sum.amount ?? 0))}
+          hint={`${monthAgg._count._all} دفعة`}
+          icon={<IconClock />}
+          tone="success"
+        />
+        <StatCard
+          index={3}
+          label="جزاءات بانتظار الخصم"
+          value={formatMoney(dec(pendingPenalties._sum.amount ?? 0))}
+          hint={
+            pendingPenalties._count._all > 0
+              ? `${pendingPenalties._count._all} جزاء — راجعها في الهالك والجزاءات قبل الرواتب`
+              : 'لا جزاءات معلقة'
+          }
+          icon={<IconBell />}
+          tone={pendingPenalties._count._all > 0 ? 'warning' : 'success'}
+        />
+      </div>
 
       <Table
         headers={['الموظف', 'الدور', 'الراتب الشهري', 'العمولة %', 'صُرف هذه السنة', 'الحالة', '']}

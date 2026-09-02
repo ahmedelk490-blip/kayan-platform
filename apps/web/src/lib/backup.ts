@@ -91,6 +91,18 @@ export async function runBackup(): Promise<{ file: string; tables: number; rows:
 }
 
 /** آخر النسخ الموجودة — لعرضها في شاشة الإدارة. */
+/** أحدث ملف نسخة مع محتواه — للتنزيل من شاشة الإدارة (نسخة بيد المالك خارج الخادم). */
+export async function latestBackup(): Promise<{ name: string; data: Buffer } | null> {
+  try {
+    const files = (await readdir(DIR)).filter((f) => f.startsWith('kayan-backup-')).sort();
+    const name = files[files.length - 1];
+    if (!name) return null;
+    return { name, data: await readFile(path.join(DIR, name)) };
+  } catch {
+    return null;
+  }
+}
+
 export async function listBackups(): Promise<{ name: string; size: number; mtime: Date }[]> {
   try {
     const files = (await readdir(DIR))

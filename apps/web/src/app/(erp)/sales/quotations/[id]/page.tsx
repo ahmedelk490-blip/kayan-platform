@@ -14,6 +14,7 @@ import {
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { waLink } from '@/lib/wa';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import { DocumentForm } from '../../DocumentForm';
@@ -66,6 +67,22 @@ export default async function QuotationDetailPage({
 
   const update = updateQuotation.bind(null, quotation.id);
 
+  // عرض السعر جاهزاً للواتساب — البيع في هذا السوق يبدأ برسالة.
+  const waUrl = waLink(
+    quotation.customer.whatsapp ?? quotation.customer.phone,
+    [
+      `عرض سعر ${quotation.number} — كيان للزي الموحد`,
+      ...quotation.lines.map((l) => {
+        const label = [l.product.nameAr, l.variant?.color?.nameAr, l.variant?.size?.code]
+          .filter(Boolean)
+          .join(' · ');
+        return `• ${label} × ${formatQty(l.quantity)} = ${formatMoney(l.lineTotal)} د.ع`;
+      }),
+      `الإجمالي: ${formatMoney(quotation.total)} د.ع`,
+      'العرض ساري وبانتظار تأكيدكم — شكراً لكم 🌹',
+    ].join('\n'),
+  );
+
   return (
     <AppShell user={user} title={quotation.number}>
       <ModuleHeader
@@ -75,9 +92,14 @@ export default async function QuotationDetailPage({
             <Link href="/sales/quotations" className="erp-btn-ghost">
               رجوع
             </Link>
-            <Link href={`/sales/quotations/${quotation.id}/print`} className="erp-btn-ghost">
+            <Link href={`/sales/quotations/${quotation.id}/print`} className="erp-btn-print">
               طباعة / PDF
             </Link>
+            {waUrl && (
+              <a href={waUrl} target="_blank" rel="noopener noreferrer" className="erp-btn-wa">
+                إرسال العرض واتساب
+              </a>
+            )}
             {canWrite && (
               <form action={duplicateQuotation.bind(null, quotation.id)}>
                 <button type="submit" className="erp-btn-ghost">
