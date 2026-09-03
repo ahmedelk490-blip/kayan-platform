@@ -94,6 +94,11 @@
   --color-text-on-primary: var(--color-neutral-50);
   /* White on the maroon fill — 9.5:1, the logo's own pairing. */
   --color-text-on-accent: var(--color-neutral-50);
+  /* نص فوق تعبئة accent — الاسم القصير الذي تولّده فئة `text-on-accent`.
+     كان غائباً فلا تتولّد الفئة أصلاً ويرث الزر لوناً داكناً يبتلعه.
+     داكنٌ على تعبئة الوضع الداكن (وردية فاتحة)، ويُقلب أبيض في الفاتح
+     (التعبئة نبيتية غامقة) — تباين AA في الحالتين. */
+  --color-on-accent: var(--color-ink-950);
 
   /* Accent for TEXT, rules and icons on dark: lighter tint, same hue. */
   --color-accent: var(--color-primary-400);
@@ -166,6 +171,8 @@
 
   /* الفاتح: الكلمة الضخمة بلون الشعار النبيتي. */
   --wordmark-color: var(--color-primary-600);
+  /* تعبئة accent في الفاتح نبيتية غامقة — النص عليها أبيض. */
+  --color-on-accent: var(--color-neutral-50);
 }
 
 @media (prefers-color-scheme: light) {
@@ -185,6 +192,7 @@
     --color-primary-hover: var(--color-primary-700);
 
     --wordmark-color: var(--color-primary-600);
+    --color-on-accent: var(--color-neutral-50);
   }
 }
 

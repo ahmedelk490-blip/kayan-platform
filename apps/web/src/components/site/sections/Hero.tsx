@@ -354,9 +354,16 @@ export function Hero({ slides }: { slides: HeroSlide[] }) {
                   />
 
                   {isCentre && (
-                    <figcaption className="pointer-events-none absolute inset-x-0 -bottom-2 text-center">
-                      <p className="text-lg font-semibold text-body">{slide.name}</p>
-                      {slide.note && <p className="mt-1 text-xs text-body-muted">{slide.note}</p>}
+                    // شريحة خلف الاسم: النص كان يطفو على الصورة مباشرة —
+                    // بنطال داكن أو أرضية فاتحة فيختفي في أحد الوضعين حتماً.
+                    // خلفية سطحية شفيفة بحدّ وضبابية تضمن قراءته فوق أي صورة.
+                    <figcaption className="pointer-events-none absolute inset-x-0 -bottom-2 flex justify-center">
+                      <span className="rounded-2xl border border-border bg-surface/85 px-5 py-2 text-center shadow-lg backdrop-blur-sm">
+                        <span className="block text-lg font-semibold text-body">{slide.name}</span>
+                        {slide.note && (
+                          <span className="mt-0.5 block text-xs text-body-muted">{slide.note}</span>
+                        )}
+                      </span>
                     </figcaption>
                   )}
                 </motion.figure>

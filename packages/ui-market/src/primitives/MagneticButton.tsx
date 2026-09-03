@@ -72,9 +72,11 @@ export function MagneticButton({
     'will-change-transform',
     // Focus must clear AA contrast against every background, including 3D.
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
+    // ألوان بالتوكنات لا بدرجات ثابتة — فتصحّ في الوضعين الفاتح والداكن:
+    // كانت outline بنص شبه أبيض ثابت يختفي على الخلفية الفاتحة.
     variant === 'solid'
-      ? 'bg-accent text-on-accent hover:bg-primary-400'
-      : 'border border-neutral-600 text-neutral-100 hover:border-accent hover:text-accent',
+      ? 'bg-accent text-on-accent hover:bg-accent-hover'
+      : 'border border-border-strong text-body hover:border-accent hover:text-accent',
     className,
   );
 

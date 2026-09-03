@@ -11,8 +11,9 @@ export function LegalBody({ children }: { children: ReactNode }) {
       <div
         className={[
           'mx-auto w-full max-w-[68ch]',
-          '[&_h2]:mt-12 [&_h2]:font-display [&_h2]:text-xl [&_h2]:text-neutral-100',
-          '[&_p]:mt-4 [&_p]:text-sm [&_p]:leading-relaxed [&_p]:text-neutral-400',
+          // توكنات لا درجات ثابتة — العناوين كانت شبه بيضاء فتختفي في الفاتح.
+          '[&_h2]:mt-12 [&_h2]:font-display [&_h2]:text-xl [&_h2]:text-body',
+          '[&_p]:mt-4 [&_p]:text-sm [&_p]:leading-relaxed [&_p]:text-body-muted',
         ].join(' ')}
       >
         {children}
@@ -31,8 +32,8 @@ export function LegalBody({ children }: { children: ReactNode }) {
  */
 export function LegalNotice() {
   return (
-    <p className="rounded-xl border border-ink-700 bg-ink-900/60 p-5 text-xs leading-relaxed text-neutral-400">
-      <strong className="text-neutral-200">Draft — pending legal review.</strong> This page
+    <p className="rounded-xl border border-border bg-surface-raised p-5 text-xs leading-relaxed text-body-muted">
+      <strong className="text-body">Draft — pending legal review.</strong> This page
       describes current practice accurately, but it has not been reviewed by a qualified lawyer
       and does not yet name the operating legal entity. It must be reviewed and completed before
       this site handles real enquiries.

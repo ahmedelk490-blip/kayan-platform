@@ -69,8 +69,8 @@ export function LeadForm() {
         role="status"
         className="rounded-2xl border border-primary-600/40 bg-primary-950/40 p-8 md:p-10"
       >
-        <h2 className="font-display text-2xl text-neutral-100">وصلنا طلبك — شكراً لك.</h2>
-        <p className="mt-4 max-w-[48ch] text-sm leading-loose text-neutral-300">
+        <h2 className="font-display text-2xl text-body">وصلنا طلبك — شكراً لك.</h2>
+        <p className="mt-4 max-w-[48ch] text-sm leading-loose text-body-muted">
           سنرجع لك خلال يوم عمل واحد بعرض سعر واضح وموعد تسليم محدد. لو عندك شعار أو تصميم
           جاهز، أرسله لنا وسيكون العرض أدق.
         </p>
@@ -78,12 +78,14 @@ export function LeadForm() {
     );
   }
 
+  // توكنات لا درجات داكنة ثابتة — الحقول كانت بنص شبه أبيض على خلفية حبرية
+  // فتصير غير مقروءة في الوضع الفاتح.
   const fieldClass = (name: string) =>
     cn(
-      'w-full rounded-xl border bg-ink-900/60 px-4 py-3 text-sm text-neutral-100',
-      'placeholder:text-neutral-600 transition-colors',
+      'w-full rounded-xl border bg-surface-raised px-4 py-3 text-sm text-body',
+      'placeholder:text-text-subtle transition-colors',
       'focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent',
-      errors[name] ? 'border-danger-500/70' : 'border-ink-700',
+      errors[name] ? 'border-danger-500/70' : 'border-border-strong',
     );
 
   const Label = ({
@@ -95,9 +97,9 @@ export function LeadForm() {
     children: React.ReactNode;
     optional?: boolean;
   }) => (
-    <label htmlFor={htmlFor} className="mb-2 block text-xs tracking-[0.1em] text-neutral-400">
+    <label htmlFor={htmlFor} className="mb-2 block text-xs tracking-[0.1em] text-body-muted">
       {children}
-      {optional && <span className="ms-2 text-neutral-600">اختياري</span>}
+      {optional && <span className="ms-2 text-body-subtle">اختياري</span>}
     </label>
   );
 
