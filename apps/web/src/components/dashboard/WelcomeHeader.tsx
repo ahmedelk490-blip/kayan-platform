@@ -63,7 +63,9 @@ export function WelcomeHeader({
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.22, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-              className="mt-1.5 text-2xl font-bold md:text-3xl"
+              // أبيض صريح: قاعدة العناوين العامة تلوّن h2 داكناً فيختفي الاسم
+              // على التدرّج النبيتي — الوراثة لا تكفي هنا.
+              className="mt-1.5 text-2xl font-bold text-white md:text-3xl"
             >
               {name}
             </motion.h2>
