@@ -32,6 +32,8 @@ const Schema = z.object({
   employeeId: z.string().trim().optional().or(z.literal('')),
   /** سبب حرّ يكتبه المسجِّل — يتصدّر سبب السجل. */
   reasonNote: z.string().trim().max(500).optional().or(z.literal('')),
+  /** المتغيّر المحلول (منتج×لون×مقاس) — عند الاعتماد تُخصم قطعه من المخزون. */
+  variantId: z.string().trim().optional().or(z.literal('')),
 });
 
 function read(formData: FormData) {
@@ -45,6 +47,7 @@ function read(formData: FormData) {
     manualCost: manual === '' ? undefined : manual,
     employeeId: String(formData.get('employeeId') ?? ''),
     reasonNote: String(formData.get('reasonNote') ?? ''),
+    variantId: String(formData.get('variantId') ?? ''),
   };
 }
 
@@ -90,6 +93,20 @@ export async function createDamage(_prev: FormState, formData: FormData): Promis
     employeeId = employee.id;
   }
 
+  // المتغيّر المحلول (اختياري) — يُتحقّق أنه لهذا المنتج ولهذا المستأجر.
+  let variantId: string | null = null;
+  if (parsed.data.variantId) {
+    const variant = await prisma.productVariant.findFirst({
+      where: {
+        id: parsed.data.variantId,
+        productId: product.id,
+        product: { tenantId: user.tenantId },
+      },
+      select: { id: true },
+    });
+    variantId = variant?.id ?? null;
+  }
+
   // السبب: النص الحرّ أولاً إن كُتب، ثم اللون والخدمة — يبقى مُفسَّراً.
   const reason =
     [parsed.data.reasonNote || null, colorName, serviceName].filter(Boolean).join(' · ') ||
@@ -108,6 +125,7 @@ export async function createDamage(_prev: FormState, formData: FormData): Promis
       damageDate: new Date(),
       employeeId,
       productId: product.id,
+      variantId,
       productLabel: [product.nameAr, colorName].filter(Boolean).join(' · '),
       quantity: parsed.data.quantity,
       reason,
@@ -158,6 +176,58 @@ export async function setDamageStatus(id: string, next: string): Promise<void> {
       approvedAt: next === 'APPROVED' ? new Date() : null,
     },
   });
+
+  // اعتمادُ الهالك يخصم قطعه التالفة من المخزون تلقائياً — القطعة التالفة
+  // خرجت من الرصيد واقعاً، فيخرج رقمها معها. يشترط متغيّراً محلولاً
+  // (منتج×لون×مقاس)، ولا يتكرر لو أُعيد الاعتماد (يُفحص بمرجع رقم المحضر).
+  if (next === 'APPROVED' && damage.variantId && damage.productId) {
+    const already = await prisma.stockMovement.findFirst({
+      where: { tenantId: user.tenantId, reference: damage.number, type: 'ISSUE' },
+      select: { id: true },
+    });
+    const warehouse = already
+      ? null
+      : await prisma.warehouse.findFirst({
+          where: { tenantId: user.tenantId, isDeleted: false },
+          orderBy: { code: 'asc' },
+          select: { id: true },
+        });
+    if (warehouse) {
+      await tenantTransaction(async (tx) => {
+        await tx.stockMovement.create({
+          data: {
+            tenantId: user.tenantId,
+            productId: damage.productId!,
+            variantId: damage.variantId!,
+            warehouseId: warehouse.id,
+            type: 'ISSUE',
+            quantity: dec(damage.quantity).negated().toString(),
+            reference: damage.number,
+            reason: `هالك معتمد — ${damage.reason}`,
+            userId: user.id,
+          },
+        });
+        const st = await tx.stock.findFirst({
+          where: { variantId: damage.variantId!, warehouseId: warehouse.id, locationId: null },
+        });
+        if (st) {
+          await tx.stock.update({
+            where: { id: st.id },
+            data: { onHand: dec(st.onHand).minus(dec(damage.quantity)).toString() },
+          });
+        } else {
+          await tx.stock.create({
+            data: {
+              variantId: damage.variantId!,
+              warehouseId: warehouse.id,
+              onHand: dec(damage.quantity).negated().toString(),
+            },
+          });
+        }
+      });
+      revalidatePath('/inventory');
+    }
+  }
 
   // اعتمادُ هالكٍ له موظف متسبب يولّد جزاءً تلقائياً بقيمة التكلفة (سعر
   // الجملة) — بانتظار اعتماد الجزاء نفسه، فيمرّ بدورته المعتادة ثم يُخصم

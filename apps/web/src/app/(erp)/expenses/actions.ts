@@ -13,7 +13,13 @@ import { numeric } from '@/lib/num';
 const Schema = z.object({
   expenseDate: z.string().optional(),
   category: z.string().refine(isExpenseCategory, 'بند مصروف غير معروف.'),
-  amount: numeric(z.coerce.number().positive('المبلغ يجب أن يكون أكبر من صفر.')),
+  // سقف ١٠ مليارات: رقم هاتف يُلصق في خانة المبلغ خرّب التقارير مرة — لن تتكرر.
+  amount: numeric(
+    z.coerce
+      .number()
+      .positive('المبلغ يجب أن يكون أكبر من صفر.')
+      .max(10_000_000_000, 'المبلغ غير منطقي — تأكد أنك لم تلصق رقماً خاطئاً.'),
+  ),
   employeeId: z.string().optional(),
   notes: z.string().trim().max(1000).optional().or(z.literal('')),
 });
@@ -134,7 +140,12 @@ import { can, isExpenseCategory as isCat } from '@erp/domain';
 const RecurringSchema = z.object({
   nameAr: z.string().trim().min(2, 'اسم المصروف مطلوب.').max(120),
   category: z.string().refine(isCat, 'بند مصروف غير معروف.'),
-  amount: numeric(z.coerce.number().positive('المبلغ يجب أن يكون أكبر من صفر.')),
+  amount: numeric(
+    z.coerce
+      .number()
+      .positive('المبلغ يجب أن يكون أكبر من صفر.')
+      .max(10_000_000_000, 'المبلغ غير منطقي — تأكد أنك لم تلصق رقماً خاطئاً.'),
+  ),
 });
 
 /** إضافة مصروف ثابت (قالب) — لا يُخصَم حتى يُسجَّل للشهر. */

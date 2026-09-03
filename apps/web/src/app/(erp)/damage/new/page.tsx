@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: 'محضر هالك جديد' };
 export default async function NewDamagePage() {
   const user = await requirePermission('damage.write');
 
-  const [products, colorRows, employeeRows] = await Promise.all([
+  const [products, colorRows, employeeRows, variantRows] = await Promise.all([
     prisma.product.findMany({
       where: { tenantId: user.tenantId, isDeleted: false, status: 'ACTIVE' },
       select: { id: true, nameAr: true, cost: true },
@@ -30,6 +30,11 @@ export default async function NewDamagePage() {
       where: { tenantId: user.tenantId, isActive: true },
       select: { id: true, name: true, nameAr: true },
       orderBy: { name: 'asc' },
+    }),
+    // المتغيّرات — لحلّ (منتج × لون × مقاس) إلى متغيّر يُخصم من مخزونه عند الاعتماد.
+    prisma.productVariant.findMany({
+      where: { isDeleted: false, product: { tenantId: user.tenantId, isDeleted: false } },
+      select: { id: true, productId: true, colorId: true, sizeId: true, size: { select: { code: true } } },
     }),
   ]);
 
@@ -55,6 +60,13 @@ export default async function NewDamagePage() {
           colors={colors}
           services={services}
           employees={employeeRows.map((e) => ({ value: e.id, label: e.nameAr ?? e.name }))}
+          variants={variantRows.map((v) => ({
+            id: v.id,
+            productId: v.productId,
+            colorId: v.colorId,
+            sizeId: v.sizeId,
+            sizeCode: v.size?.code ?? null,
+          }))}
         />
       </div>
     </AppShell>

@@ -18,6 +18,14 @@ export interface DamageProduct {
   colors: Option[];
 }
 
+export interface DamageVariant {
+  id: string;
+  productId: string;
+  colorId: string | null;
+  sizeId: string | null;
+  sizeCode: string | null;
+}
+
 /**
  * محضر هالك — نوع المنتج، اللون، نوع الخدمة، والعدد. المنتج واللون بحثٌ بالكتابة
  * (قوائم طويلة). التكلفة تُحسب حيّاً = تكلفة القطعة × العدد، وتُعرض قبل الحفظ،
@@ -29,6 +37,7 @@ export function DamageForm({
   colors,
   services,
   employees = [],
+  variants = [],
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
   products: DamageProduct[];
@@ -36,13 +45,28 @@ export function DamageForm({
   services: Option[];
   /** الموظف المتسبب (اختياري) — عند اعتماد الهالك يُنشأ له جزاء بقيمة التكلفة. */
   employees?: Option[];
+  /** متغيّرات المستأجر — لحلّ (منتج×لون×مقاس) فيُخصم الهالك من مخزونه عند الاعتماد. */
+  variants?: DamageVariant[];
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const [productId, setProductId] = useState('');
+  const [colorId, setColorId] = useState('');
+  const [sizeId, setSizeId] = useState('');
   const [qty, setQty] = useState(0);
   const [manualCost, setManualCost] = useState('');
 
   const product = products.find((p) => p.id === productId);
+
+  // مقاسات (منتج × لون) المتاحة، وحلّ المتغيّر: تطابق تام، أو المتغيّر
+  // الوحيد للمنتج — فيُخصم المخزون من الرصيد الصحيح عند الاعتماد.
+  const productVariants = variants.filter((v) => v.productId === productId);
+  const colorVariants = productVariants.filter((v) => (v.colorId ?? '') === colorId);
+  const sizeOptions = [...new Map(
+    colorVariants.filter((v) => v.sizeId && v.sizeCode).map((v) => [v.sizeId!, v.sizeCode!]),
+  )].map(([id, label]) => ({ value: id, label }));
+  const resolvedVariant =
+    colorVariants.find((v) => (v.sizeId ?? '') === sizeId) ??
+    (productVariants.length === 1 ? productVariants[0] : undefined);
   const pieceCost = product?.cost ?? null;
   const autoTotal = pieceCost !== null ? pieceCost * qty : null;
   const shownTotal = manualCost.trim() !== '' ? Number(manualCost) || 0 : autoTotal;
@@ -72,8 +96,37 @@ export function DamageForm({
         {/* ٢) اللون — بحث بالكتابة، كل الألوان متاحة */}
         <label className="block">
           <span className="mb-1.5 block text-xs text-txt-2">اللون</span>
-          <SearchableSelect name="colorId" options={colors} placeholder={colors.length ? 'ابحث عن اللون…' : 'لا ألوان معرّفة'} />
+          <SearchableSelect
+            name="colorId"
+            options={colors}
+            placeholder={colors.length ? 'ابحث عن اللون…' : 'لا ألوان معرّفة'}
+            onSelect={(v) => {
+              setColorId(v);
+              setSizeId('');
+            }}
+          />
         </label>
+
+        {/* ٢.٥) المقاس — يظهر حين توجد مقاسات لهذا المنتج/اللون؛ تحديده يجعل
+            الاعتماد يخصم القطع التالفة من رصيد المتغيّر الصحيح تلقائياً. */}
+        {sizeOptions.length > 0 && (
+          <label className="block">
+            <span className="mb-1.5 block text-xs text-txt-2">
+              المقاس <span className="text-txt-4">(ليُخصم من المخزون)</span>
+            </span>
+            <select
+              value={sizeId}
+              onChange={(e) => setSizeId(e.target.value)}
+              className="erp-input py-2.5"
+            >
+              <option value="">اختر المقاس…</option>
+              {sizeOptions.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        <input type="hidden" name="variantId" value={resolvedVariant?.id ?? ''} />
 
         {/* ٣) نوع الخدمة */}
         <Select name="service" label="نوع الخدمة" options={services} placeholder="اختر الخدمة" errors={state.fieldErrors} />
@@ -160,6 +213,9 @@ export function DamageForm({
         لتتجاوز الحساب التلقائي. يُسجَّل الهالك بانتظار الاعتماد، ويظهر في «الهالك» بالبيان المالي بعد اعتماده.
         ولو حُدّد موظف متسبب، فعند اعتماد الهالك يُنشأ له <span className="font-medium text-warn">جزاء تلقائي بقيمة التكلفة</span> (بانتظار
         اعتماد الجزاء) فيُخصم من راتبه في تحليل الموظفين.
+        {resolvedVariant
+          ? ' وعند الاعتماد ستُخصم القطع التالفة من المخزون تلقائياً.'
+          : ' حدِّد اللون والمقاس ليُخصم التالف من المخزون تلقائياً عند الاعتماد — وإلا سجِّل حركة إخراج يدوية.'}
       </p>
     </form>
   );

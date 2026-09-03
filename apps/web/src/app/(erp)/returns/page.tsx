@@ -141,7 +141,7 @@ export default async function ReturnsPage({
                   <form action={deleteReturn.bind(null, r.id)}>
                     <ConfirmButton
                       label="حذف"
-                      message={`حذف المرتجع ${r.number}؟ الحذف لا يسحب البضاعة من المخزون ولا يلغي رد المبلغ — صحّحهما يدوياً إن لزم.`}
+                      message={`حذف المرتجع ${r.number}؟ ستُسحب بضاعته من المخزون ويُعكس رد المبلغ (إن وُجد) وتُعاد حالة الفاتورة تلقائياً.`}
                     />
                   </form>
                 )}

@@ -7,6 +7,8 @@ import {
   formatMoney,
   netProfit,
   monthlySeries,
+  iraqNow,
+  iraqMidnight,
   EXPENSE_CATEGORY_AR,
   EXPENSE_CATEGORIES,
   APPROVAL_STATUS_AR,
@@ -56,25 +58,31 @@ export default async function ExpensesPage({
   const statusFilter = one(params.status) || undefined;
   const errKey = Array.isArray(params.err) ? params.err[0] : params.err;
 
-  // مدى التاريخ: من–إلى إن صحّا، وإلا الشهر المختار، وإلا كل هذه السنة.
+  // مدى التاريخ بيوم بغداد: من–إلى إن صحّا، وإلا الشهر المختار، وإلا هذه السنة.
   const rawFrom = one(params.from);
   const rawTo = one(params.to);
   const rawMonth = one(params.month);
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
-  const now = new Date();
+  const iraqDay = (ymd: string): Date | null => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd.trim());
+    if (!m) return null;
+    const d = iraqMidnight(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
   let range: { from: Date; to: Date; label: string; custom: boolean };
-  const cf = new Date(`${rawFrom}T00:00:00`);
-  const ct = new Date(`${rawTo}T23:59:59.999`);
-  if (rawFrom && rawTo && !Number.isNaN(cf.getTime()) && !Number.isNaN(ct.getTime()) && cf <= ct) {
+  const cf = rawFrom ? iraqDay(rawFrom) : null;
+  const ctStart = rawTo ? iraqDay(rawTo) : null;
+  if (cf && ctStart && cf <= ctStart) {
+    const ct = new Date(ctStart.getTime() + 24 * 60 * 60 * 1000 - 1);
     range = { from: cf, to: ct, label: `${rawFrom} ← ${rawTo}`, custom: true };
   } else if (rawMonth) {
     const m = monthRange(rawMonth);
     range = { from: m.from, to: m.to, label: m.key, custom: false };
   } else {
+    const y = iraqNow().getUTCFullYear();
     range = {
-      from: new Date(now.getFullYear(), 0, 1),
-      to: new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999),
-      label: `${now.getFullYear()}`,
+      from: iraqMidnight(y, 0, 1),
+      to: new Date(iraqMidnight(y + 1, 0, 1).getTime() - 1),
+      label: `${y}`,
       custom: false,
     };
   }
@@ -185,6 +193,13 @@ export default async function ExpensesPage({
   const canWrite = can(user.role, 'expenses.write');
   const canApprove = can(user.role, 'expenses.approve');
 
+  // مصروفات بمبالغ غير منطقية (فوق مليار) — تُفسد كل التقارير حتى تُحذف.
+  const suspicious = await prisma.secondaryExpense.findMany({
+    where: { tenantId: user.tenantId, isDeleted: false, amount: { gt: 1_000_000_000 } },
+    select: { number: true, amount: true },
+    take: 3,
+  });
+
   const expensesTotal = monthExpenses.reduce((s, g) => s.plus(dec(g._sum.amount ?? 0)), dec(0));
   const damageTotal = dec(monthDamage._sum.totalCost ?? 0);
   const recovered = dec(monthPenalties._sum.amount ?? 0);
@@ -231,6 +246,16 @@ export default async function ExpensesPage({
       {errKey && ERRORS[errKey] && (
         <p role="alert" className="mb-5 rounded-lg border border-bad bg-bad-soft px-4 py-3 text-xs text-bad">
           {ERRORS[errKey]}
+        </p>
+      )}
+
+      {/* مبلغ خيالي مُدخل بالغلط يفسد كل تقرير — يُواجَه هنا حتى يُحذف. */}
+      {suspicious.length > 0 && (
+        <p role="alert" className="mb-5 rounded-xl border border-bad bg-bad-soft px-4 py-3 text-xs font-semibold leading-[1.9] text-bad">
+          ⚠ يوجد {suspicious.length === 1 ? 'مصروف بمبلغ غير منطقي' : `${suspicious.length} مصروفات بمبالغ غير منطقية`}:{' '}
+          {suspicious.map((s) => `${s.number} (${formatMoney(s.amount)})`).join(' · ')} — على الأغلب رقم
+          لُصق بالغلط. ابحث برقمه في الجدول أدناه واحذفه أو ارفضه، فهو يفسد الربح الصافي وكل التقارير.
+          (النظام صار يرفض المبالغ فوق ١٠ مليارات من الآن.)
         </p>
       )}
 

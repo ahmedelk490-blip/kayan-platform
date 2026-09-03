@@ -220,13 +220,122 @@ export async function createReturn(
   redirect('/returns');
 }
 
-/** حذف مرتجع (ناعم) — لا يعكس المخزون تلقائياً؛ صُحّح بحركة يدوية إن لزم. */
+/**
+ * حذف مرتجع — يعكس كل آثاره لا السجل وحده:
+ * البضاعة التي أُعيدت للمخزون تُسحب منه، ورد المبلغ (الدفعة السالبة) يُعكس
+ * بدفعة مقابلة فيعود المدفوع كما كان، وحالة الفاتورة تُشتق من جديد. كانت
+ * الحذفة تترك المخزون والحسابات منحرفة بصمت — لم تعد.
+ */
 export async function deleteReturn(id: string): Promise<void> {
   const user = await requirePermission('returns.write');
-  const ret = await prisma.salesReturn.findFirst({ where: { id, tenantId: user.tenantId, isDeleted: false }, select: { id: true, number: true } });
+
+  const ret = await prisma.salesReturn.findFirst({
+    where: { id, tenantId: user.tenantId, isDeleted: false },
+    include: { lines: { select: { productId: true, variantId: true, quantity: true } } },
+  });
   if (!ret) redirect('/returns');
-  await prisma.salesReturn.update({ where: { id }, data: { isDeleted: true, deletedAt: new Date() } });
-  await audit({ tenantId: user.tenantId, userId: user.id, action: 'return.delete', entityType: 'SalesReturn', entityId: id, detail: ret.number });
+
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: ret.invoiceId, tenantId: user.tenantId, isDeleted: false },
+    select: { id: true, total: true, paidAmount: true, status: true },
+  });
+
+  // دفعة ردّ المبلغ لهذا المرتجع (سالبة) إن وُجدت ولم تُعكس من قبل.
+  const refund = await prisma.payment.findFirst({
+    where: {
+      tenantId: user.tenantId,
+      invoiceId: ret.invoiceId,
+      notes: `رد مرتجع ${ret.number}`,
+      reversesId: null,
+      reversedBy: { is: null },
+    },
+  });
+
+  const warehouseId = await defaultWarehouseId(user.tenantId);
+
+  await tenantTransaction(async (tx) => {
+    await tx.salesReturn.update({ where: { id }, data: { isDeleted: true, deletedAt: new Date() } });
+
+    // سحب ما كان أُعيد للمخزون — حركة إخراج بمرجع الحذف.
+    if (warehouseId) {
+      for (const l of ret.lines) {
+        if (!l.variantId || !l.productId) continue;
+        await tx.stockMovement.create({
+          data: {
+            tenantId: user.tenantId,
+            productId: l.productId,
+            variantId: l.variantId,
+            warehouseId,
+            type: 'ISSUE',
+            quantity: dec(l.quantity).negated().toString(),
+            reference: ret.number,
+            reason: `حذف مرتجع ${ret.number}`,
+            userId: user.id,
+          },
+        });
+        const st = await tx.stock.findFirst({ where: { variantId: l.variantId, warehouseId, locationId: null } });
+        if (st) {
+          await tx.stock.update({ where: { id: st.id }, data: { onHand: dec(st.onHand).minus(dec(l.quantity)).toString() } });
+        } else {
+          await tx.stock.create({ data: { variantId: l.variantId, warehouseId, onHand: dec(l.quantity).negated().toString() } });
+        }
+      }
+    }
+
+    if (invoice) {
+      // عكس ردّ المبلغ إن وُجد — دفعة موجبة تشير للأصلية، فيعود المدفوع.
+      let newPaid = dec(invoice.paidAmount);
+      if (refund) {
+        await lockPaymentSequence(tx, user.tenantId);
+        const number = await nextPaymentNumber(user.tenantId, tx);
+        await tx.payment.create({
+          data: {
+            tenantId: user.tenantId,
+            number,
+            invoiceId: invoice.id,
+            amount: dec(refund.amount).negated().toString(),
+            method: refund.method,
+            paidAt: new Date(),
+            notes: `عكس ${refund.number} — حذف المرتجع ${ret.number}`,
+            reversesId: refund.id,
+            recordedById: user.id,
+          },
+        });
+        newPaid = newPaid.minus(dec(refund.amount)); // الردّ سالب، فطرحه يعيد المبلغ
+      }
+
+      // الحالة من جديد: المستحق = الإجمالي − المرتجعات المتبقية بعد الحذف.
+      const remaining = await tx.salesReturn.aggregate({
+        where: { tenantId: user.tenantId, invoiceId: invoice.id, isDeleted: false },
+        _sum: { totalAmount: true },
+      });
+      const owed = dec(invoice.total).minus(dec(remaining._sum.totalAmount ?? 0));
+      const newStatus =
+        invoice.status === 'DRAFT' || invoice.status === 'VOID'
+          ? invoice.status
+          : owed.lte(newPaid)
+            ? 'PAID'
+            : newPaid.lte(0)
+              ? 'ISSUED'
+              : 'PARTIALLY_PAID';
+      await tx.invoice.update({
+        where: { id: invoice.id },
+        data: { paidAmount: newPaid.toString(), status: newStatus },
+      });
+    }
+  });
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'return.delete',
+    entityType: 'SalesReturn',
+    entityId: id,
+    detail: `${ret.number} — سُحب المخزون${refund ? ' وعُكس رد المبلغ' : ''}`,
+  });
+
   revalidatePath('/returns');
+  revalidatePath('/inventory');
+  revalidatePath(`/invoices/${ret.invoiceId}`);
   redirect('/returns');
 }
