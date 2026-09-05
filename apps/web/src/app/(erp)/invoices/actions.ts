@@ -24,11 +24,13 @@ import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors, nextCode } from '@/lib/audit';
 import { readLines, decimal, normalizeDigits } from '@/app/(erp)/sales/shared';
 import { numeric } from '@/lib/num';
+import { DELIVERY_DESCRIPTION } from '@/lib/delivery';
 import {
   allocateInvoiceNumber,
   lockPaymentSequence,
   nextPaymentNumber,
   invoiceSettings,
+  recordDeliveryExpense,
   type FormState,
 } from './shared';
 
@@ -46,6 +48,58 @@ function lineDescription(
   const svc = service ? ((PRICE_SERVICE_AR as Record<string, string>)[service as PriceService] ?? service) : '';
   const extras = [svc && svc !== 'بدون' ? svc : null, notes].filter(Boolean).join(' — ');
   return extras ? `${base} — ${extras}` : base;
+}
+
+/** قراءة خانة التوصيل: المبلغ ولمن — على الزبون (بند) أو علينا (مصروف). */
+function readDelivery(formData: FormData): { fee: number; onCustomer: boolean; onUs: boolean } {
+  const fee = decimal(formData.get('deliveryFee'));
+  const on = String(formData.get('deliveryOn') ?? '');
+  return { fee, onCustomer: fee > 0 && on === 'CUSTOMER', onUs: fee > 0 && on === 'US' };
+}
+
+/** شكل بيانات سطر الفاتورة — يسمح بسطر توصيل بلا منتج/متغيّر. */
+type InvoiceLineData = {
+  lineNo: number;
+  productId: string | null;
+  variantId: string | null;
+  description: string;
+  quantity: string;
+  unitPrice: string;
+  discountAmount: string;
+  taxRate: string;
+  taxAmount: string;
+  lineTotal: string;
+};
+
+/** سطر التوصيل «على الزبون» — بند عادي آخر الفاتورة، المخزون يتجاوزه تلقائياً. */
+function deliveryLineData(fee: number, lineNo: number): InvoiceLineData {
+  return {
+    lineNo,
+    productId: null,
+    variantId: null,
+    description: DELIVERY_DESCRIPTION,
+    quantity: '1',
+    unitPrice: dec(fee).toString(),
+    discountAmount: '0',
+    taxRate: '0',
+    taxAmount: '0',
+    lineTotal: dec(fee).toString(),
+  };
+}
+
+/**
+ * ملاحظات الوثيقة وسطر «🚚 التوصيل علينا» — يُشال السطر القديم دائماً (قد
+ * يعود من فورم التعديل بمبلغ بائت) ويُعاد محدثاً إن كان التوصيل علينا.
+ */
+function notesWithDelivery(raw: FormDataEntryValue | null, onUs: boolean, fee: number): string | null {
+  const kept = String(raw ?? '')
+    .split('\n')
+    .filter((ln) => !ln.includes('🚚 التوصيل علينا'))
+    .join('\n')
+    .trim();
+  if (!onUs) return kept || null;
+  const marker = `🚚 التوصيل علينا: ${fee.toLocaleString('en-US')} د.ع`;
+  return kept ? `${kept}\n${marker}` : marker;
 }
 
 /**
@@ -130,15 +184,20 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
 
   const docDiscount = decimal(formData.get('discountAmount'));
   const docDiscountPct = decimal(formData.get('discountPercent'));
+  const delivery = readDelivery(formData);
 
   const computed = rawLines.map((l) => calcLine(l));
+  // توصيل «على الزبون»: بند يدخل الحسبة والإجمالي كأي صنف.
+  if (delivery.onCustomer) {
+    computed.push(calcLine({ quantity: 1, unitPrice: delivery.fee, discountAmount: 0, taxRate: 0 }));
+  }
   const totals = calcDocument(computed, {
     discountAmount: docDiscount,
     discountPercent: docDiscountPct,
   });
 
-  const notes = String(formData.get('notes') ?? '').trim() || null;
-  const lineData = rawLines.map((l, i) => {
+  const notes = notesWithDelivery(formData.get('notes'), delivery.onUs, delivery.fee);
+  const lineData: InvoiceLineData[] = rawLines.map((l, i) => {
     const v = byId.get(l.variantId)!;
     const t = computed[i];
     return {
@@ -154,6 +213,7 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
       lineTotal: t.lineTotal.toString(),
     };
   });
+  if (delivery.onCustomer) lineData.push(deliveryLineData(delivery.fee, lineData.length + 1));
 
   // مصدر الطلب: يدويّ من الفورم، أو «الموقع» تلقائياً لطلب موقع، وإلا لا شيء.
   const sourceRaw = String(formData.get('source') ?? '').trim();
@@ -249,6 +309,12 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
       return inv;
     });
 
+    // توصيل «علينا»: مصروف شحن وتوصيل باسم الفاتورة — يُخصم من الربح.
+    if (delivery.onUs) {
+      await recordDeliveryExpense(user, delivery.fee, { id: created.id, number: created.number });
+      revalidatePath('/expenses');
+    }
+
     await audit({
       tenantId: user.tenantId,
       userId: user.id,
@@ -267,6 +333,11 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
   const invoice = await prisma.invoice.create({
     data: { ...baseData, status: 'DRAFT' },
   });
+
+  if (delivery.onUs) {
+    await recordDeliveryExpense(user, delivery.fee, { id: invoice.id, number: null });
+    revalidatePath('/expenses');
+  }
 
   await audit({
     tenantId: user.tenantId,
@@ -466,11 +537,18 @@ export async function updateInvoiceLines(
 
   const docDiscount = decimal(formData.get('discountAmount'));
   const docDiscountPct = decimal(formData.get('discountPercent'));
+  const delivery = readDelivery(formData);
+
   const computed = rawLines.map((l) => calcLine(l));
+  // توصيل «على الزبون»: يُعاد بناء بنده من الفورم كل حفظ (البنود تُستبدل كلها) —
+  // تغيير المبلغ أو حذفه (صفر) ينعكس على الإجمالي والحالة تلقائياً.
+  if (delivery.onCustomer) {
+    computed.push(calcLine({ quantity: 1, unitPrice: delivery.fee, discountAmount: 0, taxRate: 0 }));
+  }
   const totals = calcDocument(computed, { discountAmount: docDiscount, discountPercent: docDiscountPct });
 
-  const notes = String(formData.get('notes') ?? '').trim() || null;
-  const lineData = rawLines.map((l, i) => {
+  const notes = notesWithDelivery(formData.get('notes'), delivery.onUs, delivery.fee);
+  const lineData: InvoiceLineData[] = rawLines.map((l, i) => {
     const v = byId.get(l.variantId)!;
     const t = computed[i];
     return {
@@ -486,6 +564,7 @@ export async function updateInvoiceLines(
       lineTotal: t.lineTotal.toString(),
     };
   });
+  if (delivery.onCustomer) lineData.push(deliveryLineData(delivery.fee, lineData.length + 1));
 
   // فرق الكمية لكل متغيّر: الجديد ناقص القديم. موجب ⇒ خرج أكثر (يُخصَم)،
   // سالب ⇒ رجع (يُضاف). خريطة المنتج للمتغيّر من الجديد والقديم معاً.
@@ -557,6 +636,11 @@ export async function updateInvoiceLines(
       }
     }
   });
+
+  if (delivery.onUs) {
+    await recordDeliveryExpense(user, delivery.fee, { id: invoiceId, number: invoice.number });
+    revalidatePath('/expenses');
+  }
 
   await audit({
     tenantId: user.tenantId,

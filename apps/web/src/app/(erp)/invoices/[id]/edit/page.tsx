@@ -7,6 +7,8 @@ import { AppShell } from '@/components/AppShell';
 import { ModuleHeader } from '@/components/crud/Shell';
 import { DocumentForm, type DocLine } from '@/app/(erp)/sales/DocumentForm';
 import { loadSalesOptions } from '@/app/(erp)/sales/options';
+import { isDeliveryDesc } from '@/lib/delivery';
+import { deliveryExpenseTag } from '../../shared';
 import { updateInvoiceLines } from '../../actions';
 
 export const metadata: Metadata = { title: 'تعديل بنود الفاتورة' };
@@ -33,18 +35,42 @@ export default async function EditInvoicePage({
   const options = await loadSalesOptions(user.tenantId);
 
   // بنود الفاتورة → سطور الفورم. hydrate يملأ المنتج/اللون/المقاس من المتغيّر.
-  const lines: DocLine[] = invoice.lines.map((l) => ({
-    productId: '',
-    colorId: '',
-    sizeId: '',
-    variantId: l.variantId ?? '',
-    service: '',
-    quantity: Number(l.quantity),
-    unitPrice: Number(l.unitPrice),
-    discountAmount: Number(l.discountAmount),
-    taxRate: Number(l.taxRate),
-    notes: '',
-  }));
+  // بند التوصيل (بلا متغيّر) لا يدخل السطور — تُدار قيمته من خانة 🚚 أدناه.
+  const lines: DocLine[] = invoice.lines
+    .filter((l) => l.variantId)
+    .map((l) => ({
+      productId: '',
+      colorId: '',
+      sizeId: '',
+      variantId: l.variantId ?? '',
+      service: '',
+      quantity: Number(l.quantity),
+      unitPrice: Number(l.unitPrice),
+      discountAmount: Number(l.discountAmount),
+      taxRate: Number(l.taxRate),
+      notes: '',
+    }));
+
+  // توصيل الفاتورة الحالي: بند 🚚 (على الزبون)، وإلا مصروف الشحن الموسوم
+  // بمعرّفها (علينا) — فتفتح الخانة على وضعها الحقيقي ويعدّلها المستخدم بحرية.
+  const deliveryLine = invoice.lines.find((l) => !l.variantId && isDeliveryDesc(l.description));
+  let deliveryFee = deliveryLine ? Number(deliveryLine.unitPrice) : 0;
+  let deliveryOn: 'CUSTOMER' | 'US' = 'CUSTOMER';
+  if (!deliveryLine) {
+    const shipExpense = await prisma.secondaryExpense.findFirst({
+      where: {
+        tenantId: user.tenantId,
+        category: 'SHIPPING',
+        isDeleted: false,
+        notes: { contains: deliveryExpenseTag(invoice.id) },
+      },
+      select: { amount: true },
+    });
+    if (shipExpense) {
+      deliveryFee = Number(shipExpense.amount);
+      deliveryOn = 'US';
+    }
+  }
 
   const label = invoice.number ?? 'مسودة';
 
@@ -66,13 +92,18 @@ export default async function EditInvoicePage({
             notes: invoice.notes,
             discountAmount: Number(invoice.discountAmount),
             lines,
+            deliveryFee,
+            deliveryOn,
           }}
           labels={{ dateA: 'تاريخ الإصدار', dateB: 'تاريخ الاستحقاق' }}
           submitLabel="حفظ التعديلات"
+          withDelivery
         />
         <p className="mt-4 text-[0.7rem] leading-[1.9] text-txt-4">
           غيّر الأعداد أو أضِف أصنافاً على نفس فاتورة العميل. يُعاد حساب الإجمالي والمتبقّي تلقائياً،
           ويُسوّى المخزون بفرق الكميات (ما زاد يُصرَف وما نقص يعود). العميل ثابت لهذه الفاتورة.
+          سعر التوصيل يُعدَّل من خانة 🚚: «على الزبون» يعدّل بند التوصيل والإجمالي، و«علينا» يحدّث
+          مصروف الشحن ما دام بانتظار الاعتماد — والمصروف المعتمد لا يُمسّ.
         </p>
       </div>
     </AppShell>

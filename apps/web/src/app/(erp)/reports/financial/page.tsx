@@ -11,6 +11,7 @@ import {
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import { DonutChartInteractive } from '@/components/dashboard/DonutChartInteractive';
@@ -114,9 +115,15 @@ export default async function FinancialReport({
 
   // عدد القطع الكلي + تفصيله حسب النوع بصورة عامة (بلا ألوان وموديلات) —
   // بطلب المالك لحساب عائد الاستثمار لكل صنف عبر أي مدى يختاره.
-  const totalPieces = lines.reduce((s, l) => s + Number(l.quantity), 0);
+  // بند التوصيل 🚚 مالٌ لا بضاعة: يبقى في إجمالي المبيعات ويخرج من عدّ القطع
+  // وتحليل العوائل كي لا يشوّه أرقام عائد الاستثمار.
+  const totalPieces = lines.reduce(
+    (s, l) => (isDeliveryDesc(l.description) ? s : s + Number(l.quantity)),
+    0,
+  );
   const families = new Map<string, { pieces: number; value: ReturnType<typeof dec> }>();
   for (const l of lines) {
+    if (isDeliveryDesc(l.description)) continue;
     const key = categoryOf(l.description);
     const f = families.get(key) ?? { pieces: 0, value: dec(0) };
     f.pieces += Number(l.quantity);

@@ -51,6 +51,10 @@ export function CashierBoard({
   const [paid, setPaid] = useState(0);
   const [method, setMethod] = useState('CASH');
 
+  // سعر التوصيل: على الزبون (يرتفع الإجمالي) أو علينا (مصروف شحن يُخصم من الربح).
+  const [deliveryFee, setDeliveryFee] = useState(0);
+  const [deliveryOn, setDeliveryOn] = useState<'CUSTOMER' | 'US'>('CUSTOMER');
+
   // إضافة سريعة بالكتابة: صنف + كمية + سعر من داخل اللوحة — بلا فتح الصور.
   // السعر يُقترح من الشرائح عند الاختيار ويبقى بيد الكاشير (بطلب المالك).
   const [quickVariantId, setQuickVariantId] = useState('');
@@ -97,7 +101,10 @@ export function CashierBoard({
     return [...map.values()];
   }, [variants, images]);
 
-  const total = cart.reduce((s, l) => s.plus(dec(l.quantity).times(dec(l.unitPrice))), dec(0));
+  const merchandiseTotal = cart.reduce((s, l) => s.plus(dec(l.quantity).times(dec(l.unitPrice))), dec(0));
+  // الإجمالي الظاهر = البضاعة + التوصيل حين يكون على الزبون — كما سيحسبه الخادم.
+  const total =
+    deliveryOn === 'CUSTOMER' && deliveryFee > 0 ? merchandiseTotal.plus(dec(deliveryFee)) : merchandiseTotal;
   const remaining = total.minus(paid);
 
   // إضافة عدة سطور دفعة واحدة (كمية لكل مقاس)، مع دمج المتكرّر بالمتغيّر.
@@ -326,9 +333,58 @@ export function CashierBoard({
           </div>
         </fieldset>
 
+        {/* سعر التوصيل — على الزبون يرفع الإجمالي، وعلينا يُسجَّل مصروف شحن. */}
+        <div className="rounded-xl border border-dashed border-line-2 p-3">
+          <p className="mb-1.5 text-[0.7rem] font-medium text-txt-3">🚚 سعر التوصيل (اختياري)</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              name="deliveryFee"
+              type="number"
+              min="0"
+              dir="ltr"
+              value={deliveryFee}
+              onChange={(e) => setDeliveryFee(Math.max(0, Number(e.target.value) || 0))}
+              className="erp-input w-28 py-2 text-start text-xs"
+            />
+            {(
+              [
+                { value: 'CUSTOMER', label: 'على الزبون' },
+                { value: 'US', label: 'علينا' },
+              ] as const
+            ).map((o) => (
+              <label
+                key={o.value}
+                className="cursor-pointer rounded-full border border-line-2 px-3 py-1.5 text-[0.7rem] font-medium text-txt-2 transition-colors has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:checked]:text-brand"
+              >
+                <input
+                  type="radio"
+                  name="deliveryOn"
+                  value={o.value}
+                  checked={deliveryOn === o.value}
+                  onChange={() => setDeliveryOn(o.value)}
+                  className="sr-only"
+                />
+                {o.label}
+              </label>
+            ))}
+          </div>
+          {deliveryFee > 0 && (
+            <p className="mt-1.5 text-[0.65rem] leading-[1.7] text-txt-4">
+              {deliveryOn === 'CUSTOMER'
+                ? 'يُضاف بند «🚚 أجور توصيل» على الفاتورة — الزبون يدفعه.'
+                : 'الإجمالي لا يتغيّر — يُسجَّل مصروف «شحن وتوصيل» يُخصم من الربح.'}
+            </p>
+          )}
+        </div>
+
         <div className="flex items-center justify-between border-t border-line pt-3">
           <span className="text-sm text-txt-2">الإجمالي</span>
-          <span className="tnum text-xl font-bold text-brand">{formatMoney(total)}</span>
+          <span className="text-end">
+            <span className="tnum block text-xl font-bold text-brand">{formatMoney(total)}</span>
+            {deliveryOn === 'CUSTOMER' && deliveryFee > 0 && (
+              <span className="tnum block text-[0.65rem] text-txt-4">منها توصيل {formatMoney(dec(deliveryFee))}</span>
+            )}
+          </span>
         </div>
 
         <div className="grid grid-cols-2 gap-2">

@@ -1,5 +1,6 @@
 import { Logo } from '@erp/brand/logo';
 import { formatMoney, formatQty, balance } from '@erp/domain';
+import { isDeliveryDesc } from '@/lib/delivery';
 
 /**
  * مستند للطباعة — عرض سعر أو فاتورة.
@@ -85,7 +86,11 @@ export function PrintDocument({
 }) {
   const title = kind === 'invoice' ? 'فاتورة' : 'عرض سعر';
   // عدد القطع الكلي — يطبع للعميل كما يظهر على الشاشة، بطلب المالك.
-  const totalPieces = lines.reduce((s, l) => s + Number(l.quantity ?? 0), 0);
+  // بند التوصيل 🚚 ليس قطعة بضاعة فلا يدخل العدّ (يظهر سطراً بقيمته فقط).
+  const totalPieces = lines.reduce(
+    (s, l) => (isDeliveryDesc(l.description) ? s : s + Number(l.quantity ?? 0)),
+    0,
+  );
 
   return (
     <article className="print-doc" dir="rtl">

@@ -17,6 +17,7 @@ import {
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import { CopyButton } from '@/components/crud/CopyButton';
@@ -201,9 +202,13 @@ export default async function InvoicePage({
             </Table>
 
             <dl className="erp-card ms-auto mt-4 max-w-xs space-y-2 p-5 text-sm">
+              {/* بند التوصيل 🚚 ليس قطعة بضاعة — لا يدخل العدّ. */}
               <Row
                 label="عدد القطع"
-                value={`${invoice.lines.reduce((s, l) => s + Number(l.quantity), 0)} قطعة`}
+                value={`${invoice.lines.reduce(
+                  (s, l) => (isDeliveryDesc(l.description) ? s : s + Number(l.quantity)),
+                  0,
+                )} قطعة`}
               />
               <Row label="المجموع" value={formatMoney(invoice.subtotal)} />
               <Row label="الخصم" value={formatMoney(invoice.discountAmount)} />

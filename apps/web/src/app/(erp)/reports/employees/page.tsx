@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { formatMoney, formatQty, dec } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import type { SearchParams } from '@/lib/query';
@@ -47,6 +48,8 @@ export default async function EmployeeReport({
         lines: {
           select: {
             quantity: true,
+            // الوصف لاستثناء بند التوصيل 🚚 — ليس قطعة ولا يجعل التكلفة «مجهولة».
+            description: true,
             variant: { select: { cost: true, product: { select: { cost: true } } } },
           },
         },
@@ -121,6 +124,7 @@ export default async function EmployeeReport({
     row.invoices += 1;
     row.revenue = row.revenue.plus(dec(inv.total));
     for (const l of inv.lines) {
+      if (isDeliveryDesc(l.description)) continue;
       row.pieces = row.pieces.plus(dec(l.quantity));
       const unitCost = l.variant?.cost ?? l.variant?.product?.cost ?? null;
       if (unitCost === null) row.costKnown = false;

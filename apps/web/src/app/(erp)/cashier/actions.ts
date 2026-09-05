@@ -7,7 +7,8 @@ import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, nextCode } from '@/lib/audit';
 import { num, normalizeDigits } from '@/lib/num';
-import { allocateInvoiceNumber, lockPaymentSequence, nextPaymentNumber, invoiceSettings, type FormState } from '../invoices/shared';
+import { DELIVERY_DESCRIPTION } from '@/lib/delivery';
+import { allocateInvoiceNumber, lockPaymentSequence, nextPaymentNumber, invoiceSettings, recordDeliveryExpense, type FormState } from '../invoices/shared';
 
 /**
  * إتمام بيع الكاشير — فاتورة مُصدَرة ومُحصَّلة تخصم المخزون، في معاملة واحدة.
@@ -94,7 +95,14 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
   if (rawLines.some((l) => !byId.has(l.variantId))) return { error: 'أحد الأصناف غير صالح.' };
 
   const computed = rawLines.map((l) => ({ ...l, lineTotal: dec(l.quantity).times(dec(l.unitPrice)) }));
-  const total = computed.reduce((s, l) => s.plus(l.lineTotal), dec(0));
+  const merchandiseTotal = computed.reduce((s, l) => s.plus(l.lineTotal), dec(0));
+
+  // سعر التوصيل: «على الزبون» بند يرفع الإجمالي؛ «علينا» مصروف شحن بعد البيع.
+  const deliveryFee = num(formData.get('deliveryFee'));
+  const deliveryOn = String(formData.get('deliveryOn') ?? '');
+  const deliveryOnCustomer = deliveryFee > 0 && deliveryOn === 'CUSTOMER';
+  const deliveryOnUs = deliveryFee > 0 && deliveryOn === 'US';
+  const total = deliveryOnCustomer ? merchandiseTotal.plus(dec(deliveryFee)) : merchandiseTotal;
 
   const payAmount = dec(num(formData.get('paymentAmount')));
   const payMethod = String(formData.get('paymentMethod') ?? 'CASH');
@@ -133,22 +141,53 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
         issuedById: user.id,
         createdById: user.id,
         paidAmount: wantsPayment ? payAmount.toString() : '0',
+        // «التوصيل علينا» يُثبَّت في ملاحظات الفاتورة ليظهر على صفحتها.
+        notes: deliveryOnUs ? `🚚 التوصيل علينا: ${deliveryFee.toLocaleString('en-US')} د.ع` : null,
         lines: {
-          create: computed.map((l, i) => {
-            const v = byId.get(l.variantId)!;
-            return {
-              lineNo: i + 1,
-              productId: v.productId,
-              variantId: v.id,
-              description: [v.product.nameAr, v.color?.nameAr, v.size?.code].filter(Boolean).join(' · '),
-              quantity: dec(l.quantity).toString(),
-              unitPrice: dec(l.unitPrice).toString(),
-              discountAmount: '0',
-              taxRate: '0',
-              taxAmount: '0',
-              lineTotal: l.lineTotal.toString(),
-            };
-          }),
+          create: (() => {
+            const lines: {
+              lineNo: number;
+              productId: string | null;
+              variantId: string | null;
+              description: string;
+              quantity: string;
+              unitPrice: string;
+              discountAmount: string;
+              taxRate: string;
+              taxAmount: string;
+              lineTotal: string;
+            }[] = computed.map((l, i) => {
+              const v = byId.get(l.variantId)!;
+              return {
+                lineNo: i + 1,
+                productId: v.productId,
+                variantId: v.id,
+                description: [v.product.nameAr, v.color?.nameAr, v.size?.code].filter(Boolean).join(' · '),
+                quantity: dec(l.quantity).toString(),
+                unitPrice: dec(l.unitPrice).toString(),
+                discountAmount: '0',
+                taxRate: '0',
+                taxAmount: '0',
+                lineTotal: l.lineTotal.toString(),
+              };
+            });
+            // بند التوصيل بلا منتج/متغيّر — حلقة صرف المخزون أدناه لا تراه أصلاً.
+            if (deliveryOnCustomer) {
+              lines.push({
+                lineNo: lines.length + 1,
+                productId: null,
+                variantId: null,
+                description: DELIVERY_DESCRIPTION,
+                quantity: '1',
+                unitPrice: dec(deliveryFee).toString(),
+                discountAmount: '0',
+                taxRate: '0',
+                taxAmount: '0',
+                lineTotal: dec(deliveryFee).toString(),
+              });
+            }
+            return lines;
+          })(),
         },
       },
     });
@@ -197,6 +236,12 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
 
     return inv;
   });
+
+  // «التوصيل علينا»: مصروف شحن وتوصيل باسم الفاتورة — يُخصم من الربح.
+  if (deliveryOnUs) {
+    await recordDeliveryExpense(user, deliveryFee, { id: created.id, number: created.number });
+    revalidatePath('/expenses');
+  }
 
   await audit({
     tenantId: user.tenantId,

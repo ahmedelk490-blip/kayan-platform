@@ -1,8 +1,9 @@
 import 'server-only';
 
 import type { Prisma } from '@prisma/client';
-import { iraqYear } from '@erp/domain';
+import { iraqYear, can, dec } from '@erp/domain';
 import { prisma } from '@/lib/prisma';
+import { nextOpsNumber } from '@/lib/ops';
 
 export interface FormState {
   error?: string;
@@ -111,6 +112,64 @@ export async function nextPaymentNumber(
     return Number.isFinite(n) && n > acc ? n : acc;
   }, 0);
   return `${stem}${String(max + 1).padStart(4, '0')}`;
+}
+
+/**
+ * وسم مصروف التوصيل لفاتورة — آخر ٦ أحرف من مُعرّفها الثابت، لا رقمها:
+ * المسوّدة بلا رقم بعد، والوسم يجب أن يصمد من المسوّدة إلى الإصدار إلى
+ * التعديل كي لا يتكرّر المصروف عند كل حفظ.
+ */
+export function deliveryExpenseTag(invoiceId: string): string {
+  return `#${invoiceId.slice(-6)}`;
+}
+
+/**
+ * «التوصيل علينا»: مصروف «شحن وتوصيل» باسم الفاتورة — يُخصم من الربح في
+ * التقارير دون أن يمسّ إجمالي الفاتورة.
+ *
+ * مُكرَّر-آمن عبر الوسم: الحفظ الثاني لنفس الفاتورة يجد المصروف فيحدّث مبلغه
+ * إن كان لا يزال بانتظار الاعتماد، ويتركه إن اعتُمد (مصروف معتمد دخل ربحاً
+ * مُبلَّغاً — لا يُعدَّل بصمت، كقاعدة حذف المصروفات نفسها). من يملك صلاحية
+ * الاعتماد يُسجَّل مصروفه معتمداً فوراً، كالمصروفات الثابتة الشهرية.
+ */
+export async function recordDeliveryExpense(
+  user: { tenantId: string; id: string; role: Parameters<typeof can>[0] },
+  fee: number,
+  invoice: { id: string; number: string | null },
+): Promise<void> {
+  if (!(fee > 0)) return;
+  const tag = deliveryExpenseTag(invoice.id);
+  const notes = `أجور توصيل الفاتورة ${invoice.number ?? 'مسودة'} ${tag}`;
+
+  const existing = await prisma.secondaryExpense.findFirst({
+    where: { tenantId: user.tenantId, category: 'SHIPPING', isDeleted: false, notes: { contains: tag } },
+    select: { id: true, status: true, amount: true },
+  });
+  if (existing) {
+    if (existing.status === 'PENDING' && !dec(existing.amount).eq(dec(fee))) {
+      await prisma.secondaryExpense.update({
+        where: { id: existing.id },
+        data: { amount: dec(fee).toString(), notes },
+      });
+    }
+    return;
+  }
+
+  const approved = can(user.role, 'expenses.approve');
+  await prisma.secondaryExpense.create({
+    data: {
+      tenantId: user.tenantId,
+      number: await nextOpsNumber('secondaryExpense', 'EXP', user.tenantId),
+      expenseDate: new Date(),
+      category: 'SHIPPING',
+      amount: dec(fee).toString(),
+      notes,
+      status: approved ? 'APPROVED' : 'PENDING',
+      approvedById: approved ? user.id : null,
+      approvedAt: approved ? new Date() : null,
+      createdById: user.id,
+    },
+  });
 }
 
 /** The tenant's invoicing settings, with the documented defaults. */

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { dec, formatMoney, PAYMENT_METHOD_AR, ORDER_SOURCE_AR } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import { categoryOf } from '@/app/(erp)/returns/category';
@@ -104,11 +105,14 @@ export default async function DailyPage() {
   const expensesTotal = expenses.reduce((s, e) => s.plus(dec(e.amount)), dec(0));
   const pendingExpenses = expenses.filter((e) => e.status === 'PENDING').length;
 
-  // أفضل الأصناف اليوم — بعدد القطع من بنود فواتير اليوم.
+  // أفضل الأصناف اليوم — بعدد القطع من بنود فواتير اليوم. بند التوصيل 🚚
+  // ليس صنفاً فلا يدخل الترتيب ولا العدّ.
   const byItem = new Map<string, number>();
   for (const inv of invoices)
-    for (const l of inv.lines)
+    for (const l of inv.lines) {
+      if (isDeliveryDesc(l.description)) continue;
       byItem.set(l.description, (byItem.get(l.description) ?? 0) + Number(l.quantity));
+    }
   const topItems = [...byItem].sort((a, b) => b[1] - a[1]).slice(0, 5);
 
   // مبيعات كل نوع بالقطعة — يلكات وتيشيرتات ومرايل… بصورة عامة، بلا ألوان
@@ -120,8 +124,12 @@ export default async function DailyPage() {
     return families.get(key)!;
   };
   for (const inv of invoices)
-    for (const l of inv.lines) bump(categoryOf(l.description)).today += Number(l.quantity);
+    for (const l of inv.lines) {
+      if (isDeliveryDesc(l.description)) continue;
+      bump(categoryOf(l.description)).today += Number(l.quantity);
+    }
   for (const l of monthLines) {
+    if (isDeliveryDesc(l.description)) continue;
     const f = bump(categoryOf(l.description));
     f.month += Number(l.quantity);
     f.monthValue = f.monthValue.plus(dec(l.lineTotal));
@@ -239,7 +247,15 @@ export default async function DailyPage() {
                     <tr>
                       <td className="px-2 py-2.5 text-xs font-semibold text-txt">الإجمالي</td>
                       <td className="tnum px-2 py-2.5 text-xs font-semibold text-txt-2">
-                        {invoices.reduce((s, i) => s + i.lines.reduce((x, l) => x + Number(l.quantity), 0), 0)}
+                        {invoices.reduce(
+                          (s, i) =>
+                            s +
+                            i.lines.reduce(
+                              (x, l) => (isDeliveryDesc(l.description) ? x : x + Number(l.quantity)),
+                              0,
+                            ),
+                          0,
+                        )}
                       </td>
                       <td className="tnum px-2 py-2.5 text-xs font-bold text-brand">{monthPieces}</td>
                       <td />

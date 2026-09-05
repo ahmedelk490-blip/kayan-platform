@@ -74,6 +74,9 @@ export interface DocValues {
   dateA?: string;
   dateB?: string;
   lines?: DocLine[];
+  /** سعر التوصيل الحالي (للتعديل) — يُملأ من بند 🚚 أو مصروف الشحن المسجَّل. */
+  deliveryFee?: number;
+  deliveryOn?: 'CUSTOMER' | 'US';
 }
 
 const emptyLine = (): DocLine => ({
@@ -180,6 +183,7 @@ export function DocumentForm({
   allowNewCustomer = false,
   lastPriceAction,
   debts,
+  withDelivery = false,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   customers: { value: string; label: string }[];
@@ -203,6 +207,8 @@ export function DocumentForm({
   lastPriceAction?: (customerId: string, variantId: string) => Promise<{ price: number; date: string } | null>;
   /** دين كل عميل المفتوح — يظهر تحذيراً لحظة اختياره. */
   debts?: Record<string, { amount: number; count: number }>;
+  /** يُظهر خانة «🚚 سعر التوصيل» — للفواتير فقط (الطلبات وعروض السعر تشترط منتجاً لكل بند). */
+  withDelivery?: boolean;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const [lines, setLines] = useState<DocLine[]>(() =>
@@ -213,6 +219,10 @@ export function DocumentForm({
   const [issueNow, setIssueNow] = useState(instantDefault);
   const [payMethod, setPayMethod] = useState('CASH');
   const [payAmount, setPayAmount] = useState(0);
+
+  // سعر التوصيل: على الزبون (بند يرفع الإجمالي) أو علينا (مصروف يُخصم من الربح).
+  const [deliveryFee, setDeliveryFee] = useState(values?.deliveryFee ?? 0);
+  const [deliveryOn, setDeliveryOn] = useState<'CUSTOMER' | 'US'>(values?.deliveryOn ?? 'CUSTOMER');
 
   // «+ عميل جديد» داخل الفورم: اسم وهاتف بدل مغادرة الفاتورة والرجوع.
   const [newCustomer, setNewCustomer] = useState(false);
@@ -428,6 +438,10 @@ export function DocumentForm({
   const computed = lines
     .filter((l) => l.variantId && l.quantity > 0)
     .map((l) => calcLine(l));
+  // توصيل «على الزبون» يدخل الحسبة كسطر — نفس ما سيحسبه الخادم تماماً.
+  if (withDelivery && deliveryOn === 'CUSTOMER' && deliveryFee > 0) {
+    computed.push(calcLine({ quantity: 1, unitPrice: deliveryFee, discountAmount: 0, taxRate: 0 }));
+  }
   const totals = calcDocument(computed, {
     discountAmount: docDiscount,
     discountPercent: docDiscountPct,
@@ -886,6 +900,58 @@ export function DocumentForm({
           + إضافة صنف آخر
         </button>
       </section>
+
+      {/* ٢.٥ سعر التوصيل — على الزبون (بند يرفع الإجمالي) أو علينا (مصروف
+          شحن وتوصيل يُخصم من الربح، والفاتورة لا تتغيّر). اختياري: صفر = بلا. */}
+      {withDelivery && (
+        <section className="rounded-xl border border-line bg-card-2 p-4">
+          <h3 className="mb-3 text-sm font-semibold text-txt">
+            🚚 سعر التوصيل <span className="font-normal text-txt-4">(اختياري — اتركه صفراً إن لا توصيل)</span>
+          </h3>
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              name="deliveryFee"
+              type="number"
+              min="0"
+              step="0.01"
+              dir="ltr"
+              value={deliveryFee}
+              onChange={(e) => setDeliveryFee(Math.max(0, Number(e.target.value) || 0))}
+              className="erp-input w-36 py-2.5 text-start"
+            />
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  { value: 'CUSTOMER', label: 'على الزبون' },
+                  { value: 'US', label: 'علينا' },
+                ] as const
+              ).map((o) => (
+                <label
+                  key={o.value}
+                  className="cursor-pointer rounded-full border border-line-2 px-4 py-2 text-xs font-medium text-txt-2 transition-colors has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:checked]:text-brand"
+                >
+                  <input
+                    type="radio"
+                    name="deliveryOn"
+                    value={o.value}
+                    checked={deliveryOn === o.value}
+                    onChange={() => setDeliveryOn(o.value)}
+                    className="sr-only"
+                  />
+                  {o.label}
+                </label>
+              ))}
+            </div>
+          </div>
+          {deliveryFee > 0 && (
+            <p className="mt-2 text-[0.7rem] leading-[1.8] text-txt-4">
+              {deliveryOn === 'CUSTOMER'
+                ? `يُضاف بند «🚚 أجور توصيل» بقيمة ${formatMoney(dec(deliveryFee))} على الفاتورة — الزبون يدفعه.`
+                : `إجمالي الفاتورة لا يتغيّر — يُسجَّل مصروف «شحن وتوصيل» بقيمة ${formatMoney(dec(deliveryFee))} يُخصم من الربح في التقارير.`}
+            </p>
+          )}
+        </section>
+      )}
 
       {/* ٣. الإجمالي — كبير وواضح. */}
       <div className="flex items-center justify-between rounded-xl border border-line bg-card-2 px-5 py-4">

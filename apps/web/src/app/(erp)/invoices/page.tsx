@@ -21,6 +21,7 @@ import {
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
 import { Toolbar } from '@/components/crud/Toolbar';
 import { ModuleHeader, Table, Pager, Badge } from '@/components/crud/Shell';
@@ -122,7 +123,8 @@ export default async function InvoicesPage({
         customer: { select: { contactName: true, companyName: true } },
         _count: { select: { lines: true, payments: true } },
         // كميات السطور — لعمود «القطع»: كم قطعة في كل فاتورة، بطلب المالك.
-        lines: { select: { quantity: true } },
+        // الوصف لاستثناء بند التوصيل 🚚 من العدّ (ليس قطعة بضاعة).
+        lines: { select: { quantity: true, description: true } },
       },
     }),
     prisma.invoice.count({ where }),
@@ -274,7 +276,10 @@ export default async function InvoicesPage({
         {rows.map((row) => {
           const left = balance(row.total, row.paidAmount);
           const late = daysOverdue(row.dueDate, left);
-          const pieces = row.lines.reduce((s, l) => s + Number(l.quantity), 0);
+          const pieces = row.lines.reduce(
+            (s, l) => (isDeliveryDesc(l.description) ? s : s + Number(l.quantity)),
+            0,
+          );
           return (
             <tr key={row.id} className="hover:bg-card-2">
               <td dir="ltr" className="tnum px-4 py-3 text-start font-medium text-txt">

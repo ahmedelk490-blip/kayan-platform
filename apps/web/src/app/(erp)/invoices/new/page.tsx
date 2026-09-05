@@ -116,6 +116,7 @@ export default async function NewInvoicePage({
           submitLabel="إنشاء الفاتورة"
           instantIssue
           allowNewCustomer
+          withDelivery
           lastPriceAction={lastCustomerPrice}
           debts={options.debts}
         />
