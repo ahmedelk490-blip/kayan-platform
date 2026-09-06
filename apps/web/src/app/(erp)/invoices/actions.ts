@@ -114,10 +114,11 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
 
   let customerId = String(formData.get('customerId') ?? '').trim();
 
-  // عميل جديد من داخل الفورم نفسه (اسم + هاتف) — بلا مغادرة الفاتورة.
+  // عميل جديد من داخل الفورم نفسه (اسم + هاتف + عنوان) — بلا مغادرة الفاتورة.
   // يُطابَق بالهاتف أولاً: الرقم يعرّف العميل في هذا السوق، فلا ينشأ مكرّر.
   const newName = String(formData.get('newCustomerName') ?? '').trim();
   const newPhone = normalizeDigits(String(formData.get('newCustomerPhone') ?? ''));
+  const newAddress = String(formData.get('newCustomerAddress') ?? '').trim();
   if (!customerId && newName) {
     if (!newPhone) return { fieldErrors: { customerId: 'اكتب رقم هاتف العميل الجديد.' } };
     const existing = await prisma.customer.findFirst({
@@ -126,6 +127,10 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
     });
     if (existing) {
       customerId = existing.id;
+      // عنوان كُتب قصداً هو أحدث عنوان توصيل معروف — يُحدَّث لا يُتجاهل.
+      if (newAddress) {
+        await prisma.customer.update({ where: { id: existing.id }, data: { address: newAddress } });
+      }
     } else {
       const codes = await prisma.customer.findMany({
         where: { tenantId: user.tenantId },
@@ -138,6 +143,7 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
           contactName: newName,
           phone: newPhone,
           whatsapp: newPhone,
+          address: newAddress || null,
           notes: 'أُنشئ من فورم الفاتورة.',
         },
         select: { id: true },

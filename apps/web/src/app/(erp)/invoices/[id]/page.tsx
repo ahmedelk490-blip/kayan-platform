@@ -156,6 +156,8 @@ export default async function InvoicePage({
         <Link href={`/customers/${invoice.customerId}`} className="text-brand underline">
           {invoice.customer.companyName ?? invoice.customer.contactName}
         </Link>
+        {/* عنوان العميل أمام العين — عامل التوصيل يقرأه من هنا ومن الطباعة. */}
+        {invoice.customer.address && <span>📍 {invoice.customer.address}</span>}
         {invoice.issueDate && (
           <span className="tnum">صدرت {invoice.issueDate.toLocaleDateString('ar-EG')}</span>
         )}

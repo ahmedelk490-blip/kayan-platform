@@ -490,6 +490,12 @@ export function DocumentForm({
               placeholder="رقم الهاتف (يمنع التكرار)"
               className="erp-input py-2.5 text-start"
             />
+            {/* العنوان اختياري لكنه أساس التوصيل — يُحفظ على العميل ويطبع على الفاتورة. */}
+            <input
+              name="newCustomerAddress"
+              placeholder="📍 العنوان — للتوصيل (اختياري)"
+              className="erp-input py-2.5 sm:col-span-2"
+            />
           </div>
         ) : (
           <SearchableSelect

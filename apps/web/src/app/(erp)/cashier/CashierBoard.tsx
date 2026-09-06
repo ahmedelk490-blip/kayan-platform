@@ -86,10 +86,12 @@ export function CashierBoard({
     setQuickReset((n) => n + 1); // يعيد تركيب منتقي البحث ففراغه جاهز للصنف التالي
   }
 
-  // عميل سريع: اسم + موبايل مكان القائمة — للأوردر السريع على الكاونتر.
+  // عميل سريع: اسم + موبايل + عنوان مكان القائمة — للأوردر السريع على الكاونتر.
+  // العنوان اختياري لكنه أساس التوصيل: يُحفظ على العميل ويطبع على الفاتورة.
   const [quickCustomer, setQuickCustomer] = useState(false);
   const [quickName, setQuickName] = useState('');
   const [quickPhone, setQuickPhone] = useState('');
+  const [quickAddress, setQuickAddress] = useState('');
   const customerReady = quickCustomer
     ? quickName.trim().length > 0 && quickPhone.trim().length > 0
     : Boolean(customerId);
@@ -287,6 +289,13 @@ export function CashierBoard({
                 inputMode="tel"
                 placeholder="رقم الموبايل"
                 className="erp-input py-2.5 text-start"
+              />
+              <input
+                name="newCustomerAddress"
+                value={quickAddress}
+                onChange={(e) => setQuickAddress(e.target.value)}
+                placeholder="📍 العنوان — للتوصيل (اختياري)"
+                className="erp-input col-span-2 py-2.5"
               />
             </div>
           ) : (
