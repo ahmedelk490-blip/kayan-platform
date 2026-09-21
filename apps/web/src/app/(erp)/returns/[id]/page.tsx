@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { formatMoney, dec } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader } from '@/components/crud/Shell';
 import { categoryOf, categoriesOf } from '../category';
@@ -25,7 +26,11 @@ export default async function ReturnDetailPage({
   });
   if (!ret) notFound();
 
-  const pieces = ret.lines.reduce((s, l) => s + Number(l.quantity), 0);
+  // بند التوصيل 🚚 قد يُرَدّ مبلغه، لكنه ليس قطعة بضاعة راجعة للمخزون.
+  const pieces = ret.lines.reduce(
+    (s, l) => (isDeliveryDesc(l.description) ? s : s + Number(l.quantity)),
+    0,
+  );
   const categories = categoriesOf(ret.lines.map((l) => l.description));
 
   return (

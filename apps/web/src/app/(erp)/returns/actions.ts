@@ -10,10 +10,19 @@ import { num } from '@/lib/num';
 import type { FormState } from '@/lib/ops';
 import { lockPaymentSequence, nextPaymentNumber } from '@/app/(erp)/invoices/shared';
 
-/** رقم مرتجع متسلسل للسنة (سنة بغداد): RET-YYYY-N. */
-async function nextReturnNumber(tenantId: string): Promise<string> {
+/**
+ * رقم مرتجع متسلسل للسنة (سنة بغداد): RET-YYYY-N.
+ *
+ * يُستدعى داخل المعاملة وخلف قفل التسلسل: مرتجعان متزامنان كانا يقرآن نفس
+ * الأقصى فيولدان نفس الرقم — والرقم هو ما تُلاحق به دفعةُ الردّ لاحقاً، فحذف
+ * أحدهما كان يعكس ردّ الآخر.
+ */
+async function nextReturnNumber(
+  tenantId: string,
+  db: Parameters<typeof lockPaymentSequence>[0] | typeof prisma = prisma,
+): Promise<string> {
   const stem = `RET-${iraqYear()}-`;
-  const rows = await prisma.salesReturn.findMany({
+  const rows = await db.salesReturn.findMany({
     where: { tenantId, number: { startsWith: stem } },
     select: { number: true },
   });
@@ -101,20 +110,38 @@ export async function createReturn(
   const total = retLines
     .reduce((s, r) => s.plus(effectiveUnit(r.line).times(dec(r.qty))), dec(0))
     .toDecimalPlaces(4);
-  const number = await nextReturnNumber(user.tenantId);
   const warehouseId = await defaultWarehouseId(user.tenantId);
 
-  // قيمة كل المرتجعات السابقة — لاشتقاق ما بقي مستحقاً على الفاتورة بعد هذا
-  // المرتجع، فلا تعود فاتورةٌ مدفوعة تظهر ديناً على عميلٍ أرجع بضاعته.
-  const priorReturnedValue = priorReturns.reduce((s, pr) => s.plus(dec(pr.totalAmount)), dec(0));
-
-  // رد المبلغ للعميل (اختياري، افتراضياً نعم) — لا يتجاوز ما دُفع فعلاً على
-  // الفاتورة. يُسجَّل كدفعة سالبة تُنقص المدفوع وتُعيد اشتقاق حالة الفاتورة.
   const refundWanted = ['1', 'on', 'true'].includes(String(formData.get('refund') ?? ''));
-  const paid = dec(invoice.paidAmount);
-  const refundAmount = refundWanted && paid.gt(0) ? (total.gt(paid) ? paid : total) : dec(0);
 
-  await tenantTransaction(async (tx) => {
+  const created = await tenantTransaction(async (tx) => {
+    // القفل أولاً، ثم قراءة الفاتورة طازجةً خلفه: كل ما يلي (الرقم، ومبلغ
+    // الردّ، والمدفوع الجديد) مبنيٌّ على حالةٍ لا يمكن أن تتغيّر تحتنا. كانت
+    // تُقرأ قبل المعاملة، فتحصيلٌ يقع في نفس اللحظة كان يُمحى من paidAmount
+    // بينما دفعته باقية في السجل.
+    await lockPaymentSequence(tx, user.tenantId);
+
+    const fresh = await tx.invoice.findFirst({
+      where: { id: invoice.id, tenantId: user.tenantId, isDeleted: false },
+      select: { paidAmount: true, total: true, status: true },
+    });
+    if (!fresh) throw new Error('الفاتورة لم تعد متاحة.');
+
+    const number = await nextReturnNumber(user.tenantId, tx);
+
+    // قيمة كل المرتجعات السابقة — لاشتقاق ما بقي مستحقاً على الفاتورة بعد هذا
+    // المرتجع، فلا تعود فاتورةٌ مدفوعة تظهر ديناً على عميلٍ أرجع بضاعته.
+    const priorInTx = await tx.salesReturn.aggregate({
+      where: { tenantId: user.tenantId, invoiceId: invoice.id, isDeleted: false },
+      _sum: { totalAmount: true },
+    });
+    const priorReturnedValue = dec(priorInTx._sum.totalAmount ?? 0);
+
+    // رد المبلغ للعميل (اختياري، افتراضياً نعم) — لا يتجاوز ما دُفع فعلاً على
+    // الفاتورة. يُسجَّل كدفعة سالبة تُنقص المدفوع وتُعيد اشتقاق حالة الفاتورة.
+    const paid = dec(fresh.paidAmount);
+    const refundAmount = refundWanted && paid.gt(0) ? (total.gt(paid) ? paid : total) : dec(0);
+
     await tx.salesReturn.create({
       data: {
         tenantId: user.tenantId,
@@ -168,9 +195,8 @@ export async function createReturn(
     }
 
     // رد المبلغ نقداً: دفعة سالبة على الفاتورة تُنقص المدفوع — رقمها داخل
-    // المعاملة وخلف قفل تسلسل الدفعات، فلا يتكرر مع تحصيل متزامن.
+    // المعاملة وخلف القفل المأخوذ أعلاه، فلا يتكرر مع تحصيل متزامن.
     if (refundAmount.gt(0)) {
-      await lockPaymentSequence(tx, user.tenantId);
       const paymentNumber = await nextPaymentNumber(user.tenantId, tx);
       await tx.payment.create({
         data: {
@@ -190,10 +216,10 @@ export async function createReturn(
     // المرتجعات) مقابل المدفوع الجديد — فمرتجعٌ كامل مردود المبلغ يترك
     // الفاتورة PAID لا ديناً وهمياً يظهر في تقارير الذمم.
     const newPaid = refundAmount.gt(0) ? paid.minus(refundAmount) : paid;
-    const owedAfterReturns = dec(invoice.total).minus(priorReturnedValue).minus(total);
+    const owedAfterReturns = dec(fresh.total).minus(priorReturnedValue).minus(total);
     const newStatus =
-      invoice.status === 'DRAFT' || invoice.status === 'VOID'
-        ? invoice.status
+      fresh.status === 'DRAFT' || fresh.status === 'VOID'
+        ? fresh.status
         : owedAfterReturns.lte(newPaid)
           ? 'PAID'
           : newPaid.lte(0)
@@ -201,8 +227,13 @@ export async function createReturn(
             : 'PARTIALLY_PAID';
     await tx.invoice.update({
       where: { id: invoice.id },
-      data: { paidAmount: newPaid.toString(), status: newStatus },
+      // المدفوع لا يُكتب إلا حين يتغيّر فعلاً (ردٌّ حصل): كتابته بلا سبب كانت
+      // تدهس تحصيلاً وقع بين القراءة والكتابة.
+      data: refundAmount.gt(0)
+        ? { paidAmount: newPaid.toString(), status: newStatus }
+        : { status: newStatus },
     });
+    return { number, refundAmount };
   });
 
   await audit({
@@ -211,7 +242,7 @@ export async function createReturn(
     action: 'return.create',
     entityType: 'SalesReturn',
     entityId: invoice.id,
-    detail: `${number} — ${invoice.number ?? ''} · ${total.toString()}${refundAmount.gt(0) ? ` · رد ${refundAmount.toString()}` : ''}`,
+    detail: `${created.number} — ${invoice.number ?? ''} · ${total.toString()}${created.refundAmount.gt(0) ? ` · رد ${created.refundAmount.toString()}` : ''}`,
   });
 
   revalidatePath('/returns');
@@ -235,25 +266,29 @@ export async function deleteReturn(id: string): Promise<void> {
   });
   if (!ret) redirect('/returns');
 
-  const invoice = await prisma.invoice.findFirst({
-    where: { id: ret.invoiceId, tenantId: user.tenantId, isDeleted: false },
-    select: { id: true, total: true, paidAmount: true, status: true },
-  });
-
-  // دفعة ردّ المبلغ لهذا المرتجع (سالبة) إن وُجدت ولم تُعكس من قبل.
-  const refund = await prisma.payment.findFirst({
-    where: {
-      tenantId: user.tenantId,
-      invoiceId: ret.invoiceId,
-      notes: `رد مرتجع ${ret.number}`,
-      reversesId: null,
-      reversedBy: { is: null },
-    },
-  });
-
   const warehouseId = await defaultWarehouseId(user.tenantId);
 
-  await tenantTransaction(async (tx) => {
+  const refund = await tenantTransaction(async (tx) => {
+    // القفل قبل أي قراءة مالية: الفاتورة ودفعةُ الردّ تُقرآن خلفه فلا يضيع
+    // تحصيلٌ وقع في نفس اللحظة، ولا تُعكس دفعةٌ عُكست للتوّ.
+    await lockPaymentSequence(tx, user.tenantId);
+
+    const invoice = await tx.invoice.findFirst({
+      where: { id: ret.invoiceId, tenantId: user.tenantId, isDeleted: false },
+      select: { id: true, total: true, paidAmount: true, status: true },
+    });
+
+    // دفعة ردّ المبلغ لهذا المرتجع (سالبة) إن وُجدت ولم تُعكس من قبل.
+    const refund = await tx.payment.findFirst({
+      where: {
+        tenantId: user.tenantId,
+        invoiceId: ret.invoiceId,
+        notes: `رد مرتجع ${ret.number}`,
+        reversesId: null,
+        reversedBy: { is: null },
+      },
+    });
+
     await tx.salesReturn.update({ where: { id }, data: { isDeleted: true, deletedAt: new Date() } });
 
     // سحب ما كان أُعيد للمخزون — حركة إخراج بمرجع الحذف.
@@ -286,7 +321,6 @@ export async function deleteReturn(id: string): Promise<void> {
       // عكس ردّ المبلغ إن وُجد — دفعة موجبة تشير للأصلية، فيعود المدفوع.
       let newPaid = dec(invoice.paidAmount);
       if (refund) {
-        await lockPaymentSequence(tx, user.tenantId);
         const number = await nextPaymentNumber(user.tenantId, tx);
         await tx.payment.create({
           data: {
@@ -320,9 +354,13 @@ export async function deleteReturn(id: string): Promise<void> {
               : 'PARTIALLY_PAID';
       await tx.invoice.update({
         where: { id: invoice.id },
-        data: { paidAmount: newPaid.toString(), status: newStatus },
+        // كما في الإنشاء: المدفوع لا يُكتب إلا حين يتغيّر فعلاً (عُكس ردّ).
+        data: refund
+          ? { paidAmount: newPaid.toString(), status: newStatus }
+          : { status: newStatus },
       });
     }
+    return refund;
   });
 
   await audit({

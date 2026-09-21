@@ -27,7 +27,7 @@ export async function resetCounts(): Promise<ResetCounts> {
     purchases, receipts,
     expenses, salaries, penalties,
     damage, production, work,
-    movements, stock,
+    movements, stock, supplyTx,
     customers, suppliers,
     auditLogs,
     products, variants, tiers,
@@ -47,6 +47,7 @@ export async function resetCounts(): Promise<ResetCounts> {
     prisma.workOrder.count({ where: { productionOrder: { tenantId: user.tenantId } } }),
     prisma.stockMovement.count({ where: t }),
     prisma.stock.count({ where: { variant: { product: { tenantId: user.tenantId } } } }),
+    prisma.supplyTransaction.count({ where: t }),
     prisma.customer.count({ where: t }),
     prisma.supplier.count({ where: t }),
     prisma.auditLog.count({ where: t }),
@@ -63,6 +64,7 @@ export async function resetCounts(): Promise<ResetCounts> {
     production: production + work,
     movements,
     stock,
+    supplies: supplyTx,
     customers,
     suppliers,
     audit: auditLogs,
@@ -174,9 +176,19 @@ export async function resetData(_prev: ResetState, formData: FormData): Promise<
       }
 
       if (picked.has('movements')) {
-        await tx.supplyTransaction.deleteMany({ where: { supply: { tenantId } } });
         await tx.stockMovement.deleteMany({ where: byTenant });
         done.push('حركة المخزون');
+      }
+
+      // المستلزمات: الحركات ورصيدها يُصفَّران معاً — onHand رصيدٌ جارٍ مشتقٌّ من
+      // الحركات، فمسح الحركات وحدها يترك رصيداً لا سند له في السجل.
+      if (picked.has('supplies')) {
+        await tx.supplyTransaction.deleteMany({ where: byTenant });
+        await tx.supply.updateMany({
+          where: byTenant,
+          data: { onHand: '0', avgCost: '0', lastUnitCost: null },
+        });
+        done.push('مخزون المستلزمات');
       }
 
       if (picked.has('stock')) {

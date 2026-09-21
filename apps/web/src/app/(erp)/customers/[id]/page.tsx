@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { can, dec, formatMoney } from '@erp/domain';
+import { balance, can, dec, formatMoney } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { waLink } from '@/lib/wa';
@@ -61,7 +61,7 @@ export default async function CustomerDetailPage({
         status: { in: ['ISSUED', 'PARTIALLY_PAID'] },
       },
       orderBy: { issueDate: 'asc' },
-      select: { number: true, issueDate: true, total: true, paidAmount: true },
+      select: { id: true, number: true, issueDate: true, total: true, paidAmount: true },
     }),
     prisma.invoice.findFirst({
       where: {
@@ -76,22 +76,42 @@ export default async function CustomerDetailPage({
     }),
   ]);
 
-  const owed = openInvoices.reduce(
-    (s, i) => s.plus(dec(i.total).minus(dec(i.paidAmount))),
-    dec(0),
-  );
+  // المتبقي على كل فاتورة = (الإجمالي − ما أُرجع منها) − المدفوع، عبر balance
+  // التي تقف عند الصفر: بدون المرتجع كانت المطالبة تشمل بضاعةً أعادها العميل،
+  // وبدون القاع كانت فاتورةٌ زائدة الدفع تُلغي ديناً حقيقياً في الإجمالي.
+  const returnsByInvoice = new Map<string, ReturnType<typeof dec>>();
+  if (openInvoices.length > 0) {
+    const grouped = await prisma.salesReturn.groupBy({
+      by: ['invoiceId'],
+      where: {
+        tenantId: user.tenantId,
+        isDeleted: false,
+        invoiceId: { in: openInvoices.map((i) => i.id) },
+      },
+      _sum: { totalAmount: true },
+    });
+    for (const g of grouped) {
+      returnsByInvoice.set(g.invoiceId, dec(g._sum.totalAmount ?? 0));
+    }
+  }
+  const leftOn = (i: (typeof openInvoices)[number]) =>
+    balance(dec(i.total).minus(returnsByInvoice.get(i.id) ?? dec(0)), i.paidAmount);
+
+  const owed = openInvoices.reduce((s, i) => s.plus(leftOn(i)), dec(0));
 
   // كشف حساب جاهز للواتساب: الفواتير المفتوحة والمتبقي الكلي — للمطالبة بضغطة.
   const statementUrl =
-    openInvoices.length > 0
+    owed.gt(0)
       ? waLink(
           customer.whatsapp ?? customer.phone,
           [
             `كشف حساب — ${customer.companyName ?? customer.contactName}`,
-            ...openInvoices.map(
-              (i) =>
-                `• ${i.number ?? 'فاتورة'}${i.issueDate ? ` (${i.issueDate.toLocaleDateString('ar-EG')})` : ''} — المتبقي ${formatMoney(dec(i.total).minus(dec(i.paidAmount)))} د.ع`,
-            ),
+            ...openInvoices
+              .filter((i) => leftOn(i).gt(0))
+              .map(
+                (i) =>
+                  `• ${i.number ?? 'فاتورة'}${i.issueDate ? ` (${i.issueDate.toLocaleDateString('ar-EG')})` : ''} — المتبقي ${formatMoney(leftOn(i))} د.ع`,
+              ),
             `الإجمالي المتبقي: ${formatMoney(owed)} د.ع`,
             'شاكرين تعاونكم — كيان للزي الموحد',
           ].join('\n'),

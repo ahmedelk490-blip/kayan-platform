@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { formatMoney, dec } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { isDeliveryDesc } from '@/lib/delivery';
 import { can } from '@erp/domain';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Pager } from '@/components/crud/Shell';
@@ -55,17 +56,21 @@ export default async function ReturnsPage({
       _count: true,
       _sum: { totalAmount: true },
     }),
+    // بنود التوصيل 🚚 خارج عدّ القطع — مالٌ يُرَدّ لا بضاعة تعود للمخزون.
     prisma.salesReturnLine.aggregate({
-      where: { salesReturn: { tenantId: user.tenantId, isDeleted: false } },
+      where: {
+        salesReturn: { tenantId: user.tenantId, isDeleted: false },
+        NOT: { description: { startsWith: '🚚' } },
+      },
       _sum: { quantity: true },
     }),
   ]);
 
   const total = dec(agg._sum.totalAmount ?? 0);
   const totalPieces = Number(piecesAgg._sum.quantity ?? 0);
-  // عدد القطع لكل مرتجع معروض = مجموع كميات سطوره.
+  // عدد القطع لكل مرتجع معروض = مجموع كميات سطوره، بلا بند التوصيل.
   const piecesOf = (r: (typeof returns)[number]) =>
-    r.lines.reduce((s, l) => s + Number(l.quantity), 0);
+    r.lines.reduce((s, l) => (isDeliveryDesc(l.description) ? s : s + Number(l.quantity)), 0);
 
   return (
     <AppShell user={user} title="المرتجعات">

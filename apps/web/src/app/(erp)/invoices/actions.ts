@@ -643,10 +643,13 @@ export async function updateInvoiceLines(
     }
   });
 
-  if (delivery.onUs) {
-    await recordDeliveryExpense(user, delivery.fee, { id: invoiceId, number: invoice.number });
-    revalidatePath('/expenses');
-  }
+  // يُستدعى دائماً عند التعديل: بصفرٍ يُلغي مصروف توصيلٍ سابق لم يعد علينا
+  // (حُوِّل للزبون أو أُلغي)، وإلا بقي يخصم من الربح والزبون يدفعه على الفاتورة.
+  await recordDeliveryExpense(user, delivery.onUs ? delivery.fee : 0, {
+    id: invoiceId,
+    number: invoice.number,
+  });
+  revalidatePath('/expenses');
 
   await audit({
     tenantId: user.tenantId,

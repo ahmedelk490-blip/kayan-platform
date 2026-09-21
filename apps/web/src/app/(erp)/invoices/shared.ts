@@ -137,7 +137,6 @@ export async function recordDeliveryExpense(
   fee: number,
   invoice: { id: string; number: string | null },
 ): Promise<void> {
-  if (!(fee > 0)) return;
   const tag = deliveryExpenseTag(invoice.id);
   const notes = `أجور توصيل الفاتورة ${invoice.number ?? 'مسودة'} ${tag}`;
 
@@ -145,6 +144,20 @@ export async function recordDeliveryExpense(
     where: { tenantId: user.tenantId, category: 'SHIPPING', isDeleted: false, notes: { contains: tag } },
     select: { id: true, status: true, amount: true },
   });
+
+  // صفر يعني: لم يعد التوصيل علينا (حُوّل للزبون أو أُلغي). المصروف القديم
+  // يُلغى وإلا بقي يخصم من الربح بينما الزبون يدفع الأجرة على الفاتورة.
+  // المعتمد لا يُمسّ صمتاً — يُترك ليحذفه صاحب الصلاحية بنفسه، كقاعدة المصروفات.
+  if (!(fee > 0)) {
+    if (existing && existing.status !== 'APPROVED') {
+      await prisma.secondaryExpense.update({
+        where: { id: existing.id },
+        data: { isDeleted: true, deletedAt: new Date() },
+      });
+    }
+    return;
+  }
+
   if (existing) {
     if (existing.status === 'PENDING' && !dec(existing.amount).eq(dec(fee))) {
       await prisma.secondaryExpense.update({

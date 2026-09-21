@@ -9,6 +9,7 @@ import {
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import { DonutChartInteractive } from '@/components/dashboard/DonutChartInteractive';
@@ -50,6 +51,8 @@ export default async function StatementReport({
       select: {
         quantity: true,
         lineTotal: true,
+        // الوصف لتمييز بند التوصيل 🚚 — مالٌ لا بضاعة.
+        description: true,
         product: { select: { nameAr: true, cost: true, category: { select: { nameAr: true } } } },
       },
     }),
@@ -87,6 +90,16 @@ export default async function StatementReport({
     const rev = dec(l.lineTotal);
     const qty = dec(l.quantity);
     totalSales = totalSales.plus(rev);
+
+    // بند التوصيل 🚚 إيرادٌ لا بضاعة: يدخل المبيعات، ويخرج من عدّ القطع ومن
+    // تكلفة البضاعة (وإلا حُسب بضاعةً بتكلفة صفر فابتلع مجمل الربح الفرق)،
+    // ويُصنَّف «توصيل» بدل أن يصنع صنفاً وهمياً اسمه «غير مصنّف».
+    if (isDeliveryDesc(l.description)) {
+      const d = byCategory.get('توصيل') ?? { revenue: dec(0), qty: dec(0) };
+      byCategory.set('توصيل', { revenue: d.revenue.plus(rev), qty: d.qty });
+      continue;
+    }
+
     piecesSold = piecesSold.plus(qty);
     cogs = cogs.plus(qty.times(dec(l.product?.cost ?? 0)));
     const cat = l.product?.category?.nameAr ?? 'غير مصنّف';

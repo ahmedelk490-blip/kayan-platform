@@ -10,6 +10,7 @@ import {
   balance,
   daysOverdue,
   isInvoiceStatus,
+  overpayment,
   INVOICE_STATUS_AR,
   INVOICE_TRANSITIONS,
   PAYMENT_METHOD_AR,
@@ -82,7 +83,11 @@ export default async function InvoicePage({
     _sum: { totalAmount: true },
   });
   const returnedValue = dec(returnAgg._sum.totalAmount ?? 0);
-  const left = balance(dec(invoice.total).minus(returnedValue), invoice.paidAmount);
+  const netOwed = dec(invoice.total).minus(returnedValue);
+  const left = balance(netOwed, invoice.paidAmount);
+  // ما دُفع فوق المستحق — رصيدٌ للعميل لا دين له. يظهر صريحاً لأن balance
+  // تقف عند الصفر، فكان الفائض يختفي بلا أثر (تعديل فاتورة مدفوعة لأسفل مثلاً).
+  const credit = overpayment(netOwed, invoice.paidAmount);
   const late = daysOverdue(invoice.dueDate, left);
 
   // رابط واتساب بنص الفاتورة جاهزاً — لا يُرسل شيئاً بنفسه.
@@ -226,6 +231,13 @@ export default async function InvoicePage({
                 <Row label="المتبقي" value={formatMoney(left)} strong />
               </div>
             </dl>
+            {credit.gt(0) && (
+              <p className="mt-3 rounded-lg border border-warn bg-warn-soft px-4 py-2.5 text-[0.7rem] leading-[1.9] text-warn">
+                ⚠ دُفع أكثر من المستحق بـ <strong className="tnum">{formatMoney(credit)}</strong> د.ع —
+                رصيدٌ للعميل لدينا (يُردّ له أو يُخصم من فاتورته القادمة). يحدث عادةً بعد تخفيض بنود
+                فاتورة سُدِّدت أو تسجيل مرتجع بلا ردّ مبلغ.
+              </p>
+            )}
           </section>
 
           <section>

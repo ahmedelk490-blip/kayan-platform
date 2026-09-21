@@ -39,6 +39,13 @@ export default async function InvoicePrintPage({
   ]);
   if (!invoice) notFound();
 
+  // المرتجع يُنقص المستحق على الورقة كما يُنقصه على الشاشة — وإلا طالبت
+  // النسخةُ المسلَّمة للعميل بمالِ بضاعةٍ أعادها.
+  const returnAgg = await prisma.salesReturn.aggregate({
+    where: { tenantId: user.tenantId, invoiceId: invoice.id, isDeleted: false },
+    _sum: { totalAmount: true },
+  });
+
   // A draft has no number yet, and a void invoice must never be mistaken for
   // a live one. Both say so on the page itself, not just on screen.
   const statusNote =
@@ -95,6 +102,7 @@ export default async function InvoicePrintPage({
         taxAmount={invoice.taxAmount}
         total={invoice.total}
         paidAmount={invoice.paidAmount}
+        returnedAmount={returnAgg._sum.totalAmount ?? 0}
         notes={invoice.notes}
       />
     </main>

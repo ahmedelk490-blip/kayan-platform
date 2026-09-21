@@ -1,6 +1,7 @@
 import { dec } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { withTenant } from '@/lib/prisma';
+import { isDeliveryDesc } from '@/lib/delivery';
 import { csvResponse, stampedName } from '../../csv';
 import { resolveRange } from '../../range';
 
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
         select: {
           total: true, createdById: true,
           createdBy: { select: { nameAr: true, name: true } },
-          lines: { select: { quantity: true, variant: { select: { cost: true, product: { select: { cost: true } } } } } },
+          lines: { select: { quantity: true, description: true, variant: { select: { cost: true, product: { select: { cost: true } } } } } },
         },
       }),
       tx.employeePayment.findMany({
@@ -63,6 +64,8 @@ export async function GET(request: Request) {
     row.invoices += 1;
     row.revenue = row.revenue.plus(dec(inv.total));
     for (const l of inv.lines) {
+      // بند التوصيل 🚚 ليس قطعة — نفس استثناء الشاشة، وإلا خالف الملفُ التقرير.
+      if (isDeliveryDesc(l.description)) continue;
       row.pieces = row.pieces.plus(dec(l.quantity));
       const unitCost = l.variant?.cost ?? l.variant?.product?.cost ?? null;
       if (unitCost !== null) row.cost = row.cost.plus(dec(l.quantity).times(dec(unitCost)));

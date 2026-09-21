@@ -1,5 +1,5 @@
 import { Logo } from '@erp/brand/logo';
-import { formatMoney, formatQty, balance } from '@erp/domain';
+import { formatMoney, formatQty, balance, dec } from '@erp/domain';
 import { isDeliveryDesc } from '@/lib/delivery';
 
 /**
@@ -65,6 +65,7 @@ export function PrintDocument({
   taxAmount,
   total,
   paidAmount,
+  returnedAmount,
   notes,
   statusNote,
 }: {
@@ -80,6 +81,8 @@ export function PrintDocument({
   taxAmount: unknown;
   total: unknown;
   paidAmount?: unknown;
+  /** قيمة ما أُرجع من هذه الفاتورة — تُنقص المتبقي كما على الشاشة. */
+  returnedAmount?: unknown;
   notes?: string | null;
   /** Shown when the document is not a final one — a draft or a void. */
   statusNote?: string | null;
@@ -170,14 +173,25 @@ export function PrintDocument({
           <Row label={`الإجمالي (${company.currency})`} value={formatMoney(total as never)} strong />
           {paidAmount !== undefined && (
             <>
+              {returnedAmount !== undefined && !dec(returnedAmount as never).isZero() && (
+                <Row label="المرتجع" value={`− ${formatMoney(returnedAmount as never)}`} />
+              )}
               <Row label="المدفوع" value={formatMoney(paidAmount as never)} />
               {/* Through the domain's `balance`, not JS subtraction. Every
                   other figure in this system is exact decimal; a printed
                   document that disagrees with the screen by a rounding cent
-                  is the one place the customer will notice. */}
+                  is the one place the customer will notice.
+
+                  والمرتجع يُنقص المستحق هنا كما يُنقصه على الشاشة تماماً: بدونه
+                  كانت الورقة المسلَّمة للعميل تطالبه بمبلغ بضاعةٍ أعادها. */}
               <Row
                 label="المتبقي"
-                value={formatMoney(balance(total as never, paidAmount as never))}
+                value={formatMoney(
+                  balance(
+                    dec(total as never).minus(dec((returnedAmount ?? 0) as never)),
+                    paidAmount as never,
+                  ),
+                )}
                 strong
               />
             </>

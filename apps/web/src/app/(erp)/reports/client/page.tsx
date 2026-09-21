@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { formatMoney, dec, balance, INVOICE_STATUS_AR } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import type { SearchParams } from '@/lib/query';
@@ -48,7 +49,7 @@ export default async function SingleClientReport({ searchParams }: { searchParam
             orderBy: { issueDate: 'desc' },
             select: {
               id: true, number: true, total: true, paidAmount: true, issueDate: true, dueDate: true, status: true,
-              lines: { select: { quantity: true, variant: { select: { cost: true, product: { select: { cost: true } } } } } },
+              lines: { select: { quantity: true, description: true, variant: { select: { cost: true, product: { select: { cost: true } } } } } },
             },
           },
         },
@@ -58,17 +59,36 @@ export default async function SingleClientReport({ searchParams }: { searchParam
   let invoiced = dec(0);
   let collected = dec(0);
   let cost = dec(0);
+  let outstanding = dec(0);
   if (selected) {
+    // المرتجعات تُنقص المستحق، وقاعُ balance يمنع فاتورةً زائدة الدفع من
+    // إلغاء دَينٍ حقيقي على فاتورة أخرى لنفس العميل.
+    const grouped = selected.invoices.length
+      ? await prisma.salesReturn.groupBy({
+          by: ['invoiceId'],
+          where: {
+            tenantId: user.tenantId,
+            isDeleted: false,
+            invoiceId: { in: selected.invoices.map((i) => i.id) },
+          },
+          _sum: { totalAmount: true },
+        })
+      : [];
+    const returnsByInvoice = new Map(grouped.map((g) => [g.invoiceId, dec(g._sum.totalAmount ?? 0)]));
+
     for (const inv of selected.invoices) {
       invoiced = invoiced.plus(dec(inv.total));
       collected = collected.plus(dec(inv.paidAmount));
+      outstanding = outstanding.plus(
+        balance(dec(inv.total).minus(returnsByInvoice.get(inv.id) ?? dec(0)), inv.paidAmount),
+      );
       for (const l of inv.lines) {
+        if (isDeliveryDesc(l.description)) continue;
         const unitCost = l.variant?.cost ?? l.variant?.product?.cost ?? null;
         if (unitCost !== null) cost = cost.plus(dec(l.quantity).times(dec(unitCost)));
       }
     }
   }
-  const outstanding = invoiced.minus(collected);
   const profit = invoiced.minus(cost);
   const name = selected ? selected.companyName ?? selected.contactName : '';
   const fmt = new Intl.DateTimeFormat('ar-IQ', { dateStyle: 'medium' });

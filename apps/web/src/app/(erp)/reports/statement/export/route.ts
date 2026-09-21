@@ -1,6 +1,7 @@
 import { dec, EXPENSE_CATEGORY_AR, type ExpenseCategory } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { withTenant } from '@/lib/prisma';
+import { isDeliveryDesc } from '@/lib/delivery';
 import { csvResponse, stampedName } from '../../csv';
 import { resolveRange } from '../../range';
 
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
     Promise.all([
       tx.invoiceLine.findMany({
         where: { invoice: { tenantId: user.tenantId, isDeleted: false, status: { notIn: ['DRAFT', 'VOID'] }, issueDate: { gte: from, lte: to } } },
-        select: { quantity: true, lineTotal: true, product: { select: { nameAr: true, cost: true, category: { select: { nameAr: true } } } } },
+        select: { quantity: true, lineTotal: true, description: true, product: { select: { nameAr: true, cost: true, category: { select: { nameAr: true } } } } },
       }),
       tx.employeePayment.findMany({ where: { tenantId: user.tenantId, deletedAt: null, kind: 'SALARY', paidAt: { gte: from, lte: to } }, select: { amount: true } }),
       tx.secondaryExpense.findMany({ where: { tenantId: user.tenantId, isDeleted: false, status: 'APPROVED', expenseDate: { gte: from, lte: to } }, select: { amount: true, category: true } }),
@@ -31,7 +32,14 @@ export async function GET(request: Request) {
   const byProduct = new Map<string, { revenue: ReturnType<typeof dec>; qty: ReturnType<typeof dec> }>();
   for (const l of lines) {
     const rev = dec(l.lineTotal), qty = dec(l.quantity);
-    totalSales = totalSales.plus(rev); pieces = pieces.plus(qty); cogs = cogs.plus(qty.times(dec(l.product?.cost ?? 0)));
+    totalSales = totalSales.plus(rev);
+    // التوصيل 🚚 إيرادٌ لا بضاعة — كما في الشاشة تماماً كي لا يختلف الملف عنها.
+    if (isDeliveryDesc(l.description)) {
+      const d = byCategory.get('توصيل') ?? { revenue: dec(0), qty: dec(0) };
+      byCategory.set('توصيل', { revenue: d.revenue.plus(rev), qty: d.qty });
+      continue;
+    }
+    pieces = pieces.plus(qty); cogs = cogs.plus(qty.times(dec(l.product?.cost ?? 0)));
     const cat = l.product?.category?.nameAr ?? 'غير مصنّف';
     const c = byCategory.get(cat) ?? { revenue: dec(0), qty: dec(0) };
     byCategory.set(cat, { revenue: c.revenue.plus(rev), qty: c.qty.plus(qty) });

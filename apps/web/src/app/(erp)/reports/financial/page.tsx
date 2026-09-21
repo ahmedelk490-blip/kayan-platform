@@ -7,6 +7,7 @@ import {
   monthlySeries,
   RECEIVABLE_STATUSES,
   EXPENSE_CATEGORY_AR,
+  DEDUCTION_KINDS,
   type ExpenseCategory,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
@@ -80,9 +81,17 @@ export default async function FinancialReport({
   // بنود «الربح الصافي الشامل» — كل ما خرج فعلاً في المدى: رواتب ومدفوعات
   // الموظفين، تكلفة الهالك المعتمد، والمشتريات المؤكَّدة؛ والجزاءات المحصَّلة
   // تُردّ للربح لأنها استُرجعت من المتسببين.
-  const [salariesAgg, damageAgg, penaltiesAgg, purchasesAgg] = await Promise.all([
+  const [salariesAgg, damageAgg, penaltiesAgg, purchasesAgg, returnsAgg] = await Promise.all([
+    // الأنواع المدفوعة للموظف فقط (راتب/مكافأة/عمولة). الخصم والخسارة والسلفة
+    // مالٌ يعود للشركة لا يخرج منها — جمعُها هنا كان يخصمها من الربح مرتين:
+    // مرةً كتكلفة هالك ومرةً كأنها راتب مدفوع.
     prisma.employeePayment.aggregate({
-      where: { tenantId: user.tenantId, isDeleted: false, paidAt: { gte: from, lte: to } },
+      where: {
+        tenantId: user.tenantId,
+        isDeleted: false,
+        kind: { notIn: DEDUCTION_KINDS },
+        paidAt: { gte: from, lte: to },
+      },
       _sum: { amount: true },
       _count: { _all: true },
     }),
@@ -109,6 +118,13 @@ export default async function FinancialReport({
         orderDate: { gte: from, lte: to },
       },
       _sum: { total: true },
+      _count: { _all: true },
+    }),
+    // المرتجعات: بضاعة رجعت ومالها رُدّ — تُنقص المبيعات، وغيابها كان يترك
+    // فاتورةً رُدَّت بالكامل محسوبةً ربحاً.
+    prisma.salesReturn.aggregate({
+      where: { tenantId: user.tenantId, isDeleted: false, returnDate: { gte: from, lte: to } },
+      _sum: { totalAmount: true },
       _count: { _all: true },
     }),
   ]);
@@ -145,7 +161,9 @@ export default async function FinancialReport({
   const damageOut = dec(damageAgg._sum.totalCost ?? 0);
   const penaltiesIn = dec(penaltiesAgg._sum.amount ?? 0);
   const purchasesOut = dec(purchasesAgg._sum.total ?? 0);
+  const returnsOut = dec(returnsAgg._sum.totalAmount ?? 0);
   const fullNet = invoiced
+    .minus(returnsOut)
     .minus(expenseTotal)
     .minus(salariesOut)
     .minus(damageOut)
@@ -292,11 +310,15 @@ export default async function FinancialReport({
                 <dd className="tnum text-ok">+ {formatMoney(invoiced)}</dd>
               </div>
               <div className="flex justify-between gap-4">
+                <dt className="text-txt-2">المرتجعات <span className="text-[0.7rem] text-txt-4">({returnsAgg._count._all} مرتجع)</span></dt>
+                <dd className="tnum text-bad">− {formatMoney(returnsOut)}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
                 <dt className="text-txt-2">المصروفات المعتمدة</dt>
                 <dd className="tnum text-bad">− {formatMoney(expenseTotal)}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-txt-2">الرواتب ومدفوعات الموظفين <span className="text-[0.7rem] text-txt-4">({salariesAgg._count._all} دفعة)</span></dt>
+                <dt className="text-txt-2">الرواتب والمكافآت <span className="text-[0.7rem] text-txt-4">({salariesAgg._count._all} دفعة — بلا الخصومات والسُّلف)</span></dt>
                 <dd className="tnum text-bad">− {formatMoney(salariesOut)}</dd>
               </div>
               <div className="flex justify-between gap-4">

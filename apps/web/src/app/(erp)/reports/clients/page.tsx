@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { formatMoney, dec } from '@erp/domain';
+import { formatMoney, dec, balance } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import type { SearchParams } from '@/lib/query';
@@ -31,14 +32,37 @@ export default async function ClientsReport({ searchParams }: { searchParams: Pr
       issueDate: { gte: from, lte: to },
     },
     select: {
+      id: true,
       total: true,
       paidAmount: true,
       issueDate: true,
       customerId: true,
       customer: { select: { contactName: true, companyName: true } },
-      lines: { select: { quantity: true, variant: { select: { cost: true, product: { select: { cost: true } } } } } },
+      lines: {
+        select: {
+          quantity: true,
+          // الوصف لاستثناء بند التوصيل 🚚 — مالٌ لا بضاعة لها تكلفة.
+          description: true,
+          variant: { select: { cost: true, product: { select: { cost: true } } } },
+        },
+      },
     },
   });
+
+  // ما أُرجع من كل فاتورة — الدين الحقيقي = (الإجمالي − المرتجع) − المدفوع.
+  const returnsByInvoice = new Map<string, ReturnType<typeof dec>>();
+  if (invoices.length > 0) {
+    const grouped = await prisma.salesReturn.groupBy({
+      by: ['invoiceId'],
+      where: {
+        tenantId: user.tenantId,
+        isDeleted: false,
+        invoiceId: { in: invoices.map((i) => i.id) },
+      },
+      _sum: { totalAmount: true },
+    });
+    for (const g of grouped) returnsByInvoice.set(g.invoiceId, dec(g._sum.totalAmount ?? 0));
+  }
 
   type Row = {
     id: string;
@@ -47,17 +71,26 @@ export default async function ClientsReport({ searchParams }: { searchParams: Pr
     invoiced: ReturnType<typeof dec>;
     collected: ReturnType<typeof dec>;
     cost: ReturnType<typeof dec>;
+    /** المستحق الصافي لهذا العميل — بقاعٍ عند الصفر لكل فاتورة على حدة. */
+    outstanding: ReturnType<typeof dec>;
     last: Date | null;
   };
   const byClient = new Map<string, Row>();
   for (const inv of invoices) {
     const id = inv.customerId;
     const name = inv.customer.companyName ?? inv.customer.contactName;
-    const row = byClient.get(id) ?? { id, name, count: 0, invoiced: dec(0), collected: dec(0), cost: dec(0), last: null };
+    const row =
+      byClient.get(id) ??
+      { id, name, count: 0, invoiced: dec(0), collected: dec(0), cost: dec(0), outstanding: dec(0), last: null };
     row.count += 1;
     row.invoiced = row.invoiced.plus(dec(inv.total));
     row.collected = row.collected.plus(dec(inv.paidAmount));
+    // فاتورةٌ زائدة الدفع لا تُلغي ديناً على فاتورةٍ أخرى — balance تقف عند الصفر.
+    row.outstanding = row.outstanding.plus(
+      balance(dec(inv.total).minus(returnsByInvoice.get(inv.id) ?? dec(0)), inv.paidAmount),
+    );
     for (const l of inv.lines) {
+      if (isDeliveryDesc(l.description)) continue;
       const unitCost = l.variant?.cost ?? l.variant?.product?.cost ?? null;
       if (unitCost !== null) row.cost = row.cost.plus(dec(l.quantity).times(dec(unitCost)));
     }
@@ -69,7 +102,7 @@ export default async function ClientsReport({ searchParams }: { searchParams: Pr
   const rows = [...byClient.values()].sort((a, b) => b.invoiced.minus(a.invoiced).toNumber());
   const totalInvoiced = rows.reduce((s, r) => s.plus(r.invoiced), dec(0));
   const totalCollected = rows.reduce((s, r) => s.plus(r.collected), dec(0));
-  const totalOutstanding = totalInvoiced.minus(totalCollected);
+  const totalOutstanding = rows.reduce((s, r) => s.plus(r.outstanding), dec(0));
 
   const topClients = rows.slice(0, 8).map((r) => ({
     label: r.name,
@@ -109,7 +142,7 @@ export default async function ClientsReport({ searchParams }: { searchParams: Pr
             empty={false}
           >
             {rows.map((r) => {
-              const outstanding = r.invoiced.minus(r.collected);
+              const outstanding = r.outstanding;
               const rate = r.invoiced.lte(0) ? dec(0) : r.collected.dividedBy(r.invoiced).times(100);
               const profit = r.invoiced.minus(r.cost);
               return (

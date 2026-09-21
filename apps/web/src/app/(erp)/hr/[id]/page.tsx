@@ -10,6 +10,7 @@ import {
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import { Figure } from '../../reports/Shell';
@@ -51,17 +52,33 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
       },
       select: {
         total: true,
-        lines: { select: { quantity: true, variant: { select: { cost: true, product: { select: { cost: true } } } } } },
+        lines: {
+          select: {
+            quantity: true,
+            lineTotal: true,
+            // الوصف لتمييز بند التوصيل 🚚 — أجرةُ توصيلٍ ليست بيعاً للمندوب.
+            description: true,
+            variant: { select: { cost: true, product: { select: { cost: true } } } },
+          },
+        },
       },
     }),
   ]);
 
   // أداء الموظف من فواتيره هذه السنة.
+  //
+  // أجور التوصيل تُستبعد من قاعدة العمولة: المندوب لم يبعها، وهي إمّا مبلغ
+  // مرّ على الفاتورة للزبون أو تكلفة علينا — احتسابها ربحاً يدفع عمولة على
+  // مالٍ ليس ربحاً.
   let revenue = dec(0);
   let cost = dec(0);
   for (const inv of invoices) {
-    revenue = revenue.plus(dec(inv.total));
+    const delivery = inv.lines
+      .filter((l) => isDeliveryDesc(l.description))
+      .reduce((s, l) => s.plus(dec(l.lineTotal)), dec(0));
+    revenue = revenue.plus(dec(inv.total)).minus(delivery);
     for (const l of inv.lines) {
+      if (isDeliveryDesc(l.description)) continue;
       const unitCost = l.variant?.cost ?? l.variant?.product?.cost ?? null;
       if (unitCost !== null) cost = cost.plus(dec(l.quantity).times(dec(unitCost)));
     }

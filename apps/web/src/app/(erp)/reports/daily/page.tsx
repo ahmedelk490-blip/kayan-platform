@@ -104,6 +104,11 @@ export default async function DailyPage() {
   const returnsTotal = returns.reduce((s, r) => s.plus(dec(r.totalAmount)), dec(0));
   const expensesTotal = expenses.reduce((s, e) => s.plus(dec(e.amount)), dec(0));
   const pendingExpenses = expenses.filter((e) => e.status === 'PENDING').length;
+  // صافي النقد يخصم المعتمد وحده — كبقية التقارير. خصمُ مطالبةٍ لم تُعتمد
+  // (وقد تُرفض) كان يُظهر الصندوق ناقصاً بمبلغ لم يخرج.
+  const approvedExpenses = expenses
+    .filter((e) => e.status === 'APPROVED')
+    .reduce((s, e) => s.plus(dec(e.amount)), dec(0));
 
   // أفضل الأصناف اليوم — بعدد القطع من بنود فواتير اليوم. بند التوصيل 🚚
   // ليس صنفاً فلا يدخل الترتيب ولا العدّ.
@@ -137,7 +142,7 @@ export default async function DailyPage() {
   const familyRows = [...families.entries()].sort((a, b) => b[1].month - a[1].month);
   const monthPieces = familyRows.reduce((s, [, f]) => s + f.month, 0);
 
-  const cashNet = (byMethod.get('CASH') ?? dec(0)).minus(expensesTotal);
+  const cashNet = (byMethod.get('CASH') ?? dec(0)).minus(approvedExpenses);
 
   return (
     <AppShell user={user} title="يومية اليوم">
