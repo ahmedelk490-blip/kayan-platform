@@ -29,6 +29,14 @@ interface CartLine {
 
 interface Choice { id: string; label: string }
 
+/**
+ * أجرة التوصيل الافتراضية — أشيع رقمٍ في المدينة (بطلب المالك). تُملأ بمجرّد
+ * تشغيل المفتاح فلا يكتبها الكاشير في كل بيعة، وتبقى قابلة للتعديل بضغطة.
+ */
+const DELIVERY_DEFAULT = 5000;
+const DELIVERY_STEP = 1000;
+const DELIVERY_QUICK = [5000, 10000, 15000];
+
 /** لوحة الكاشير: كروت منتجات بالصور، اختيار سريع، وفاتورة تُصدَر وتُحصَّل بضغطة. */
 export function CashierBoard({
   customers,
@@ -51,9 +59,13 @@ export function CashierBoard({
   const [paid, setPaid] = useState(0);
   const [method, setMethod] = useState('CASH');
 
-  // سعر التوصيل: على الزبون (يرتفع الإجمالي) أو علينا (مصروف شحن يُخصم من الربح).
-  const [deliveryFee, setDeliveryFee] = useState(0);
-  const [deliveryOn, setDeliveryOn] = useState<'CUSTOMER' | 'US'>('CUSTOMER');
+  // التوصيل: مفتاح واحد يُشغّله بأجرةٍ افتراضية، ثم مَن يدفعها — على الزبون
+  // (ترفع الإجمالي) أو علينا (مصروف شحن يُخصم من الربح).
+  const [deliveryOn, setDeliveryOn] = useState(false);
+  const [deliveryFee, setDeliveryFee] = useState(DELIVERY_DEFAULT);
+  const [deliveryWho, setDeliveryWho] = useState<'CUSTOMER' | 'US'>('CUSTOMER');
+  /** الأجرة الفعلية: صفرٌ ما دام المفتاح مطفأً مهما كان الرقم المكتوب. */
+  const fee = deliveryOn ? deliveryFee : 0;
 
   // إضافة سريعة بالكتابة: صنف + كمية + سعر من داخل اللوحة — بلا فتح الصور.
   // السعر يُقترح من الشرائح عند الاختيار ويبقى بيد الكاشير (بطلب المالك).
@@ -106,7 +118,7 @@ export function CashierBoard({
   const merchandiseTotal = cart.reduce((s, l) => s.plus(dec(l.quantity).times(dec(l.unitPrice))), dec(0));
   // الإجمالي الظاهر = البضاعة + التوصيل حين يكون على الزبون — كما سيحسبه الخادم.
   const total =
-    deliveryOn === 'CUSTOMER' && deliveryFee > 0 ? merchandiseTotal.plus(dec(deliveryFee)) : merchandiseTotal;
+    deliveryWho === 'CUSTOMER' && fee > 0 ? merchandiseTotal.plus(dec(fee)) : merchandiseTotal;
   const remaining = total.minus(paid);
 
   // إضافة عدة سطور دفعة واحدة (كمية لكل مقاس)، مع دمج المتكرّر بالمتغيّر.
@@ -342,56 +354,129 @@ export function CashierBoard({
           </div>
         </fieldset>
 
-        {/* سعر التوصيل — على الزبون يرفع الإجمالي، وعلينا يُسجَّل مصروف شحن. */}
-        <div className="rounded-xl border border-dashed border-line-2 p-3">
-          <p className="mb-1.5 text-[0.7rem] font-medium text-txt-3">🚚 سعر التوصيل (اختياري)</p>
-          <div className="flex flex-wrap items-center gap-2">
+        {/* التوصيل — مفتاح بعلامة صح: ضغطة تُشغّله بأجرة 5,000 جاهزة، وضغطة
+            تُطفئه. الكاشير على شاشة لمس، فالأهداف كبيرة والرقم لا يُكتب يدوياً
+            إلا عند الحاجة. */}
+        <div
+          className={`rounded-xl border p-3 transition-colors ${
+            deliveryOn ? 'border-brand bg-brand-soft/40' : 'border-dashed border-line-2'
+          }`}
+        >
+          <label className="flex cursor-pointer items-center gap-2.5">
             <input
-              name="deliveryFee"
-              type="number"
-              min="0"
-              dir="ltr"
-              value={deliveryFee}
-              onChange={(e) => setDeliveryFee(Math.max(0, Number(e.target.value) || 0))}
-              className="erp-input w-28 py-2 text-start text-xs"
+              type="checkbox"
+              checked={deliveryOn}
+              onChange={(e) => {
+                setDeliveryOn(e.target.checked);
+                if (e.target.checked && deliveryFee <= 0) setDeliveryFee(DELIVERY_DEFAULT);
+              }}
+              className="sr-only"
             />
-            {(
-              [
-                { value: 'CUSTOMER', label: 'على الزبون' },
-                { value: 'US', label: 'علينا' },
-              ] as const
-            ).map((o) => (
-              <label
-                key={o.value}
-                className="cursor-pointer rounded-full border border-line-2 px-3 py-1.5 text-[0.7rem] font-medium text-txt-2 transition-colors has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:checked]:text-brand"
-              >
+            <span
+              aria-hidden
+              className={`grid h-7 w-7 shrink-0 place-items-center rounded-md border-2 text-sm font-bold transition-colors ${
+                deliveryOn ? 'border-brand bg-brand text-white' : 'border-line-2 text-transparent'
+              }`}
+            >
+              ✓
+            </span>
+            <span className={`text-sm font-semibold ${deliveryOn ? 'text-brand' : 'text-txt-2'}`}>
+              🚚 توصيل
+            </span>
+            {deliveryOn && (
+              <span className="tnum ms-auto text-sm font-bold text-brand">{formatMoney(dec(fee))}</span>
+            )}
+          </label>
+
+          {deliveryOn && (
+            <div className="mt-3 space-y-2.5">
+              {/* الأجرة بأزرار لمس كبيرة — الكتابة اليدوية للحالات الشاذة فقط. */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  aria-label="أنقص"
+                  onClick={() => setDeliveryFee((f) => Math.max(0, f - DELIVERY_STEP))}
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-line-2 text-lg text-txt-2 active:bg-card"
+                >
+                  −
+                </button>
                 <input
-                  type="radio"
-                  name="deliveryOn"
-                  value={o.value}
-                  checked={deliveryOn === o.value}
-                  onChange={() => setDeliveryOn(o.value)}
-                  className="sr-only"
+                  type="number"
+                  min="0"
+                  step={DELIVERY_STEP}
+                  dir="ltr"
+                  value={deliveryFee}
+                  onChange={(e) => setDeliveryFee(Math.max(0, Number(e.target.value) || 0))}
+                  className="erp-input w-24 py-2 text-center text-sm"
                 />
-                {o.label}
-              </label>
-            ))}
-          </div>
-          {deliveryFee > 0 && (
-            <p className="mt-1.5 text-[0.65rem] leading-[1.7] text-txt-4">
-              {deliveryOn === 'CUSTOMER'
-                ? 'يُضاف بند «🚚 أجور توصيل» على الفاتورة — الزبون يدفعه.'
-                : 'الإجمالي لا يتغيّر — يُسجَّل مصروف «شحن وتوصيل» يُخصم من الربح.'}
-            </p>
+                <button
+                  type="button"
+                  aria-label="زد"
+                  onClick={() => setDeliveryFee((f) => f + DELIVERY_STEP)}
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-line-2 text-lg text-txt-2 active:bg-card"
+                >
+                  +
+                </button>
+                <div className="flex flex-wrap gap-1.5">
+                  {DELIVERY_QUICK.map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => setDeliveryFee(q)}
+                      className={`tnum rounded-full border px-2.5 py-1.5 text-[0.7rem] font-medium transition-colors ${
+                        deliveryFee === q
+                          ? 'border-brand bg-brand text-white'
+                          : 'border-line-2 text-txt-2'
+                      }`}
+                    >
+                      {q.toLocaleString('en-US')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* مَن يدفعها — الافتراضي على الزبون، وهو الأشيع. */}
+              <div className="flex flex-wrap gap-1.5">
+                {(
+                  [
+                    { value: 'CUSTOMER', label: 'على الزبون' },
+                    { value: 'US', label: 'علينا' },
+                  ] as const
+                ).map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => setDeliveryWho(o.value)}
+                    className={`rounded-full border px-4 py-2 text-xs font-medium transition-colors ${
+                      deliveryWho === o.value
+                        ? 'border-brand bg-brand text-white'
+                        : 'border-line-2 text-txt-2'
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+
+              <p className="text-[0.65rem] leading-[1.7] text-txt-4">
+                {deliveryWho === 'CUSTOMER'
+                  ? 'يُضاف بند «🚚 أجور توصيل» على الفاتورة — الزبون يدفعه.'
+                  : 'الإجمالي لا يتغيّر — يُسجَّل مصروف «شحن وتوصيل» يُخصم من الربح.'}
+              </p>
+            </div>
           )}
+
+          {/* ما يصل الخادم: صفرٌ حين يكون المفتاح مطفأً. */}
+          <input type="hidden" name="deliveryFee" value={fee} />
+          <input type="hidden" name="deliveryOn" value={deliveryWho} />
         </div>
 
         <div className="flex items-center justify-between border-t border-line pt-3">
           <span className="text-sm text-txt-2">الإجمالي</span>
           <span className="text-end">
             <span className="tnum block text-xl font-bold text-brand">{formatMoney(total)}</span>
-            {deliveryOn === 'CUSTOMER' && deliveryFee > 0 && (
-              <span className="tnum block text-[0.65rem] text-txt-4">منها توصيل {formatMoney(dec(deliveryFee))}</span>
+            {deliveryWho === 'CUSTOMER' && fee > 0 && (
+              <span className="tnum block text-[0.65rem] text-txt-4">منها توصيل {formatMoney(dec(fee))}</span>
             )}
           </span>
         </div>
