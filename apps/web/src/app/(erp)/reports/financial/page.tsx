@@ -24,6 +24,9 @@ import { categoryOf } from '@/app/(erp)/returns/category';
 
 export const metadata: Metadata = { title: 'التقرير المالي' };
 
+/** ألوان شرائح المصروفات — ثابتة بالترتيب فيطابق لونُ الشريط لونَ بنده. */
+const OUTFLOW_TONES = ['bg-brand', 'bg-warn', 'bg-bad', 'bg-txt-3', 'bg-txt-4'];
+
 /**
  * التقرير المالي — الداخل والخارج للفترة.
  *
@@ -162,6 +165,26 @@ export default async function FinancialReport({
   const penaltiesIn = dec(penaltiesAgg._sum.amount ?? 0);
   const purchasesOut = dec(purchasesAgg._sum.total ?? 0);
   const returnsOut = dec(returnsAgg._sum.totalAmount ?? 0);
+
+  /**
+   * بنود «أين ذهبت المبيعات» — مرتّبةً بالأكبر أولاً لا بترتيبٍ ثابت: أكبر
+   * مصرفٍ يجب أن يكون أول ما تقع عليه العين، فهو القرار الذي يستحق النظر.
+   */
+  const outflowRows = [
+    { key: 'purchases', label: 'المشتريات', count: `${purchasesAgg._count._all} أمر`, amount: purchasesOut },
+    { key: 'salaries', label: 'الرواتب والمكافآت', count: `${salariesAgg._count._all} دفعة`, amount: salariesOut },
+    { key: 'expenses', label: 'المصروفات المعتمدة', count: `${expenses.length} مصروف`, amount: expenseTotal },
+    { key: 'returns', label: 'المرتجعات', count: `${returnsAgg._count._all} مرتجع`, amount: returnsOut },
+    { key: 'damage', label: 'الهالك المعتمد', count: `${damageAgg._count._all} محضر`, amount: damageOut },
+  ]
+    .filter((r) => r.amount.gt(0))
+    .sort((a, b) => b.amount.minus(a.amount).toNumber());
+
+  // المقياس = كل ما دخل (مبيعات + جزاءات مستردّة). النسب منه، لا من المبيعات
+  // وحدها، وإلا تجاوز مجموع الشرائح مئةً حين تُسترَدّ جزاءات.
+  const moneyIn = invoiced.plus(penaltiesIn);
+  const share = (v: ReturnType<typeof dec>) =>
+    moneyIn.lte(0) ? 0 : Math.max(0, Math.min(100, v.dividedBy(moneyIn).times(100).toNumber()));
   const fullNet = invoiced
     .minus(returnsOut)
     .minus(expenseTotal)
@@ -169,6 +192,7 @@ export default async function FinancialReport({
     .minus(damageOut)
     .minus(purchasesOut)
     .plus(penaltiesIn);
+  const profitShare = fullNet.gt(0) ? share(fullNet) : 0;
 
   // المصروفات حسب البند.
   const byCategory = new Map<string, ReturnType<typeof dec>>();
@@ -298,49 +322,95 @@ export default async function FinancialReport({
             />
           </div>
 
-          {/* الربح الصافي الشامل — كل الالتزامات مخصومة، بنداً بنداً ثم الرقم. */}
-          <section className="erp-card mb-8 border-s-4 border-s-brand p-5">
-            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
-              <h3 className="text-sm font-semibold text-brand">💰 الربح الصافي الشامل للمدى</h3>
+          {/* الربح الصافي الشامل.
+              الحكم أولاً ثم تفسيره: كان سبعة سطورٍ متشابهة يقرؤها المالك كلها
+              ليعرف أين ذهب ماله. الآن الرقم وحكمُه في الأعلى، وشريطٌ يُري
+              نصيب كل مصرفٍ من المبيعات، والبنود مرتّبةٌ بالأكبر أولاً. */}
+          <section className="erp-card mb-8 overflow-hidden border-s-4 border-s-brand">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
+              <h3 className="text-sm font-semibold text-brand">💰 الربح الصافي الشامل</h3>
               <span className="tnum text-xs text-txt-3">{range.fromStr} ← {range.toStr}</span>
             </div>
-            <dl className="space-y-2 text-sm">
-              <div className="flex justify-between gap-4">
-                <dt className="text-txt-2">المبيعات المفوترة</dt>
-                <dd className="tnum text-ok">+ {formatMoney(invoiced)}</dd>
+
+            {/* الحكم: كلمة ورقم — بلا حساب ذهني. */}
+            <div className={`px-5 py-5 ${fullNet.lt(0) ? 'bg-bad-soft/40' : 'bg-ok-soft/40'}`}>
+              <p className="text-xs font-medium text-txt-2">
+                {fullNet.lt(0) ? 'خسارة في هذه الفترة' : fullNet.isZero() ? 'لا ربح ولا خسارة' : 'ربح صافٍ في هذه الفترة'}
+              </p>
+              <p className={`tnum mt-1 text-3xl font-bold ${fullNet.lt(0) ? 'text-bad' : 'text-ok'}`}>
+                {formatMoney(fullNet)} <span className="text-base font-medium">د.ع</span>
+              </p>
+              {moneyIn.gt(0) && (
+                <p className="mt-1 text-[0.7rem] text-txt-3">
+                  من كل <span className="tnum">100</span> دينار مبيعات، بقي لك{' '}
+                  <strong className="tnum">{Math.round(profitShare)}</strong> ديناراً.
+                </p>
+              )}
+            </div>
+
+            {/* شريط واحد: نصيب كل مصرفٍ من المبيعات، والباقي ربح. */}
+            {moneyIn.gt(0) && (
+              <div className="px-5 pt-4">
+                <div className="flex h-3 w-full overflow-hidden rounded-full bg-card-2">
+                  {outflowRows.map((r, idx) => (
+                    <span
+                      key={r.key}
+                      title={`${r.label} ${formatMoney(r.amount)}`}
+                      style={{ width: `${share(r.amount)}%` }}
+                      className={OUTFLOW_TONES[idx % OUTFLOW_TONES.length]}
+                    />
+                  ))}
+                  {profitShare > 0 && (
+                    <span style={{ width: `${profitShare}%` }} className="bg-ok" title="الربح" />
+                  )}
+                </div>
               </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-txt-2">المرتجعات <span className="text-[0.7rem] text-txt-4">({returnsAgg._count._all} مرتجع)</span></dt>
-                <dd className="tnum text-bad">− {formatMoney(returnsOut)}</dd>
+            )}
+
+            {/* البنود: الأكبر أولاً، كلٌّ بنسبته من المبيعات. */}
+            <dl className="space-y-3 px-5 py-4 text-sm">
+              <div className="flex items-baseline justify-between gap-4 border-b border-line pb-3">
+                <dt className="text-txt-2">
+                  المبيعات المفوترة
+                  {penaltiesIn.gt(0) && (
+                    <span className="text-[0.7rem] text-txt-4"> + جزاءات محصَّلة {formatMoney(penaltiesIn)}</span>
+                  )}
+                </dt>
+                <dd className="tnum font-semibold text-ok">{formatMoney(moneyIn)}</dd>
               </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-txt-2">المصروفات المعتمدة</dt>
-                <dd className="tnum text-bad">− {formatMoney(expenseTotal)}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-txt-2">الرواتب والمكافآت <span className="text-[0.7rem] text-txt-4">({salariesAgg._count._all} دفعة — بلا الخصومات والسُّلف)</span></dt>
-                <dd className="tnum text-bad">− {formatMoney(salariesOut)}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-txt-2">تكلفة الهالك المعتمد <span className="text-[0.7rem] text-txt-4">({damageAgg._count._all} محضر)</span></dt>
-                <dd className="tnum text-bad">− {formatMoney(damageOut)}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-txt-2">المشتريات المؤكَّدة <span className="text-[0.7rem] text-txt-4">({purchasesAgg._count._all} أمر)</span></dt>
-                <dd className="tnum text-bad">− {formatMoney(purchasesOut)}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-txt-2">جزاءات محصَّلة من الموظفين</dt>
-                <dd className="tnum text-ok">+ {formatMoney(penaltiesIn)}</dd>
-              </div>
-              <div className="flex justify-between gap-4 border-t border-line pt-3">
-                <dt className="text-base font-bold text-txt">= الربح الصافي الشامل</dt>
+
+              {outflowRows.length === 0 ? (
+                <p className="py-2 text-xs text-txt-4">لا مصروفات ولا مشتريات في هذه الفترة.</p>
+              ) : (
+                outflowRows.map((r, idx) => (
+                  <div key={r.key} className="flex items-baseline justify-between gap-4">
+                    <dt className="flex min-w-0 items-center gap-2 text-txt-2">
+                      <span
+                        aria-hidden
+                        className={`h-2.5 w-2.5 shrink-0 rounded-sm ${OUTFLOW_TONES[idx % OUTFLOW_TONES.length]}`}
+                      />
+                      <span className="truncate">{r.label}</span>
+                      <span className="shrink-0 text-[0.7rem] text-txt-4">({r.count})</span>
+                    </dt>
+                    <dd className="shrink-0 text-end">
+                      <span className="tnum text-bad">− {formatMoney(r.amount)}</span>
+                      <span className="tnum block text-[0.65rem] text-txt-4">
+                        {Math.round(share(r.amount))}% من المبيعات
+                      </span>
+                    </dd>
+                  </div>
+                ))
+              )}
+
+              <div className="flex items-baseline justify-between gap-4 border-t border-line pt-3">
+                <dt className="text-base font-bold text-txt">= الصافي</dt>
                 <dd className={`tnum text-xl font-bold ${fullNet.lt(0) ? 'text-bad' : 'text-ok'}`}>
                   {formatMoney(fullNet)}
                 </dd>
               </div>
             </dl>
-            <p className="mt-3 text-[0.7rem] leading-[1.8] text-txt-4">
+
+            <p className="border-t border-line px-5 py-3 text-[0.7rem] leading-[1.8] text-txt-4">
               المشتريات تُخصم كإنفاق نقدي في مداها (لا كتكلفة بضاعة مباعة) — فبضاعة اشتريتها
               اليوم وستبيعها الشهر القادم تُخصم اليوم. غيّر المدى أعلاه فيتغيّر كل شيء معه.
             </p>
