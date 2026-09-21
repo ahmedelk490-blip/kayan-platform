@@ -153,6 +153,10 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
 
   MANAGER: [
     'dashboard.view',
+    // صاحب المصنع هو «المدير» في هذا النظام أحاديّ الشركة: حجبُ صفحة إدارة
+    // النظام عنه كان يحجب عنه نسخه الاحتياطية وبياناته هو — ولا يملك أن
+    // يمنح نفسه الصلاحية (المستخدم لا يعدّل صلاحيات نفسه، عمداً).
+    'admin.view',
     'sales.view',
     'sales.documents',
     'sales.write',
