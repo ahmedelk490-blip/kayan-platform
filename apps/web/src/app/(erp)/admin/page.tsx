@@ -105,9 +105,13 @@ export default async function AdminPage() {
           <BackupPanel />
         </Panel>
 
-        <Panel title="تصفير البيانات — البدء من جديد">
-          <ResetPanel counts={await resetCounts()} />
-        </Panel>
+        {/* مُعرَّف ثابت ليُوصَل إليه مباشرةً بـ /admin#reset — اللوحة رابعة في
+            الصفحة وتحتها جدول مستخدمين قد يطول، فالوصول إليها بالتمرير وحده متعب. */}
+        <div id="reset" className="scroll-mt-6">
+          <Panel title="تصفير البيانات — البدء من جديد">
+            <ResetPanel counts={await resetCounts()} />
+          </Panel>
+        </div>
 
         <Panel title="الأدوار والصلاحيات">
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

@@ -116,6 +116,9 @@ export async function resetData(_prev: ResetState, formData: FormData): Promise<
   const done: string[] = [];
 
   try {
+    // سقف Prisma الافتراضي للمعاملة خمس ثوانٍ — لا يكفي لمسح آلاف الصفوف عبر
+    // عشرين جدولاً، فكانت العملية تتراجع كلها برسالة مبهمة. دقيقتان هنا آمنتان:
+    // المسح يجري مرةً في عمر النظام ولا يزاحم بيعاً يومياً.
     await tenantTransaction(async (tx) => {
       const byTenant = { tenantId };
 
@@ -225,7 +228,7 @@ export async function resetData(_prev: ResetState, formData: FormData): Promise<
         });
         done.push('سجل التدقيق');
       }
-    });
+    }, { timeout: 120_000, maxWait: 15_000 });
   } catch (e) {
     return {
       error: `فشل المسح فتراجعت العملية بالكامل — لم تُمسّ أي بيانات. (${e instanceof Error ? e.message : 'خطأ غير معروف'}) ${backupNote}`,

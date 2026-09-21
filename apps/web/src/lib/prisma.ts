@@ -68,14 +68,22 @@ export async function withTenant<T>(
   return base.$transaction(async (tx) => fn(tx));
 }
 
-/** The same, taking the tenant from the request context rather than an argument. */
+/**
+ * The same, taking the tenant from the request context rather than an argument.
+ *
+ * `options` exists for the rare operation that legitimately outlives Prisma's
+ * 5-second interactive-transaction default — a bulk purge, say. Ordinary
+ * writes must NOT raise it: a slow transaction holds row locks, and the
+ * default is what keeps a stuck request from blocking the tills.
+ */
 export async function tenantTransaction<T>(
   fn: (
     tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>,
   ) => Promise<T>,
+  options?: { timeout?: number; maxWait?: number },
 ): Promise<T> {
   void currentTenant();
-  return base.$transaction(async (tx) => fn(tx));
+  return base.$transaction(async (tx) => fn(tx), options);
 }
 
 /**
