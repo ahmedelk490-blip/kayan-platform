@@ -28,6 +28,14 @@ export function ResetPanel({ counts }: { counts: ResetCounts }) {
   const totalRows = [...picked].reduce((s, k) => s + (counts[k as ResetGroupKey] ?? 0), 0);
   const ready = picked.size > 0 && confirm.trim() === 'تصفير';
 
+  /**
+   * اختيارات جاهزة — التأشير اليدوي على عشرة بنود يُخطئ أحدُها فتُرفض العملية
+   * كلها (العملاء لا يُمسحون وفواتيرهم قائمة). هذه تختار المجموعة المتّسقة دفعةً
+   * واحدة؛ ويبقى التعديل اليدوي بعدها متاحاً، وكلمة التأكيد مطلوبة كما هي.
+   */
+  const applyPreset = (keys: ResetGroupKey[]) =>
+    setPicked(new Set(keys.filter((k) => (counts[k] ?? 0) > 0 || k === 'stock')));
+
   return (
     <form action={action} className="space-y-4">
       <p className="text-xs leading-[1.9] text-txt-3">
@@ -43,6 +51,41 @@ export function ResetPanel({ counts }: { counts: ResetCounts }) {
         <summary className="cursor-pointer select-none text-sm font-semibold text-bad">
           ⚠️ فتح أدوات التصفير — اضغط هنا
         </summary>
+
+        {/* اختيارات جاهزة — ضغطة واحدة بدل عشر تأشيرات قد يسقط منها المترابط. */}
+        <div className="mt-4 rounded-lg border border-line bg-card p-3">
+          <p className="mb-2 text-[0.7rem] font-medium text-txt-2">اختيار سريع:</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => applyPreset(['sales', 'customers', 'movements', 'stock'])}
+              className="erp-btn-ghost erp-btn-sm"
+            >
+              📊 تصفير لوحة التحكم — المبيعات والعملاء والمخزون
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                applyPreset([
+                  'sales', 'purchasing', 'expenses', 'damage', 'production',
+                  'movements', 'stock', 'supplies', 'customers', 'suppliers', 'audit',
+                ])
+              }
+              className="erp-btn-ghost erp-btn-sm"
+            >
+              🧹 بداية جديدة بالكامل — كل شيء عدا المنتجات
+            </button>
+            {picked.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setPicked(new Set())}
+                className="erp-btn-ghost erp-btn-sm"
+              >
+                ✕ إلغاء التحديد
+              </button>
+            )}
+          </div>
+        </div>
 
         <div className="mt-4 space-y-2.5">
           {RESET_GROUPS.map((g) => {
