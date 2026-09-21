@@ -8,6 +8,8 @@ import { SeedButton } from './SeedButton';
 import { SubmitButton } from '@/components/crud/Form';
 import { listBackups } from '@/lib/backup';
 import { runBackupNow } from './backup-actions';
+import { ResetPanel } from './ResetPanel';
+import { resetCounts } from './reset-actions';
 
 export const metadata: Metadata = { title: 'الإدارة' };
 
@@ -101,6 +103,10 @@ export default async function AdminPage() {
 
         <Panel title="النسخ الاحتياطي">
           <BackupPanel />
+        </Panel>
+
+        <Panel title="تصفير البيانات — البدء من جديد">
+          <ResetPanel counts={await resetCounts()} />
         </Panel>
 
         <Panel title="الأدوار والصلاحيات">
