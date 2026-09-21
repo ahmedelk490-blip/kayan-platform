@@ -31,6 +31,7 @@ import { ProductImages } from './ProductImages';
 import { PriceTierForm } from './PriceTierForm';
 import { BundleForm } from './BundleForm';
 import { BundleEditForm } from './BundleEditForm';
+import { AddDozenStock } from './AddDozenStock';
 
 export const metadata: Metadata = { title: 'بيانات المنتج' };
 
@@ -79,6 +80,8 @@ export default async function ProductDetailPage({
     select: { id: true, nameAr: true, hex: true },
   });
   const canWrite = can(user.role, 'products.write');
+  // إضافة الرصيد من هنا تكتب حركة مخزون — صلاحيتها مستقلة عن تعديل المنتج.
+  const canStock = can(user.role, 'inventory.write');
 
   // مقاسات هذا المنتج (من متغيّراته) — لتعريف السيريه بتوزيعها. Map يزيل التكرار.
   const productSizes = [
@@ -218,7 +221,7 @@ export default async function ProductDetailPage({
               المتغيّرات ({product.variants.length})
             </h3>
             <Table
-              headers={['الكود', 'اللون', 'المقاس', 'المخزون', 'الحالة', '']}
+              headers={['الكود', 'اللون', 'المقاس', 'المخزون', 'إضافة بالدست', 'الحالة', '']}
               empty={product.variants.length === 0}
             >
               {product.variants.map((v) => {
@@ -245,6 +248,17 @@ export default async function ProductDetailPage({
                     </td>
                     <td className="px-4 py-3 text-txt-2">{v.size?.code ?? '—'}</td>
                     <td className="tnum px-4 py-3 text-txt">{formatQty(onHand)}</td>
+                    <td className="px-4 py-3">
+                      {canStock ? (
+                        <AddDozenStock
+                          variantId={v.id}
+                          perDozen={product.piecesPerDozen}
+                          label={[product.nameAr, v.color?.nameAr, v.size?.code].filter(Boolean).join(' · ')}
+                        />
+                      ) : (
+                        <span className="text-[0.65rem] text-txt-4">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <Badge tone={v.isActive ? 'ok' : 'muted'}>
                         {v.isActive ? 'نشط' : 'موقوف'}

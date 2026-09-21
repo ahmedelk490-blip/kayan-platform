@@ -151,6 +151,9 @@ export async function postMovement(_prev: FormState, formData: FormData): Promis
   });
 
   revalidatePath('/inventory');
+  // صفحة المنتج تعرض رصيد كل متغيّر، والحركة قد تُسجَّل من هناك مباشرة —
+  // بلا هذا السطر يبقى الرقم القديم معروضاً بعد الإضافة.
+  revalidatePath(`/catalog/products/${variant.productId}`);
   return { ok: `تم تسجيل الحركة: ${meta.labelAr} ${quantity}` };
 }
 
