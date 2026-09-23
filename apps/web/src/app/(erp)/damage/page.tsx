@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
-import { can, formatMoney, formatQty, DAMAGE_STATUSES, DAMAGE_STATUS_AR } from '@erp/domain';
+import { can, formatMoney, formatQty, DAMAGE_STATUSES, DAMAGE_STATUS_AR, userCan} from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -30,6 +30,10 @@ export default async function DamagePage({
   searchParams: Promise<SearchParams>;
 }) {
   const user = await requirePermission('damage.view');
+  // رابط أمر الإنتاج لمن يملك فتحه — وإلا رقمٌ نصّي. كان يردّ أمين
+  // المخزن من حيث أتى بلا رسالة على أكثر شاشاته استعمالاً.
+  const canSeeProduction = userCan(user.role, user.overrides, 'manufacturing.view');
+  const seeCosts = userCan(user.role, user.overrides, 'cost.view');
   const params = await searchParams;
   const query = parseListQuery(params, {
     defaultSort: 'damageDate',
@@ -88,10 +92,14 @@ export default async function DamagePage({
       />
 
       <p className="mb-5 text-xs text-txt-3">
-        إجمالي تكلفة الهالك المعتمد:{' '}
-        <span className="tnum font-medium text-brand">
-          {formatMoney(approved._sum.totalCost ?? 0)}
-        </span>{' '}
+        {seeCosts ? (
+          <>
+            إجمالي تكلفة الهالك المعتمد:{' '}
+            <span className="tnum font-medium text-brand">
+              {formatMoney(approved._sum.totalCost ?? 0)}
+            </span>{' '}
+          </>
+        ) : null}
         — المعتمد فقط، لأن المحضر غير المعتمد ليس تكلفة بعد.
       </p>
 
@@ -124,7 +132,11 @@ export default async function DamagePage({
       </div>
 
       <Table
-        headers={['الرقم', 'التاريخ', 'الموظف', 'القسم', 'المنتج', 'أمر الإنتاج', 'الكمية', 'التكلفة', 'جزاءات', 'الحالة', '']}
+        headers={[
+          'الرقم', 'التاريخ', 'الموظف', 'القسم', 'المنتج', 'أمر الإنتاج', 'الكمية',
+          ...(seeCosts ? ['التكلفة'] : []),
+          'جزاءات', 'الحالة', '',
+        ]}
         empty={rows.length === 0}
       >
         {rows.map((row) => (
@@ -142,6 +154,7 @@ export default async function DamagePage({
             <td className="px-4 py-3 text-txt-3">{row.product?.nameAr ?? row.productLabel ?? '—'}</td>
             <td className="tnum px-4 py-3">
               {row.productionOrder ? (
+                canSeeProduction ? (
                 <Link
                   href={`/manufacturing/${row.productionOrder.id}`}
                   dir="ltr"
@@ -149,14 +162,19 @@ export default async function DamagePage({
                 >
                   {row.productionOrder.number}
                 </Link>
+                ) : (
+                  <span dir="ltr" className="text-txt-3">{row.productionOrder.number}</span>
+                )
               ) : (
                 <span className="text-txt-4">—</span>
               )}
             </td>
             <td className="tnum px-4 py-3 text-txt-2">{formatQty(row.quantity)}</td>
-            <td className="tnum px-4 py-3 font-medium text-brand">
-              {formatMoney(row.totalCost)}
-            </td>
+            {seeCosts && (
+              <td className="tnum px-4 py-3 font-medium text-brand">
+                {formatMoney(row.totalCost)}
+              </td>
+            )}
             <td className="tnum px-4 py-3 text-txt-3">
               {row._count.penalties > 0 ? row._count.penalties : '—'}
             </td>

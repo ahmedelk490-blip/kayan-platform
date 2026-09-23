@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { dec, isSupplyKind, isSupplyTxType, supplyDelta, SUPPLY_CATEGORIES } from '@erp/domain';
+import { dec, isSupplyKind, isSupplyTxType, supplyDelta, movingAverageCost, SUPPLY_CATEGORIES } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
@@ -205,6 +205,17 @@ export async function recordSupplyTransaction(
   const totalCost = quantity.times(unitCost);
   const delta = supplyDelta(parsed.data.type as 'PURCHASE' | 'CONSUMPTION', quantity);
 
+  // الاستهلاك لا يُنزل الرصيد تحت الصفر — كما يمنعه مخزون المنتجات تماماً.
+  // كتابة ٥٠ استهلاكاً على رصيد ٥ كانت تترك «−٤٥» يُقرأ نفاداً بعجزٍ وهمي
+  // ويُقيَّم بالسالب في تقرير المخزون.
+  if (delta.isNegative() && dec(supply.onHand).plus(delta).isNegative()) {
+    return {
+      fieldErrors: {
+        quantity: `الرصيد الحالي ${supply.onHand.toString()} ${supply.unit ?? ''} لا يكفي لهذا الاستهلاك.`,
+      },
+    };
+  }
+
   await tenantTransaction(async (tx) => {
     await tx.supplyTransaction.create({
       data: {
@@ -221,13 +232,24 @@ export async function recordSupplyTransaction(
       },
     });
 
+    // الشراء يُحدِّث المتوسط المرجّح كما يفعل استلام المشتريات تماماً: كان
+    // يُحدِّث آخر سعرٍ وحده ويترك avgCost صفراً، فيأتي أول استلامٍ لاحق
+    // فيجد متوسطاً صفراً ويعتمد سعره هو على كل الرصيد — تقييمٌ مضخَّم.
+    const isPurchase = parsed.data.type === 'PURCHASE' && unitCost.gt(0);
     await tx.supply.update({
       where: { id: supply.id },
       data: {
-        onHand: dec(supply.onHand).plus(delta).toString(),
-        // A purchase tells us today's price; consumption does not.
-        ...(parsed.data.type === 'PURCHASE' && unitCost.gt(0)
-          ? { lastUnitCost: unitCost.toString() }
+        onHand: { increment: delta.toNumber() },
+        ...(isPurchase
+          ? {
+              lastUnitCost: unitCost.toString(),
+              avgCost: movingAverageCost(
+                supply.onHand,
+                supply.avgCost,
+                quantity,
+                unitCost,
+              ).toString(),
+            }
           : {}),
       },
     });

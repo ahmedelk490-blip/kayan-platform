@@ -175,11 +175,13 @@ export async function ProductsArea({
                         barcode: row.barcode,
                         categoryId: row.categoryId,
                         descriptionAr: row.descriptionAr,
-                        cost: row.cost === null ? null : Number(row.cost.toString()),
+                        // التكلفة تُحجب عن المتصفح لمن لا يملك صلاحيتها.
+                        cost: !seeCosts || row.cost === null ? null : Number(row.cost.toString()),
                         sellingPrice:
                           row.sellingPrice === null ? null : Number(row.sellingPrice.toString()),
                         piecesPerDozen: row.piecesPerDozen,
-                        dozenCost: row.dozenCost === null ? null : Number(row.dozenCost.toString()),
+                        dozenCost:
+                          !seeCosts || row.dozenCost === null ? null : Number(row.dozenCost.toString()),
                         dozenPrice: row.dozenPrice === null ? null : Number(row.dozenPrice.toString()),
                         status: row.status,
                       }}

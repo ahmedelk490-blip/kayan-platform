@@ -9,8 +9,7 @@ import {
   SUPPLY_KIND_AR,
   SUPPLY_CATEGORY_AR,
   SUPPLY_TX_TYPE_AR,
-  type SupplyKind,
-} from '@erp/domain';
+  type SupplyKind, userCan,} from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -29,6 +28,10 @@ export default async function SuppliesPage({
   searchParams: Promise<SearchParams>;
 }) {
   const user = await requirePermission('supplies.view');
+  // رابط أمر الإنتاج لمن يملك فتحه — وإلا رقمٌ نصّي. كان يردّ أمين
+  // المخزن من حيث أتى بلا رسالة على أكثر شاشاته استعمالاً.
+  const canSeeProduction = userCan(user.role, user.overrides, 'manufacturing.view');
+  const seeCosts = userCan(user.role, user.overrides, 'cost.view');
   const params = await searchParams;
   const kindFilter = Array.isArray(params.kind) ? params.kind[0] : params.kind;
   const month = monthRange(Array.isArray(params.month) ? params.month[0] : params.month);
@@ -88,11 +91,18 @@ export default async function SuppliesPage({
           <span className="tnum text-xs text-txt-3">{month.key}</span>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Figure label="مشتريات" value={formatMoney(purchases)} strong />
-          <Figure label="استهلاك محمَّل" value={formatMoney(consumption)} />
-          {spendByKind.map((s) => (
-            <Figure key={s.kind} label={`مشتريات ${SUPPLY_KIND_AR[s.kind]}`} value={formatMoney(s.total)} />
-          ))}
+          {/* أرقام الإنفاق للمدير وحده — أمين المخزن يتابع الأرصدة لا الأسعار. */}
+          {seeCosts ? (
+            <>
+              <Figure label="مشتريات" value={formatMoney(purchases)} strong />
+              <Figure label="استهلاك محمَّل" value={formatMoney(consumption)} />
+              {spendByKind.map((s) => (
+                <Figure key={s.kind} label={`مشتريات ${SUPPLY_KIND_AR[s.kind]}`} value={formatMoney(s.total)} />
+              ))}
+            </>
+          ) : (
+            <Figure label="حركات هذا الشهر" value={`${transactions.length} حركة`} />
+          )}
         </div>
         <p className="mt-3 text-[0.7rem] text-txt-4">
           «مشتريات» هو ما خرج من الخزينة هذا الشهر. «استهلاك» هو ما احترق في الإنتاج —
@@ -127,7 +137,7 @@ export default async function SuppliesPage({
       </div>
 
       <Table
-        headers={['الكود', 'الاسم', 'النوع', 'الفئة', 'الرصيد', 'الوحدة', 'آخر سعر', 'الحد الأدنى', ...(canWrite ? [''] : [])]}
+        headers={['الكود', 'الاسم', 'النوع', 'الفئة', 'الرصيد', 'الوحدة', ...(seeCosts ? ['آخر سعر'] : []), 'الحد الأدنى', ...(canWrite ? [''] : [])]}
         empty={supplies.length === 0}
       >
         {supplies.map((s) => {
@@ -154,9 +164,11 @@ export default async function SuppliesPage({
                 )}
               </td>
               <td className="px-4 py-3 text-txt-3">{s.unit ?? '—'}</td>
-              <td className="tnum px-4 py-3 text-txt-3">
-                {s.lastUnitCost === null ? '—' : formatMoney(s.lastUnitCost)}
-              </td>
+              {seeCosts && (
+                <td className="tnum px-4 py-3 text-txt-3">
+                  {s.lastUnitCost === null ? '—' : formatMoney(s.lastUnitCost)}
+                </td>
+              )}
               <td className="tnum px-4 py-3 text-txt-4">{formatQty(s.minStock)}</td>
               {canWrite && (
                 <td className="px-4 py-3 text-end">
@@ -209,7 +221,7 @@ export default async function SuppliesPage({
       <section className="mt-8">
         <h3 className="mb-3 text-sm font-semibold text-brand">حركات {month.key}</h3>
         <Table
-          headers={['التاريخ', 'المستلزم', 'الحركة', 'الكمية', 'تكلفة الوحدة', 'الإجمالي', 'أمر الإنتاج']}
+          headers={['التاريخ', 'المستلزم', 'الحركة', 'الكمية', ...(seeCosts ? ['تكلفة الوحدة', 'الإجمالي'] : []), 'أمر الإنتاج']}
           empty={transactions.length === 0}
         >
           {transactions.map((t) => (
@@ -229,10 +241,15 @@ export default async function SuppliesPage({
               <td className="tnum px-4 py-3 text-txt-2">
                 {formatQty(t.quantity)} {t.supply.unit ?? ''}
               </td>
-              <td className="tnum px-4 py-3 text-txt-3">{formatMoney(t.unitCost)}</td>
-              <td className="tnum px-4 py-3 font-medium text-txt">{formatMoney(t.totalCost)}</td>
+              {seeCosts && (
+                <>
+                  <td className="tnum px-4 py-3 text-txt-3">{formatMoney(t.unitCost)}</td>
+                  <td className="tnum px-4 py-3 font-medium text-txt">{formatMoney(t.totalCost)}</td>
+                </>
+              )}
               <td className="tnum px-4 py-3">
                 {t.productionOrder ? (
+                  canSeeProduction ? (
                   <Link
                     href={`/manufacturing/${t.productionOrder.id}`}
                     dir="ltr"
@@ -240,6 +257,9 @@ export default async function SuppliesPage({
                   >
                     {t.productionOrder.number}
                   </Link>
+                  ) : (
+                    <span dir="ltr" className="text-txt-3">{t.productionOrder.number}</span>
+                  )
                 ) : (
                   <span className="text-txt-4">—</span>
                 )}

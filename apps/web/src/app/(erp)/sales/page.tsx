@@ -11,6 +11,7 @@ import {
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { returnsByInvoice, netOwed } from '@/lib/receivables';
 import { AppShell } from '@/components/AppShell';
 import { WelcomeHeader } from '@/components/dashboard/WelcomeHeader';
 import { StatCard } from '@/components/dashboard/StatCard';
@@ -66,7 +67,7 @@ export default async function SalesDashboard() {
       seeMoney
         ? prisma.invoice.findMany({
             where: { tenantId, isDeleted: false, ...ownerScope, status: { notIn: ['DRAFT', 'VOID'] } },
-            select: { total: true, paidAmount: true, status: true },
+            select: { id: true, total: true, paidAmount: true, status: true },
           })
         : [],
       seeCustomers ? prisma.customer.count({ where: { tenantId, isDeleted: false } }) : 0,
@@ -107,9 +108,13 @@ export default async function SalesDashboard() {
 
   const invoiced = invoiceRows.reduce((s, i) => s.plus(dec(i.total)), dec(0));
   const collected = invoiceRows.reduce((s, i) => s.plus(dec(i.paidAmount)), dec(0));
-  const outstanding = invoiceRows
-    .filter((i) => RECEIVABLE_STATUSES.includes(i.status as never))
-    .reduce((s, i) => s.plus(balance(i.total, i.paidAmount)), dec(0));
+  // المستحق بعد خصم المرتجعات — نفس قاعدة اللوحة، فلا يختلف رقمان لشيء واحد.
+  const receivableRows = invoiceRows.filter((i) => RECEIVABLE_STATUSES.includes(i.status as never));
+  const invoiceReturns = await returnsByInvoice(user.tenantId, receivableRows.map((i) => i.id));
+  const outstanding = receivableRows.reduce(
+    (s, i) => s.plus(balance(netOwed(i, invoiceReturns), i.paidAmount)),
+    dec(0),
+  );
 
   // سلسلة المبيعات الشهرية لهذه السنة — الرسم الوحيد في اللوحة.
   const { from, to } = periodRange('YEAR');

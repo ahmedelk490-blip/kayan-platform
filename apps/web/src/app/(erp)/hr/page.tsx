@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { dec, formatMoney, paymentSign, iraqNow, iraqMidnight } from '@erp/domain';
+import { dec, formatMoney, paymentSign, iraqNow, iraqMidnight, userCan, DEDUCTION_KINDS } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -18,6 +18,11 @@ export const metadata: Metadata = { title: 'الرواتب والموظفين' }
  */
 export default async function HRPage() {
   const user = await requirePermission('hr.manage');
+  const seeProfit = userCan(user.role, user.overrides, 'cost.margin');
+  // إنشاء الحسابات وإيقافها من صلاحية إدارة المستخدمين لا من الرواتب:
+  // كانت أزرارها تظهر لمن يصرف الرواتب فيملأ النموذج ويُرمى خارج الصفحة
+  // بلا رسالة ولا حفظ.
+  const canManageAccounts = userCan(user.role, user.overrides, 'users.manage');
   // حدود السنة والشهر بيوم بغداد — كباقي النظام.
   const ref = iraqNow();
   const yearStart = iraqMidnight(ref.getUTCFullYear(), 0, 1);
@@ -38,9 +43,16 @@ export default async function HRPage() {
       select: { employeeId: true, kind: true, amount: true },
     }),
     grantableRoles(),
-    // مدفوعات هذا الشهر — كم خرج للموظفين فعلاً.
+    // مدفوعات هذا الشهر — كم خرج للموظفين فعلاً. الأنواع المدفوعة وحدها:
+    // الخصم والسلفة والخسارة مالٌ يعود للشركة، وجمعُها هنا كان يضخّم الرقم
+    // بضعف قيمتها (٥٠٠ راتب + ١٠٠ خصم كانت تُعرض ٦٠٠ والحقيقة ٤٠٠).
     prisma.employeePayment.aggregate({
-      where: { tenantId: user.tenantId, isDeleted: false, paidAt: { gte: monthStart } },
+      where: {
+        tenantId: user.tenantId,
+        isDeleted: false,
+        kind: { notIn: DEDUCTION_KINDS },
+        paidAt: { gte: monthStart },
+      },
       _sum: { amount: true },
       _count: { _all: true },
     }),
@@ -73,7 +85,7 @@ export default async function HRPage() {
         count={employees.length}
         action={
           <div className="flex flex-wrap gap-2">
-            <EmployeeCreateModal roles={roles} />
+            {canManageAccounts && <EmployeeCreateModal roles={roles} />}
             <SalaryRunModal />
             <PaymentModal employees={employeeOptions} />
           </div>
@@ -122,7 +134,7 @@ export default async function HRPage() {
       </div>
 
       <Table
-        headers={['الموظف', 'الدور', 'الراتب الشهري', 'العمولة %', 'صُرف هذه السنة', 'الحالة', '']}
+        headers={['الموظف', 'الدور', 'الراتب الشهري', ...(seeProfit ? ['العمولة %'] : []), 'صُرف هذه السنة', 'الحالة', '']}
         empty={employees.length === 0}
       >
         {employees.map((e) => (
@@ -130,7 +142,9 @@ export default async function HRPage() {
             <td className="px-4 py-3 text-txt">{e.nameAr ?? e.name}</td>
             <td className="px-4 py-3 text-txt-3">{e.role.nameAr}</td>
             <td className="tnum px-4 py-3 text-txt-2">{e.monthlySalary === null ? '—' : formatMoney(e.monthlySalary)}</td>
-            <td className="tnum px-4 py-3 text-txt-2">{e.commissionPercent === null ? '—' : `${dec(e.commissionPercent).toFixed(1)}٪`}</td>
+            {seeProfit && (
+              <td className="tnum px-4 py-3 text-txt-2">{e.commissionPercent === null ? '—' : `${dec(e.commissionPercent).toFixed(1)}٪`}</td>
+            )}
             <td className="tnum px-4 py-3 font-medium text-brand">{formatMoney(paidByEmployee.get(e.id) ?? dec(0))}</td>
             <td className="px-4 py-3">
               <span className={`rounded-full px-2.5 py-1 text-[0.7rem] ${e.isActive ? 'bg-ok-soft text-ok' : 'bg-bad-soft text-bad'}`}>
@@ -148,7 +162,9 @@ export default async function HRPage() {
                   roles={roles}
                 />
                 <Link href={`/hr/${e.id}`} className="text-xs text-brand hover:underline">الكشف</Link>
-                {e.id !== user.id && <EmployeeActiveToggle employeeId={e.id} active={e.isActive} />}
+                {canManageAccounts && e.id !== user.id && (
+                  <EmployeeActiveToggle employeeId={e.id} active={e.isActive} />
+                )}
               </div>
             </td>
           </tr>

@@ -15,8 +15,7 @@ import {
   isDamageStatus,
   isPenaltyStatus,
   type DamageStatus,
-  type PenaltyStatus,
-} from '@erp/domain';
+  type PenaltyStatus, userCan,} from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -49,6 +48,10 @@ export default async function DamageDetailPage({
   searchParams: Promise<SearchParams>;
 }) {
   const user = await requirePermission('damage.view');
+  // رابط أمر الإنتاج لمن يملك فتحه — وإلا رقمٌ نصّي. كان يردّ أمين
+  // المخزن من حيث أتى بلا رسالة على أكثر شاشاته استعمالاً.
+  const canSeeProduction = userCan(user.role, user.overrides, 'manufacturing.view');
+  const seeCosts = userCan(user.role, user.overrides, 'cost.view');
   const { id } = await params;
   const sp = await searchParams;
   const errKey = Array.isArray(sp.err) ? sp.err[0] : sp.err;
@@ -160,14 +163,17 @@ export default async function DamageDetailPage({
         </Badge>
         <span className="tnum">{damage.damageDate.toLocaleDateString('ar-EG')}</span>
         <span className="tnum">الكمية التالفة: {formatQty(damage.quantity)}</span>
-        {damage.productionOrder && (
+        {damage.productionOrder &&
+          (canSeeProduction ? (
           <Link
             href={`/manufacturing/${damage.productionOrder.id}`}
             className="text-brand underline"
           >
             أمر الإنتاج {damage.productionOrder.number}
           </Link>
-        )}
+          ) : (
+            <span className="text-txt-3">أمر الإنتاج {damage.productionOrder.number}</span>
+          ))}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
@@ -182,7 +188,7 @@ export default async function DamageDetailPage({
               <h3 className="text-sm font-semibold text-brand">الجزاءات</h3>
               <span className="text-[0.7rem] text-txt-4">
                 الحد الأقصى للجزاء = قيمة الهالك بسعر البيع {formatMoney(charge)}
-                {!charge.eq(dec(damage.totalCost)) && (
+                {seeCosts && !charge.eq(dec(damage.totalCost)) && (
                   <span className="text-txt-4"> (تكلفتها {formatMoney(damage.totalCost)})</span>
                 )}
               </span>
@@ -281,16 +287,19 @@ export default async function DamageDetailPage({
         </div>
 
         <aside className="space-y-6">
-          <section className="erp-card p-5">
-            <h3 className="mb-3 text-sm font-semibold text-brand">التكلفة</h3>
-            <dl className="space-y-2 text-sm">
-              <Row label="خامات" value={formatMoney(damage.materialCost)} />
-              <Row label="عمالة" value={formatMoney(damage.laborCost)} />
-              <div className="border-t border-line pt-2">
-                <Row label="الإجمالي" value={formatMoney(damage.totalCost)} strong />
-              </div>
-            </dl>
-          </section>
+          {/* تفصيل التكلفة للمدير وحده — سعر جملةٍ لا يخصّ من يحرّر المحضر. */}
+          {seeCosts && (
+            <section className="erp-card p-5">
+              <h3 className="mb-3 text-sm font-semibold text-brand">التكلفة</h3>
+              <dl className="space-y-2 text-sm">
+                <Row label="خامات" value={formatMoney(damage.materialCost)} />
+                <Row label="عمالة" value={formatMoney(damage.laborCost)} />
+                <div className="border-t border-line pt-2">
+                  <Row label="الإجمالي" value={formatMoney(damage.totalCost)} strong />
+                </div>
+              </dl>
+            </section>
+          )}
 
           <section className="erp-card p-5">
             <h3 className="mb-3 text-sm font-semibold text-brand">التفاصيل</h3>

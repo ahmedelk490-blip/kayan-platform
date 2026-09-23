@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
+  can,
   dec,
   formatMoney,
   paymentSign,
@@ -21,6 +22,9 @@ export const metadata: Metadata = { title: 'كشف الموظف' };
 
 export default async function EmployeeStatement({ params }: { params: Promise<{ id: string }> }) {
   const user = await requirePermission('hr.manage');
+  // الربح والعمولة أرقامٌ للمالك وحده: مَن يصرف الرواتب لا يلزمه أن يعرف
+  // ربح المصنع من فواتير كل مندوب (قاعدة المالك: الجملة والربح للمدير فقط).
+  const seeProfit = can(user.role, 'cost.margin');
   const { id } = await params;
   const year = new Date().getFullYear();
   const yearStart = new Date(year, 0, 1);
@@ -85,7 +89,7 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
   }
   const profit = revenue.minus(cost);
   const commissionRate = employee.commissionPercent === null ? dec(0) : dec(employee.commissionPercent);
-  const commissionDue = profit.gt(0) ? profit.times(commissionRate).dividedBy(100) : dec(0);
+  const commissionEarned = profit.gt(0) ? profit.times(commissionRate).dividedBy(100) : dec(0);
 
   // ما صُرف له وما خُصم منه (كل السجلّ).
   let paidOut = dec(0);
@@ -96,6 +100,15 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
     if (paymentSign(p.kind) < 0) deducted = deducted.plus(dec(p.amount));
     else paidOut = paidOut.plus(dec(p.amount));
   }
+  // العمولة المستحقة = ما استحقّه ناقص ما صُرف له منها فعلاً.
+  //
+  // كانت محسوبةً من ربح السنة وحده، فتبقى «١٥٠٬٠٠٠ مستحقة» بعد صرفها —
+  // فتُصرف مرة أخرى. الآن تنزل بما دُفع تحت بند عمولة وتصل صفراً.
+  const commissionPaid = payments
+    .filter((p) => p.kind === 'COMMISSION')
+    .reduce((s, p) => s.plus(dec(p.amount)), dec(0));
+  const commissionDue = commissionEarned.minus(commissionPaid);
+
   const penaltyTotal = penalties.reduce((s, p) => s.plus(dec(p.amount)), dec(0));
   const netPaid = paidOut.minus(deducted).minus(penaltyTotal);
 
@@ -117,8 +130,23 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Figure label="الراتب الشهري" value={employee.monthlySalary === null ? '—' : formatMoney(employee.monthlySalary)} hint={employee.role.nameAr} />
-        <Figure label={`ربح فواتيره (${year})`} value={formatMoney(profit)} hint={`${invoices.length} فاتورة`} strong tone={profit.lt(0) ? 'bad' : undefined} />
-        <Figure label="العمولة المستحقة" value={formatMoney(commissionDue)} hint={`${commissionRate.toFixed(1)}٪ من الربح`} />
+        {seeProfit ? (
+          <>
+            <Figure label={`ربح فواتيره (${year})`} value={formatMoney(profit)} hint={`${invoices.length} فاتورة`} strong tone={profit.lt(0) ? 'bad' : undefined} />
+            <Figure
+              label="العمولة المتبقية"
+              value={formatMoney(commissionDue.lt(0) ? dec(0) : commissionDue)}
+              hint={
+                commissionPaid.gt(0)
+                  ? `استحقّ ${formatMoney(commissionEarned)} · صُرف ${formatMoney(commissionPaid)}`
+                  : `${commissionRate.toFixed(1)}٪ من الربح`
+              }
+            />
+          </>
+        ) : (
+          // بديلٌ لا يكشف ربحاً: عدد الفواتير وحده يكفي من يصرف الراتب.
+          <Figure label={`فواتيره (${year})`} value={String(invoices.length)} hint="فاتورة" />
+        )}
         <Figure
           label="المحمّل عليه"
           value={formatMoney(deducted.plus(penaltyTotal))}

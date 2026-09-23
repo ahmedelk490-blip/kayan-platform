@@ -200,10 +200,12 @@ export default async function ProductDetailPage({
             // input surface and the server recalculates on submit.
             values={{
               ...product,
-              cost: product.cost === null ? null : dec(product.cost).toNumber(),
+              // التكلفة لا تُرسَل لمن لا يملك صلاحيتها — لا تصل المتصفح أصلاً.
+              cost: !seeCosts || product.cost === null ? null : dec(product.cost).toNumber(),
+              dozenCost:
+                !seeCosts || product.dozenCost === null ? null : dec(product.dozenCost).toNumber(),
               sellingPrice:
                 product.sellingPrice === null ? null : dec(product.sellingPrice).toNumber(),
-              dozenCost: product.dozenCost === null ? null : dec(product.dozenCost).toNumber(),
               dozenPrice: product.dozenPrice === null ? null : dec(product.dozenPrice).toNumber(),
             }}
             categories={options.categories}

@@ -12,6 +12,7 @@ import {
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { returnsByInvoice, netOwed } from '@/lib/receivables';
 import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
@@ -68,7 +69,7 @@ export default async function FinancialReport({
     }),
     prisma.invoice.findMany({
       where: { tenantId: user.tenantId, isDeleted: false, status: { in: RECEIVABLE_STATUSES } },
-      select: { total: true, paidAmount: true },
+      select: { id: true, total: true, paidAmount: true },
     }),
     prisma.secondaryExpense.findMany({
       where: {
@@ -153,7 +154,12 @@ export default async function FinancialReport({
 
   const invoiced = invoices.reduce((s, i) => s.plus(dec(i.total)), dec(0));
   const collected = invoices.reduce((s, i) => s.plus(dec(i.paidAmount)), dec(0));
-  const outstanding = receivable.reduce((s, i) => s.plus(balance(i.total, i.paidAmount)), dec(0));
+  // المستحق بعد خصم المرتجعات — فاتورةٌ عادت بضاعتها ليست ديناً قائماً.
+  const invoiceReturns = await returnsByInvoice(user.tenantId, receivable.map((i) => i.id));
+  const outstanding = receivable.reduce(
+    (s, i) => s.plus(balance(netOwed(i, invoiceReturns), i.paidAmount)),
+    dec(0),
+  );
   const expenseTotal = expenses.reduce((s, e) => s.plus(dec(e.amount)), dec(0));
   const net = invoiced.minus(expenseTotal);
   const cashFlow = collected.minus(expenseTotal);

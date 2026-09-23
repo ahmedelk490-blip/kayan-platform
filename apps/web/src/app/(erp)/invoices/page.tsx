@@ -21,6 +21,7 @@ import {
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { returnsByInvoice, netOwed } from '@/lib/receivables';
 import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
 import { Toolbar } from '@/components/crud/Toolbar';
@@ -132,15 +133,20 @@ export default async function InvoicesPage({
     // not a claim, and a void one never was.
     prisma.invoice.findMany({
       where: { tenantId: user.tenantId, isDeleted: false, ...ownerScope, status: { in: RECEIVABLE_STATUSES } },
-      select: { total: true, paidAmount: true, dueDate: true },
+      select: { id: true, total: true, paidAmount: true, dueDate: true },
     }),
   ]);
 
+  // المستحق بعد خصم المرتجعات — بضاعةٌ عادت ليست ديناً.
+  const invoiceReturns = await returnsByInvoice(user.tenantId, receivable.map((i) => i.id));
   const ageing = ageingTotals(
-    receivable.map((i) => ({ dueDate: i.dueDate, outstanding: balance(i.total, i.paidAmount) })),
+    receivable.map((i) => ({
+      dueDate: i.dueDate,
+      outstanding: balance(netOwed(i, invoiceReturns), i.paidAmount),
+    })),
   );
   const totalOutstanding = receivable.reduce(
-    (sum, i) => sum.plus(balance(i.total, i.paidAmount)),
+    (sum, i) => sum.plus(balance(netOwed(i, invoiceReturns), i.paidAmount)),
     dec(0),
   );
 

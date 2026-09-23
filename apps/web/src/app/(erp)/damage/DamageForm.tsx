@@ -38,11 +38,14 @@ export function DamageForm({
   services,
   employees = [],
   variants = [],
+  seeCosts = true,
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
   products: DamageProduct[];
   colors: Option[];
   services: Option[];
+  /** تُعرض أرقام التكلفة؟ تُغلق عن غير المدير — تُحسب على الخادم كما هي. */
+  seeCosts?: boolean;
   /** الموظف المتسبب (اختياري) — عند اعتماد الهالك يُنشأ له جزاء بقيمة التكلفة. */
   employees?: Option[];
   /** متغيّرات المستأجر — لحلّ (منتج×لون×مقاس) فيُخصم الهالك من مخزونه عند الاعتماد. */
@@ -149,7 +152,9 @@ export function DamageForm({
           )}
         </label>
 
-        {/* ٥) التكلفة اليدوية (اختياري) — تتجاوز الحساب التلقائي إن مُلئت */}
+        {/* ٥) التكلفة اليدوية (اختياري) — تتجاوز الحساب التلقائي إن مُلئت.
+            تغيب عمّن لا يملك صلاحية التكلفة؛ يحسبها الخادم من بطاقة المنتج. */}
+        {seeCosts && (
         <label className="block">
           <span className="mb-1.5 block text-xs text-txt-2">التكلفة (يدوي — اختياري)</span>
           <input
@@ -167,6 +172,7 @@ export function DamageForm({
             <span className="mt-1 block text-[0.7rem] text-bad">{state.fieldErrors.manualCost}</span>
           )}
         </label>
+        )}
 
         {/* ٦) الموظف المتسبب (اختياري) — يتولّد له جزاء تلقائي عند الاعتماد */}
         {employees.length > 0 && (
@@ -193,7 +199,8 @@ export function DamageForm({
         />
       </label>
 
-      {/* إجمالي الهالك — يظهر حيّاً قبل الحفظ */}
+      {/* إجمالي الهالك — يظهر حيّاً قبل الحفظ، ولمن يملك صلاحية التكلفة وحده. */}
+      {seeCosts && (
       <div className="flex items-center justify-between rounded-xl border border-line bg-card-2 px-4 py-3">
         <span className="text-xs text-txt-2">
           إجمالي تكلفة الهالك
@@ -203,15 +210,18 @@ export function DamageForm({
           {shownTotal !== null ? formatMoney(shownTotal) : '—'}
         </span>
       </div>
+      )}
 
       <div className="flex items-center gap-3">
         <SubmitButton label="تسجيل الهالك" />
         {state.ok && <span className="text-xs text-ok">{state.ok}</span>}
       </div>
       <p className="text-[0.7rem] leading-[1.8] text-txt-4">
-        التكلفة تُحسب تلقائياً من تكلفة قطعة المنتج × العدد — أو اكتبها يدوياً في خانة «التكلفة»
-        لتتجاوز الحساب التلقائي. يُسجَّل الهالك بانتظار الاعتماد، ويظهر في «الهالك» بالبيان المالي بعد اعتماده.
-        ولو حُدّد موظف متسبب، فعند اعتماد الهالك يُنشأ له <span className="font-medium text-warn">جزاء تلقائي بقيمة التكلفة</span> (بانتظار
+        {seeCosts
+          ? 'التكلفة تُحسب تلقائياً من تكلفة قطعة المنتج × العدد — أو اكتبها يدوياً لتتجاوز الحساب التلقائي. '
+          : ''}
+        يُسجَّل الهالك بانتظار الاعتماد، ويظهر في البيان المالي بعد اعتماده.
+        ولو حُدّد موظف متسبب، فعند اعتماد الهالك يُنشأ له <span className="font-medium text-warn">جزاء تلقائي بسعر بيع القطعة × العدد</span> (بانتظار
         اعتماد الجزاء) فيُخصم من راتبه في تحليل الموظفين.
         {resolvedVariant
           ? ' وعند الاعتماد ستُخصم القطع التالفة من المخزون تلقائياً.'

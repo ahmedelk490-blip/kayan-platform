@@ -134,6 +134,13 @@ export async function changePurchaseStatus(id: string, next: string): Promise<vo
   if (!order || !isPurchaseStatus(order.status)) return;
   if (!PURCHASE_TRANSITIONS[order.status].includes(next)) return;
 
+  // حالة الاستلام تُشتقّ من التسليمات ولا تُكتب بيد: وسمُ أمرٍ «مستلم» يدوياً
+  // كان يجمّد المتبقي إلى الأبد — RECEIVED نهائية، و receiveGoods ترفض ما
+  // بعدها، فتبقى الكمية غير قابلة للاستلام على هذا الأمر.
+  if (next === 'RECEIVED' || next === 'PARTIALLY_RECEIVED') {
+    redirect(`/purchasing/${id}?err=receive-by-delivery`);
+  }
+
   // Cancelling an order that already has deliveries would orphan stock that
   // is physically on the shelf.
   if (next === 'CANCELLED' && order.receipts.length > 0) {
@@ -147,7 +154,8 @@ export async function changePurchaseStatus(id: string, next: string): Promise<vo
       status: next,
       confirmedAt: next === 'CONFIRMED' ? (order.confirmedAt ?? now) : order.confirmedAt,
       cancelledAt: next === 'CANCELLED' ? now : order.cancelledAt,
-      completedAt: next === 'RECEIVED' ? now : order.completedAt,
+      // RECEIVED لا تُكتب من هنا (تُشتقّ من التسليمات) — التاريخ يضبطه receiveGoods.
+      completedAt: order.completedAt,
     },
   });
 
@@ -255,6 +263,20 @@ export async function receiveGoods(
   const number = await nextPurchaseNumber('GRN', user.tenantId);
 
   await tenantTransaction(async (tx) => {
+    // الفحص يُعاد داخل المعاملة على القراءة الطازجة: الفحص أعلاه على لقطةٍ
+    // قُرئت قبلها، فضغطتان متتاليتان كانتا تمرّان كلتاهما فيتضاعف المستلم.
+    const freshLines = await tx.purchaseOrderLine.findMany({
+      where: { id: { in: deliveries.map((d) => d.line.id) } },
+      select: { id: true, lineNo: true, quantity: true, receivedQty: true },
+    });
+    const freshById = new Map(freshLines.map((l) => [l.id, l]));
+    for (const d of deliveries) {
+      const fresh = freshById.get(d.line.id);
+      if (!fresh || exceedsOutstanding(d.quantity, fresh.quantity, fresh.receivedQty)) {
+        throw new Error(`الكمية المستلمة للبند ${d.line.lineNo} تتجاوز المتبقي على الأمر.`);
+      }
+    }
+
     const receipt = await tx.goodsReceipt.create({
       data: {
         tenantId: user.tenantId,
@@ -303,9 +325,11 @@ export async function receiveGoods(
           where: { variantId: line.variantId, warehouseId: warehouse.id, locationId: null },
         });
         if (stock) {
+          // زيادة ذرّية لا قراءةً ثم كتابة — تسليمان متزامنان يتراكمان بدل
+          // أن يدهس أحدهما الآخر.
           await tx.stock.update({
             where: { id: stock.id },
-            data: { onHand: dec(stock.onHand).plus(dec(quantity)).toString() },
+            data: { onHand: { increment: dec(quantity).toNumber() } },
           });
         } else {
           await tx.stock.create({
@@ -344,7 +368,7 @@ export async function receiveGoods(
         await tx.supply.update({
           where: { id: supply.id },
           data: {
-            onHand: dec(supply.onHand).plus(dec(quantity)).toString(),
+            onHand: { increment: dec(quantity).toNumber() },
             lastUnitCost: line.unitPrice,
             avgCost: avg.toString(),
           },
@@ -353,7 +377,7 @@ export async function receiveGoods(
 
       await tx.purchaseOrderLine.update({
         where: { id: line.id },
-        data: { receivedQty: dec(line.receivedQty).plus(dec(quantity)).toString() },
+        data: { receivedQty: { increment: dec(quantity).toNumber() } },
       });
     }
 

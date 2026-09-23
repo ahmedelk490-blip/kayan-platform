@@ -13,6 +13,7 @@ import {
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { returnsByInvoice, netOwed } from '@/lib/receivables';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import type { SearchParams } from '@/lib/query';
@@ -53,14 +54,19 @@ export default async function SalesReport({
     }),
     prisma.invoice.findMany({
       where: { tenantId: user.tenantId, isDeleted: false, status: { in: RECEIVABLE_STATUSES } },
-      select: { total: true, paidAmount: true },
+      select: { id: true, total: true, paidAmount: true },
     }),
   ]);
 
   const orderTotal = total(orders.map((o) => o.total));
   const invoiceTotal = total(invoices.map((i) => i.total));
   const collected = total(invoices.map((i) => i.paidAmount));
-  const outstanding = receivable.reduce((s, i) => s.plus(balance(i.total, i.paidAmount)), dec(0));
+  // المستحق بعد خصم المرتجعات — فاتورةٌ عادت بضاعتها ليست ديناً قائماً.
+  const invoiceReturns = await returnsByInvoice(user.tenantId, receivable.map((i) => i.id));
+  const outstanding = receivable.reduce(
+    (s, i) => s.plus(balance(netOwed(i, invoiceReturns), i.paidAmount)),
+    dec(0),
+  );
 
   const series = monthlySeries(
     invoices.map((i) => ({ date: i.issueDate as Date, amount: i.total })),

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { can, dec, formatMoney } from '@erp/domain';
+import { can, dec, formatMoney, userCan } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -75,7 +75,7 @@ export default async function ProductsAdminPage() {
 
   const canWrite = can(user.role, 'products.write');
   // قيمة المخزون بالتكلفة رقمٌ ماليّ — لمن يملك صلاحية التكلفة وحده.
-  const seeCosts = can(user.role, 'cost.view');
+  const seeCosts = userCan(user.role, user.overrides, 'cost.view');
   const seeInventory = can(user.role, 'inventory.read');
 
   // كل شاشات القسم كبلاطات ملوّنة — بلون هوية كل فعل.
@@ -148,14 +148,17 @@ export default async function ProductsAdminPage() {
               <p className="py-8 text-center text-xs text-txt-4">لا منتجات بعد.</p>
             )}
           </section>
-          <section className="erp-card p-5">
-            <h3 className="mb-4 text-sm font-semibold text-brand">قيمة المخزون حسب التصنيف</h3>
-            {valuePoints.length > 0 ? (
-              <HBarChartInteractive points={valuePoints} />
-            ) : (
-              <p className="py-8 text-center text-xs text-txt-4">لا رصيد بتكلفة معروفة بعد.</p>
-            )}
-          </section>
+          {/* قيمة المخزون بالتكلفة — رسمٌ ماليّ للمدير وحده، كالكارت أعلاه. */}
+          {seeCosts && (
+            <section className="erp-card p-5">
+              <h3 className="mb-4 text-sm font-semibold text-brand">قيمة المخزون حسب التصنيف</h3>
+              {valuePoints.length > 0 ? (
+                <HBarChartInteractive points={valuePoints} />
+              ) : (
+                <p className="py-8 text-center text-xs text-txt-4">لا رصيد بتكلفة معروفة بعد.</p>
+              )}
+            </section>
+          )}
         </div>
       </div>
     </AppShell>

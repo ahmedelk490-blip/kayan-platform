@@ -24,6 +24,8 @@ export const metadata: Metadata = { title: 'أمر الشراء' };
 const ERRORS: Record<string, string> = {
   received:
     'لا يمكن إلغاء أو حذف أمر عليه استلامات — البضاعة على الرف فعلاً. سجّل مرتجعاً بدلاً من ذلك.',
+  'receive-by-delivery':
+    'حالة الاستلام تُشتقّ من التسليمات المسجّلة — استخدم «تسجيل استلام» وأدخل الكميات، ولا تُعلّم الأمر مستلماً بيدك.',
 };
 
 export default async function PurchaseOrderPage({

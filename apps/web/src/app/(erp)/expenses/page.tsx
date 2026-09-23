@@ -13,6 +13,7 @@ import {
   EXPENSE_CATEGORIES,
   APPROVAL_STATUS_AR,
   type ExpenseCategory,
+  userCan,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
@@ -48,6 +49,8 @@ export default async function ExpensesPage({
   searchParams: Promise<SearchParams>;
 }) {
   const user = await requirePermission('expenses.view');
+  // «أثر المدى على صافي الربح» رقمُ ربحٍ — للمدير وحده بقاعدة المالك.
+  const seeProfit = userCan(user.role, user.overrides, 'cost.margin');
   const params = await searchParams;
   const query = parseListQuery(params, {
     defaultSort: 'expenseDate',
@@ -408,7 +411,8 @@ export default async function ExpensesPage({
         </details>
       )}
 
-      {/* أثر الربح مطويّ — أربعة أرقام لمن يدقّق. */}
+      {/* أثر الربح مطويّ — أربعة أرقام لمن يدقّق، وللمدير وحده. */}
+      {seeProfit && (
       <details className="erp-card mb-6 px-5 py-4">
         <summary className="cursor-pointer select-none text-sm font-semibold text-brand">
           💰 أثر المدى على صافي الربح — {range.label}
@@ -437,6 +441,7 @@ export default async function ExpensesPage({
       </section>
         </div>
       </details>
+      )}
 
       <h3 className="mb-3 text-sm font-semibold text-brand">🧾 سجل المصروفات</h3>
       <Toolbar placeholder="ابحث بالرقم أو الملاحظات…" sorts={SORTS} />

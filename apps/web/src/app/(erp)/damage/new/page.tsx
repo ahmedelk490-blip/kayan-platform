@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { PRICE_SERVICES, PRICE_SERVICE_AR } from '@erp/domain';
+import { PRICE_SERVICES, PRICE_SERVICE_AR, userCan } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -12,6 +12,9 @@ export const metadata: Metadata = { title: 'محضر هالك جديد' };
 
 export default async function NewDamagePage() {
   const user = await requirePermission('damage.write');
+  // تكلفة المنتجات لا تُرسَل للمتصفح لمن لا يملك صلاحيتها — الفورم يعرض
+  // إجمالي التكلفة، فكانت قائمة أسعار الجملة كاملةً تصل الصفحة.
+  const seeCosts = userCan(user.role, user.overrides, 'cost.view');
 
   const [products, colorRows, employeeRows, variantRows] = await Promise.all([
     prisma.product.findMany({
@@ -41,7 +44,7 @@ export default async function NewDamagePage() {
   const productList: DamageProduct[] = products.map((p) => ({
     id: p.id,
     nameAr: p.nameAr,
-    cost: p.cost === null ? null : Number(p.cost.toString()),
+    cost: !seeCosts || p.cost === null ? null : Number(p.cost.toString()),
     colors: [],
   }));
   const colors = colorRows.map((c) => ({ value: c.id, label: c.nameAr }));
@@ -55,6 +58,7 @@ export default async function NewDamagePage() {
       />
       <div className="erp-card max-w-2xl p-6">
         <DamageForm
+          seeCosts={seeCosts}
           action={createDamage}
           products={productList}
           colors={colors}

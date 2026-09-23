@@ -316,7 +316,7 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'customers.read',
     'customers.write',
     'inventory.read',
-    'cost.view',
+    // لا cost.view: الكاشير موظف، وسعر الجملة للمدير وحده (قاعدة المالك).
     'invoices.view',
     'invoices.write',
     'invoices.issue',

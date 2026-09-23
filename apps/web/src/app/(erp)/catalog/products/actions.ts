@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import sharp from 'sharp';
 import { isPriceService } from '@erp/domain';
+import { userCan } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
@@ -60,21 +61,32 @@ function read(formData: FormData) {
  * حقول الدستة المحسوبة: قطع الدستة وتكلفتها وسعرها، وتكلفة/سعر القطعة مشتقّان
  * بالقسمة (إن أُدخلت الدستة)، وإلا تُستعمل التكلفة/السعر المباشران كما هما.
  */
-function dozenFields(d: {
-  piecesPerDozen?: string;
-  dozenCost?: string;
-  dozenPrice?: string;
-  cost?: string;
-  sellingPrice?: string;
-}) {
+function dozenFields(
+  d: {
+    piecesPerDozen?: string;
+    dozenCost?: string;
+    dozenPrice?: string;
+    cost?: string;
+    sellingPrice?: string;
+  },
+  /**
+   * التكلفة الحالية حين لا يملك المرسِل صلاحية رؤيتها.
+   *
+   * حقول التكلفة لا تُرسَل أصلاً لمن لا يراها (فلا تظهر في الصفحة ولو مخفيّة)،
+   * فلو أُهملت هنا لمُحيت بمجرّد تعديل الاسم. تُحفَظ كما هي بدلاً من ذلك.
+   */
+  keepCost?: { dozenCost: number | null; cost: number | null },
+) {
   const pieces = Math.max(1, Math.round(Number(d.piecesPerDozen) || 12));
   const dc = num(d.dozenCost);
   const dp = num(d.dozenPrice);
+  const costFields = keepCost
+    ? { dozenCost: keepCost.dozenCost, cost: keepCost.cost }
+    : { dozenCost: dc, cost: dc !== null ? dc / pieces : num(d.cost) };
   return {
     piecesPerDozen: pieces,
-    dozenCost: dc,
+    ...costFields,
     dozenPrice: dp,
-    cost: dc !== null ? dc / pieces : num(d.cost),
     sellingPrice: dp !== null ? dp / pieces : num(d.sellingPrice),
   };
 }
@@ -262,7 +274,16 @@ export async function updateProduct(
       nameEn: parsed.data.nameEn || null,
       barcode: parsed.data.barcode || null,
       descriptionAr: parsed.data.descriptionAr || null,
-      ...dozenFields(parsed.data),
+      // من لا يملك صلاحية التكلفة لا يُرسلها ولا يمسّها: تبقى كما هي.
+      ...dozenFields(
+        parsed.data,
+        userCan(user.role, user.overrides, 'cost.view')
+          ? undefined
+          : {
+              dozenCost: current.dozenCost === null ? null : Number(current.dozenCost),
+              cost: current.cost === null ? null : Number(current.cost),
+            },
+      ),
       status: parsed.data.status,
     },
   });

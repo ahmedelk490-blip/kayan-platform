@@ -9,6 +9,7 @@ import {
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { returnsByInvoice, netOwed } from '@/lib/receivables';
 import { AppShell } from '@/components/AppShell';
 import { WelcomeHeader } from '@/components/dashboard/WelcomeHeader';
 import { StatCard } from '@/components/dashboard/StatCard';
@@ -51,7 +52,7 @@ export default async function ManagerDashboard() {
       seeMoney
         ? prisma.invoice.findMany({
             where: { tenantId, isDeleted: false, status: { notIn: ['DRAFT', 'VOID'] } },
-            select: { total: true, paidAmount: true, status: true },
+            select: { id: true, total: true, paidAmount: true, status: true },
           })
         : [],
       seeInventory
@@ -92,9 +93,14 @@ export default async function ManagerDashboard() {
   // ── المال ─────────────────────────────────────────────────
   const invoiced = invoiceRows.reduce((s, i) => s.plus(dec(i.total)), dec(0));
   const collected = invoiceRows.reduce((s, i) => s.plus(dec(i.paidAmount)), dec(0));
-  const outstanding = invoiceRows
-    .filter((i) => RECEIVABLE_STATUSES.includes(i.status as never))
-    .reduce((s, i) => s.plus(balance(i.total, i.paidAmount)), dec(0));
+  // المستحق بعد خصم المرتجعات: فاتورةٌ رُجّعت بضاعتها لم تعد ديناً على العميل
+  // وإن بقيت «صادرة». بدون الخصم كان الرقم يطالب بمالِ بضاعةٍ عادت للرف.
+  const receivableRows = invoiceRows.filter((i) => RECEIVABLE_STATUSES.includes(i.status as never));
+  const invoiceReturns = await returnsByInvoice(tenantId, receivableRows.map((i) => i.id));
+  const outstanding = receivableRows.reduce(
+    (s, i) => s.plus(balance(netOwed(i, invoiceReturns), i.paidAmount)),
+    dec(0),
+  );
 
   // ── المخزون ───────────────────────────────────────────────
   const onHand = stockRows.reduce((s, r) => s.plus(dec(r.onHand)), dec(0));

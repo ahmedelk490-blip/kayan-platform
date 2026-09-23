@@ -2,10 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { isEmployeePaymentKind } from '@erp/domain';
+import { isEmployeePaymentKind, iraqYear } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
-import { prisma } from '@/lib/prisma';
+import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
+import { lockPaymentSequence } from '@/app/(erp)/invoices/shared';
 import { normalizeDigits } from '@/app/(erp)/sales/shared';
 
 export interface FormState {
@@ -22,10 +23,17 @@ function num(value: FormDataEntryValue | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-async function nextPaymentNumber(tenantId: string): Promise<string> {
-  const year = new Date().getFullYear();
+/**
+ * رقم دفعة موظف متسلسل. MAX+1 — فاستدعِه داخل معاملة تمسك قفل التسلسل
+ * أولاً، وإلا وُلّد نفس الرقم لدفعتين متزامنتين.
+ */
+async function nextPaymentNumber(
+  tenantId: string,
+  db: Parameters<typeof lockPaymentSequence>[0] | typeof prisma = prisma,
+): Promise<string> {
+  const year = iraqYear();
   const prefix = `EP-${year}-`;
-  const rows = await prisma.employeePayment.findMany({
+  const rows = await db.employeePayment.findMany({
     where: { tenantId, number: { startsWith: prefix } },
     select: { number: true },
   });
@@ -217,36 +225,44 @@ export async function runMonthlySalaries(_prev: FormState, formData: FormData): 
   });
   if (employees.length === 0) return { error: 'لا يوجد موظفون براتب ثابت محدَّد.' };
 
-  const existing = await prisma.employeePayment.findMany({
-    where: { tenantId: user.tenantId, isDeleted: false, kind: 'SALARY', periodMonth: month, periodYear: year },
-    select: { employeeId: true },
-  });
-  const alreadyPaid = new Set(existing.map((e) => e.employeeId));
-
+  // الفحص والإنشاء في معاملة واحدة خلف قفل التسلسل: ضغطتان متزامنتان على
+  // «صرف الرواتب» كانتا تقرآن معاً «لم يُصرف بعد» فتُنشئان راتبين لكل موظف —
+  // وبأرقامٍ متكرّرة، إذ الرقم من MAX+1. القفل يجعلهما تتسلسلان، فالثانية
+  // تقرأ ما كتبته الأولى وتتخطّاه.
   let created = 0;
   let skipped = 0;
-  for (const e of employees) {
-    if (alreadyPaid.has(e.id) || e.monthlySalary === null) {
-      skipped += 1;
-      continue;
-    }
-    const number = await nextPaymentNumber(user.tenantId);
-    await prisma.employeePayment.create({
-      data: {
-        tenantId: user.tenantId,
-        number,
-        employeeId: e.id,
-        kind: 'SALARY',
-        amount: e.monthlySalary,
-        paidAt: new Date(),
-        periodMonth: month,
-        periodYear: year,
-        note: `راتب شهر ${month}/${year}`,
-        createdById: user.id,
-      },
+  await tenantTransaction(async (tx) => {
+    await lockPaymentSequence(tx, user.tenantId);
+
+    const existing = await tx.employeePayment.findMany({
+      where: { tenantId: user.tenantId, isDeleted: false, kind: 'SALARY', periodMonth: month, periodYear: year },
+      select: { employeeId: true },
     });
-    created += 1;
-  }
+    const alreadyPaid = new Set(existing.map((e) => e.employeeId));
+
+    for (const e of employees) {
+      if (alreadyPaid.has(e.id) || e.monthlySalary === null) {
+        skipped += 1;
+        continue;
+      }
+      const number = await nextPaymentNumber(user.tenantId, tx);
+      await tx.employeePayment.create({
+        data: {
+          tenantId: user.tenantId,
+          number,
+          employeeId: e.id,
+          kind: 'SALARY',
+          amount: e.monthlySalary,
+          paidAt: new Date(),
+          periodMonth: month,
+          periodYear: year,
+          note: `راتب شهر ${month}/${year}`,
+          createdById: user.id,
+        },
+      });
+      created += 1;
+    }
+  }, { timeout: 60_000, maxWait: 10_000 });
 
   await audit({
     tenantId: user.tenantId,

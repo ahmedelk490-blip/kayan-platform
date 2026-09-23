@@ -128,8 +128,8 @@ export function ProductForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <Field name="nameEn" label="الاسم بالإنجليزية" dir="ltr" errors={state.fieldErrors} defaultValue={values?.nameEn} />
             <Field name="barcode" label="الباركود" dir="ltr" errors={state.fieldErrors} defaultValue={values?.barcode} />
-            {/* التكلفة تبقى مُرسَلةً حتى حين تُخفى: حقلٌ غائب يصل الخادم فارغاً
-                فيمحو ما هو مخزَّن — الإخفاء لا يجوز أن يُتلف بيانات. */}
+            {/* التكلفة لا تُرسَل أصلاً لمن لا يراها — فلا تظهر في الصفحة ولو
+                مخفيّة. والخادم يُبقي المخزَّن كما هو حين تغيب. */}
             {seeCosts ? (
               <Field
                 name="cost"
@@ -140,9 +140,7 @@ export function ProductForm({
                 defaultValue={values?.cost ?? ''}
                 hint="تُخزَّن فقط — محرك التكلفة لم يُبنَ بعد"
               />
-            ) : (
-              <input type="hidden" name="cost" value={values?.cost ?? ''} />
-            )}
+            ) : null}
             <Select
               name="status"
               label="الحالة"
@@ -183,7 +181,7 @@ export function ProductForm({
 /** قسم الدستة: القطع في الدستة + تكلفتها وسعرها، وتكلفة/سعر القطعة تلقائياً. */
 function DozenSection({ values, seeCosts }: { values?: ProductValues; seeCosts: boolean }) {
   const [pieces, setPieces] = useState(values?.piecesPerDozen ?? 12);
-  const [dozenCost, setDozenCost] = useState(values?.dozenCost ?? 0);
+  const [dozenCost, setDozenCost] = useState(seeCosts ? values?.dozenCost ?? 0 : 0);
   const [dozenPrice, setDozenPrice] = useState(values?.dozenPrice ?? 0);
   // عدد الدست: حاسبة لا تُحفظ — «عندي كم دست؟» فيرى القطع والتكلفة والقيمة
   // قبل الشراء أو الجرد. الرصيد نفسه يُضاف من جدول المتغيّرات في صفحة المنتج،
@@ -219,8 +217,8 @@ function DozenSection({ values, seeCosts }: { values?: ProductValues; seeCosts: 
             onChange={(e) => setPieces(Math.max(1, Math.round(Number(e.target.value) || 1)))}
             className="erp-input py-2.5 text-start" />
         </label>
-        {/* تكلفة الدستة = سعر الجملة. تُخفى عمّن لا يملك صلاحية التكلفة وتبقى
-            مُرسَلةً بقيمتها، فالإخفاء لا يمحو ما هو مخزَّن. */}
+        {/* تكلفة الدستة = سعر الجملة: لا تُرسَل لمن لا يملك صلاحيتها، والخادم
+            يُبقي المخزَّن كما هو حين تغيب. */}
         {seeCosts ? (
           <label className="block">
             <span className="mb-1.5 block text-xs text-txt-2">تكلفة الدستة</span>
@@ -229,9 +227,7 @@ function DozenSection({ values, seeCosts }: { values?: ProductValues; seeCosts: 
               className="erp-input py-2.5 text-start" />
             <span className="mt-1 block text-[0.7rem] text-txt-4">تكلفة القطعة: <span className="tnum font-semibold text-brand">{formatMoney(pieceCost)}</span></span>
           </label>
-        ) : (
-          <input type="hidden" name="dozenCost" value={dozenCost} />
-        )}
+        ) : null}
         <label className="block">
           <span className="mb-1.5 block text-xs text-txt-2">سعر الدستة</span>
           <input name="dozenPrice" type="number" min="0" step="0.01" dir="ltr" value={dozenPrice}

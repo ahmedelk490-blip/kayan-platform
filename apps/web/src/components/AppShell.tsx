@@ -64,6 +64,9 @@ const NAV: NavItem[] = [
   { href: '/catalog/products/deleted', label: 'المحذوفات', permission: 'products.write', built: true, group: 'إدارة المنتجات' },
 
   { href: '/inventory', label: 'المخزون', permission: 'inventory.read', built: true, group: 'المخزون' },
+  // أوامر الإنتاج كانت بلا مدخلٍ في القائمة: الوحدة مبنيّة كاملةً ولا يُوصل
+  // إليها إلا برابطٍ عميق من محضر هالك أو أمر بيع — أي أن قائمتها لا تُفتح.
+  { href: '/manufacturing', label: 'أوامر الإنتاج', permission: 'manufacturing.view', built: true, group: 'المخزون' },
   { href: '/supplies', label: 'المستلزمات', permission: 'supplies.view', built: true, group: 'المخزون' },
   { href: '/formulas', label: 'المعادلات والتكلفة', permission: 'formula.view', built: true, group: 'المخزون' },
 
@@ -136,6 +139,10 @@ export async function AppShell({
   // تنبيهات نقص المخزون والمستلزمات — تُحسب لمن يرى المخزون فقط. تبقى القائمة
   // فارغة (بلا استعلام) لغيره، فلا تُثقل صفحاته.
   const seeInventory = userCan(user.role, user.overrides, 'inventory.read');
+  // تنبيهات المستلزمات لمن يملك فتح شاشتها وحده: كانت تُرفع لكل من يرى
+  // المخزون، فيضغط الكاشير التنبيه فيُردّ من حيث أتى — ويقرأ أسماء خامات
+  // وكمياتٍ حُجبت عنه عمداً.
+  const seeSupplies = userCan(user.role, user.overrides, 'supplies.view');
   const seeWebOrders = userCan(user.role, user.overrides, 'invoices.write');
   let alerts: Alert[] = [];
 
@@ -171,10 +178,12 @@ export async function AppShell({
           },
         },
       }),
-      prisma.supply.findMany({
-        where: { tenantId: user.tenantId, isDeleted: false, minStock: { gt: 0 } },
-        select: { id: true, nameAr: true, onHand: true, minStock: true, unit: true },
-      }),
+      seeSupplies
+        ? prisma.supply.findMany({
+            where: { tenantId: user.tenantId, isDeleted: false, minStock: { gt: 0 } },
+            select: { id: true, nameAr: true, onHand: true, minStock: true, unit: true },
+          })
+        : [],
     ]);
     const stockAlerts: Alert[] = lowStock
       .filter((s) => dec(s.onHand).lte(dec(s.minStock)))

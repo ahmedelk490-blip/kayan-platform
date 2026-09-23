@@ -14,6 +14,7 @@ import {
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { returnsByInvoice, netOwed } from '@/lib/receivables';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import { Figure, Empty } from '../Shell';
@@ -39,9 +40,13 @@ export default async function AgingReport() {
     },
   });
 
+  // المرتجعات تُنقص المستحق قبل حساب عمر الدين — فاتورةٌ أُعيدت بضاعتها لا
+  // تُلاحَق كمتأخرة، وكانت تظهر في «أكثر من ٩٠ يوماً» إلى الأبد.
+  const invoiceReturns = await returnsByInvoice(user.tenantId, invoices.map((i) => i.id));
+
   const rows = invoices
     .map((i) => {
-      const outstanding = balance(i.total, i.paidAmount);
+      const outstanding = balance(netOwed(i, invoiceReturns), i.paidAmount);
       const days = daysOverdue(i.dueDate, outstanding, now);
       return {
         id: i.id,
@@ -57,7 +62,7 @@ export default async function AgingReport() {
     .sort((a, b) => b.days - a.days);
 
   const totals = ageingTotals(
-    invoices.map((i) => ({ dueDate: i.dueDate, outstanding: balance(i.total, i.paidAmount) })),
+    invoices.map((i) => ({ dueDate: i.dueDate, outstanding: balance(netOwed(i, invoiceReturns), i.paidAmount) })),
     now,
   );
   const grand = AGEING_BUCKETS.reduce((s, b) => s.plus(totals[b]), dec(0));

@@ -73,6 +73,8 @@ export default async function InvoicePage({
   const canIssue = can(user.role, 'invoices.issue');
   const canPay = can(user.role, 'payments.record');
   const canWrite = can(user.role, 'invoices.write');
+  const canSeeCustomer = userCan(user.role, user.overrides, 'customers.read');
+  const canSeeOrders = userCan(user.role, user.overrides, 'sales.documents');
 
   const status: InvoiceStatus = isInvoiceStatus(invoice.status) ? invoice.status : 'DRAFT';
 
@@ -158,9 +160,15 @@ export default async function InvoicePage({
         <Badge tone={status === 'PAID' ? 'ok' : status === 'VOID' ? 'bad' : 'muted'}>
           {INVOICE_STATUS_AR[status]}
         </Badge>
-        <Link href={`/customers/${invoice.customerId}`} className="text-brand underline">
-          {invoice.customer.companyName ?? invoice.customer.contactName}
-        </Link>
+        {/* اسم العميل رابطٌ لمن يملك فتح ملفه — وإلا نصٌّ عادي. كان الرابط
+            يظهر للجميع فيُردّ الكاشير ومدير المخزن من حيث أتوا بلا رسالة. */}
+        {canSeeCustomer ? (
+          <Link href={`/customers/${invoice.customerId}`} className="text-brand underline">
+            {invoice.customer.companyName ?? invoice.customer.contactName}
+          </Link>
+        ) : (
+          <span className="text-txt-2">{invoice.customer.companyName ?? invoice.customer.contactName}</span>
+        )}
         {/* عنوان العميل أمام العين — عامل التوصيل يقرأه من هنا ومن الطباعة. */}
         {invoice.customer.address && <span>📍 {invoice.customer.address}</span>}
         {invoice.issueDate && (
@@ -172,11 +180,14 @@ export default async function InvoicePage({
             {late > 0 && ` — متأخرة ${late} يوم`}
           </span>
         )}
-        {invoice.salesOrder && (
-          <Link href={`/sales/orders/${invoice.salesOrder.id}`} className="text-brand underline">
-            من أمر البيع {invoice.salesOrder.number}
-          </Link>
-        )}
+        {invoice.salesOrder &&
+          (canSeeOrders ? (
+            <Link href={`/sales/orders/${invoice.salesOrder.id}`} className="text-brand underline">
+              من أمر البيع {invoice.salesOrder.number}
+            </Link>
+          ) : (
+            <span className="text-txt-3">من أمر البيع {invoice.salesOrder.number}</span>
+          ))}
       </div>
 
       {status === 'VOID' && invoice.voidReason && (
