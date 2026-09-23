@@ -68,8 +68,23 @@ export async function createUser(_prev: FormState, formData: FormData): Promise<
   });
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
 
-  const role = await authDb.role.findUnique({ where: { key: parsed.data.roleKey } });
-  if (!role) return { error: 'الدور غير موجود في قاعدة البيانات.' };
+  // صفّ الدور يُنشأ عند الحاجة بدل رفض الطلب.
+  //
+  // الصلاحيات تُقرأ من الكود، لكن المستخدم يشير إلى صفٍّ في جدول الأدوار —
+  // فدورٌ أُضيف في الكود ولم يُزامَن بعدُ كان يردّ «الدور غير موجود في قاعدة
+  // البيانات»، وهي رسالةٌ لا يملك المستخدم حيالها شيئاً. والتعريف كله في
+  // ROLES فلا شيء يُخترع هنا: نكتب ما يقوله الكود أصلاً.
+  const def = ROLES[parsed.data.roleKey as RoleKey];
+  const role =
+    (await authDb.role.findUnique({ where: { key: parsed.data.roleKey } })) ??
+    (await authDb.role.create({
+      data: {
+        key: parsed.data.roleKey,
+        name: def.name,
+        nameAr: def.nameAr,
+        landingPath: def.landingPath,
+      },
+    }));
 
   const existing = await authDb.user.findUnique({ where: { email: parsed.data.email } });
   if (existing) return { fieldErrors: { email: 'هذا البريد مستخدم بالفعل.' } };
