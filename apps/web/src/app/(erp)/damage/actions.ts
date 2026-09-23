@@ -12,6 +12,8 @@ import {
   isPenaltyStatus,
   isPriceService,
   PRICE_SERVICE_AR,
+  piecePrice,
+  damageCharge,
   dec,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
@@ -150,6 +152,29 @@ export async function createDamage(_prev: FormState, formData: FormData): Promis
   redirect(`/damage/${damage.id}`);
 }
 
+/**
+ * ما يُحمَّل على الموظف مقابل محضر هالك — بسعر بيع القطعة × العدد.
+ *
+ * السعر من بطاقة المنتج (سعر القطعة، وإلا سعر الدستة ÷ قطعها). وإن لم يُعرف
+ * سعرٌ عادت القيمة إلى التكلفة المسجَّلة في المحضر، فلا يسقط الجزاء لجهل.
+ */
+async function damageChargeFor(
+  tenantId: string,
+  damage: { productId: string | null; quantity: unknown; totalCost: unknown },
+) {
+  const product = damage.productId
+    ? await prisma.product.findFirst({
+        where: { id: damage.productId, tenantId },
+        select: { sellingPrice: true, dozenPrice: true, piecesPerDozen: true },
+      })
+    : null;
+  return damageCharge(
+    damage.quantity as never,
+    product ? piecePrice(product) : null,
+    damage.totalCost as never,
+  );
+}
+
 export async function setDamageStatus(id: string, next: string): Promise<void> {
   const user = await requirePermission('damage.view');
   if (!isDamageStatus(next)) return;
@@ -164,7 +189,12 @@ export async function setDamageStatus(id: string, next: string): Promise<void> {
   if (next === 'PENDING') await requirePermission('damage.write');
   else await requirePermission('damage.approve');
 
-  if (next === 'APPROVED' && damage.createdById === user.id) {
+  // المنع الصحيح: المتَّهم لا يعتمد محضره.
+  //
+  // كان المنع على *كاتب* المحضر — وهو خطأ: محضر الهالك يُحمِّل موظفاً آخر،
+  // فكاتبه لا ينتفع باعتماده. والنتيجة أن المالك (وهو الكاتب والمعتمد الوحيد)
+  // لم يستطع اعتماد محضرٍ قط، فبقي معلّقاً ولم يُولَد جزاء ولم يُخصم شيء.
+  if (next === 'APPROVED' && damage.employeeId && damage.employeeId === user.id) {
     redirect(`/damage/${id}?err=self`);
   }
 
@@ -229,22 +259,25 @@ export async function setDamageStatus(id: string, next: string): Promise<void> {
     }
   }
 
-  // اعتمادُ هالكٍ له موظف متسبب يولّد جزاءً تلقائياً بقيمة التكلفة (سعر
-  // الجملة) — بانتظار اعتماد الجزاء نفسه، فيمرّ بدورته المعتادة ثم يُخصم
-  // من راتب الموظف في تحليله. لا يتكرر لو أُعيد الاعتماد.
+  // اعتمادُ هالكٍ له موظف متسبب يولّد جزاءً تلقائياً **بسعر بيع القطعة** لا
+  // بسعر الجملة (بطلب المالك): القطعة التالفة حرمت الشركة من بيعها لا من
+  // ثمن شرائها فحسب. وإن جُهل سعر البيع عاد الأساس للتكلفة المسجَّلة.
+  // الجزاء يبدأ بانتظار الاعتماد فيمرّ بدورته ثم يُخصم من راتب الموظف.
+  // لا يتكرر لو أُعيد الاعتماد.
   if (next === 'APPROVED' && damage.employeeId) {
     const existing = await prisma.penalty.findFirst({
       where: { tenantId: user.tenantId, damageId: id },
       select: { id: true },
     });
     if (!existing) {
+      const charged = await damageChargeFor(user.tenantId, damage);
       const penalty = await prisma.penalty.create({
         data: {
           tenantId: user.tenantId,
           number: await nextOpsNumber('penalty', 'PEN', user.tenantId),
           damageId: id,
           employeeId: damage.employeeId,
-          amount: damage.totalCost,
+          amount: charged.toString(),
           reason: `هالك ${damage.number} — ${damage.reason}`,
           status: 'PENDING',
           createdById: user.id,
@@ -333,10 +366,13 @@ export async function createPenalty(
 
   // A penalty larger than the damage it answers for is not a recovery, it is
   // a punishment the system should refuse to compute.
-  if (penaltyExceedsDamage(parsed.data.amount, damage.totalCost)) {
+  // السقف بقيمة ما فُقد بسعر البيع لا بسعر الجملة — وإلا رفض النظامُ جزاءً
+  // يساوي الخسارة الحقيقية لأنه «أكبر من التكلفة».
+  const maxCharge = await damageChargeFor(user.tenantId, damage);
+  if (penaltyExceedsDamage(parsed.data.amount, maxCharge)) {
     return {
       fieldErrors: {
-        amount: `الجزاء لا يتجاوز تكلفة الهالك (${damage.totalCost.toString()} د.ع).`,
+        amount: `الجزاء لا يتجاوز قيمة الهالك بسعر البيع (${maxCharge.toString()} د.ع).`,
       },
     };
   }

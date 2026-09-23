@@ -158,6 +158,45 @@ export function penaltyExceedsDamage(amount: Numeric, damageCost: Numeric): bool
   return dec(amount).gt(dec(damageCost));
 }
 
+/**
+ * سعر بيع القطعة الواحدة — من سعر القطعة إن حُدِّد، وإلا من سعر الدستة مقسوماً
+ * على قطعها.
+ *
+ * يُرجع null حين لا سعر بيع معروفاً، ولا يُرجع صفراً: الصفر يبدو سعراً وهو
+ * ليس كذلك، ومن يستدعيه يقرّر ماذا يفعل بالجهل.
+ */
+export function piecePrice(product: {
+  sellingPrice?: Numeric | null;
+  dozenPrice?: Numeric | null;
+  piecesPerDozen?: number | null;
+}): Decimal | null {
+  if (product.sellingPrice != null) {
+    const p = dec(product.sellingPrice);
+    if (p.gt(0)) return p;
+  }
+  if (product.dozenPrice != null) {
+    const per = product.piecesPerDozen && product.piecesPerDozen > 0 ? product.piecesPerDozen : 12;
+    const p = dec(product.dozenPrice).dividedBy(per);
+    if (p.gt(0)) return calc(p);
+  }
+  return null;
+}
+
+/**
+ * ما يُحمَّل على الموظف مقابل هالكٍ أتلفه — **بسعر البيع لا بسعر الجملة**
+ * (بطلب المالك): القطعة التالفة لم تُكلّف الشركة ثمن شرائها فحسب، بل حرمتها
+ * من بيعها. وحين لا سعر بيع معروفاً يعود الأساس إلى التكلفة المسجَّلة، فلا
+ * يسقط الجزاء لجهلٍ بسعر.
+ */
+export function damageCharge(
+  quantity: Numeric,
+  unitPrice: Decimal | null,
+  fallbackTotalCost: Numeric,
+): Decimal {
+  if (unitPrice === null) return calc(dec(fallbackTotalCost));
+  return calc(unitPrice.times(dec(quantity)));
+}
+
 // ── Supplies ────────────────────────────────────────────────
 
 /**

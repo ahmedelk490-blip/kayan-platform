@@ -4,6 +4,9 @@ import { notFound } from 'next/navigation';
 import {
   can,
   formatMoney,
+  piecePrice,
+  damageCharge,
+  dec,
   formatQty,
   DAMAGE_TRANSITIONS,
   DAMAGE_STATUS_AR,
@@ -25,7 +28,7 @@ import { setDamageStatus, deleteDamage, createPenalty, setPenaltyStatus } from '
 export const metadata: Metadata = { title: 'محضر الهالك' };
 
 const ERRORS: Record<string, string> = {
-  self: 'لا يعتمد المحضرَ من سجّله. الفصل بين التسجيل والاعتماد هو الغرض من الخطوة.',
+  self: 'لا يعتمد المحضرَ الموظفُ المحمَّل به — لا يُجيز أحدٌ جزاءً على نفسه.',
   'self-penalty': 'لا يعتمد الجزاءَ من سجّله.',
   approved: 'لا يمكن حذف محضر معتمد — سبق أن دخل في تكلفة فترة مُعلنة.',
   penalties: 'لا يمكن حذف محضر عليه جزاءات. ألغِ الجزاءات أولاً.',
@@ -56,7 +59,8 @@ export default async function DamageDetailPage({
       employee: { select: { nameAr: true, name: true } },
       createdBy: { select: { nameAr: true, name: true } },
       approvedBy: { select: { nameAr: true, name: true } },
-      product: { select: { nameAr: true } },
+      // أسعار البيع لحساب قيمة الهالك — الجزاء بسعر البيع لا بالتكلفة.
+      product: { select: { nameAr: true, sellingPrice: true, dozenPrice: true, piecesPerDozen: true } },
       variant: { select: { sku: true } },
       productionOrder: { select: { id: true, number: true } },
       penalties: {
@@ -84,6 +88,13 @@ export default async function DamageDetailPage({
   const canPenalise = can(user.role, 'penalties.approve');
 
   const status: DamageStatus = isDamageStatus(damage.status) ? damage.status : 'DRAFT';
+  // قيمة ما فُقد بسعر البيع — أساس الجزاء وسقفه (بطلب المالك). تُحسب هنا
+  // بنفس دالة الخادم فلا تختلف الشاشة عمّا يُسجَّل فعلاً.
+  const charge = damageCharge(
+    damage.quantity,
+    damage.product ? piecePrice(damage.product) : null,
+    damage.totalCost,
+  );
   const next = DAMAGE_TRANSITIONS[status];
 
   return (
@@ -170,7 +181,10 @@ export default async function DamageDetailPage({
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
               <h3 className="text-sm font-semibold text-brand">الجزاءات</h3>
               <span className="text-[0.7rem] text-txt-4">
-                الحد الأقصى للجزاء = تكلفة الهالك {formatMoney(damage.totalCost)}
+                الحد الأقصى للجزاء = قيمة الهالك بسعر البيع {formatMoney(charge)}
+                {!charge.eq(dec(damage.totalCost)) && (
+                  <span className="text-txt-4"> (تكلفتها {formatMoney(damage.totalCost)})</span>
+                )}
               </span>
             </div>
 
@@ -259,7 +273,7 @@ export default async function DamageDetailPage({
                 <PenaltyForm
                   action={createPenalty.bind(null, damage.id)}
                   employees={employees.map((e) => ({ value: e.id, label: e.nameAr ?? e.name }))}
-                  damageCost={damage.totalCost.toString()}
+                  damageCost={charge.toString()}
                 />
               </div>
             )}
