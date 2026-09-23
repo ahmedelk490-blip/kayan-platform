@@ -7,6 +7,7 @@ import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
+import { ConfirmButton } from '@/components/crud/ConfirmButton';
 import { ProductForm } from '../ProductForm';
 import {
   updateProduct,
@@ -273,9 +274,10 @@ export default async function ProductDetailPage({
                     <td className="px-4 py-3 text-end">
                       {canWrite && product.variants.length > 1 && (
                         <form action={del}>
-                          <button type="submit" className="text-xs text-bad hover:underline">
-                            حذف
-                          </button>
+                          <ConfirmButton
+                            label="حذف"
+                            message={`حذف المتغيّر ${v.sku}؟ يختفي من المخزون واختيارات البيع.`}
+                          />
                         </form>
                       )}
                     </td>

@@ -6,6 +6,7 @@ import {
   balance,
   available,
   RECEIVABLE_STATUSES,
+  stockState,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
@@ -110,9 +111,10 @@ export default async function ManagerDashboard() {
     dec(0),
   );
   const lowStock = stockRows.filter(
-    (r) => dec(r.minStock).gt(0) && available(r.onHand, r.reserved).lt(dec(r.minStock)),
+    // نفس تعريف بقية الشاشات: الرصيد لا المتاح، وعند الحدّ لا تحته فقط.
+    (r) => stockState(r.onHand, r.minStock) === 'low',
   ).length;
-  const outOfStock = stockRows.filter((r) => dec(r.onHand).lte(0)).length;
+  const outOfStock = stockRows.filter((r) => stockState(r.onHand, r.minStock) === 'out').length;
 
   // ── الأوامر ───────────────────────────────────────────────
   const orderTotal = orderRows.reduce((s, r) => s + r._count._all, 0);

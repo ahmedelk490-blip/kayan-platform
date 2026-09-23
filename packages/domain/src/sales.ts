@@ -178,6 +178,31 @@ export function available(onHand: Numeric, reserved: Numeric): Decimal {
   return calc(dec(onHand).minus(dec(reserved)));
 }
 
+/**
+ * حالة الصنف من رصيده وحدّه الأدنى — تعريفٌ واحد لكل الشاشات.
+ *
+ * كانت خمس شاشات تحسبها بثلاث معادلات: إحداها تقارن المتاح والأخرى الرصيد،
+ * وإحداها تُدخل النافذ في «تحت الحدّ» والأخرى تُخرجه. فيقول كارتٌ رقماً
+ * ويعرض الجدول الذي يفتحه رقماً آخر.
+ *
+ * القاعدة المعتمدة: «نفد» رصيدٌ ≤ صفر دائماً ولو بلا حدّ، و«قارب» له حدٌّ
+ * موجب وما زال فوق الصفر لكن عند الحدّ أو تحته. والاثنان معاً «يحتاج طلباً».
+ */
+export function stockState(
+  onHand: Numeric,
+  minStock: Numeric,
+): 'out' | 'low' | 'ok' {
+  const held = dec(onHand);
+  if (held.lte(0)) return 'out';
+  const min = dec(minStock);
+  return min.gt(0) && held.lte(min) ? 'low' : 'ok';
+}
+
+/** يحتاج طلباً = نفد أو قارب على النفاد. */
+export function needsReorder(onHand: Numeric, minStock: Numeric): boolean {
+  return stockState(onHand, minStock) !== 'ok';
+}
+
 export function isQuotationStatus(v: string): v is QuotationStatus {
   return (QUOTATION_STATUSES as readonly string[]).includes(v);
 }

@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { can, available, dec, formatQty, formatMoney } from '@erp/domain';
+import { can, available, dec, formatQty, formatMoney,
+  stockState,
+  needsReorder,
+} from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -128,7 +131,7 @@ export default async function InventoryPage({
   // ملخّص الخامات: النافذ (رصيد ≤ 0) دائماً، والقارب (له حدّ وما زال فوق الصفر).
   const emptySupplies = supplies.filter((s) => dec(s.onHand).lte(dec(0)));
   const lowSupplies = supplies.filter(
-    (s) => dec(s.minStock).gt(0) && dec(s.onHand).gt(0) && dec(s.onHand).lte(dec(s.minStock)),
+    (s) => stockState(s.onHand, s.minStock) === 'low',
   );
 
   const SUPPLY_TX_AR: Record<string, string> = {
@@ -139,7 +142,9 @@ export default async function InventoryPage({
   };
 
   // Decimal arithmetic — `+` on Decimal would stringify and concatenate.
-  const totals = stock.reduce(
+  // ومن الجرد الكامل لا من المئة المعروضة: كانت كروت «رصيد المنتجات» و«محجوز»
+  // و«تالف» تُجمع من أحدث مئة صفٍّ فقط، فتُعلن رصيداً أقلّ من الحقيقة بلا إشارة.
+  const totals = fullStock.reduce(
     (acc, s) => ({
       onHand: acc.onHand.plus(dec(s.onHand)),
       reserved: acc.reserved.plus(dec(s.reserved)),
@@ -150,9 +155,9 @@ export default async function InventoryPage({
 
   // النافذ = رصيد ≤ 0 (دائماً، ولو بلا حدّ أدنى). القارب = له حدّ وما زال فوق الصفر لكن عنده أو تحته.
   // من الجرد الكامل لا قائمة الأرصدة المحدودة بـ100، فالعدّ يشمل كل الأصناف.
-  const outOfStock = fullStock.filter((s) => dec(s.onHand).lte(0));
+  const outOfStock = fullStock.filter((s) => stockState(s.onHand, s.minStock) === 'out');
   const lowStock = fullStock.filter(
-    (s) => dec(s.minStock).gt(0) && dec(s.onHand).gt(0) && dec(s.onHand).lte(dec(s.minStock)),
+    (s) => stockState(s.onHand, s.minStock) === 'low',
   );
 
   // جدول إعادة الطلب: كل منتج وخامة تحت الحدّ الأدنى، مع مقدار النقص
@@ -171,7 +176,7 @@ export default async function InventoryPage({
   };
   const reorderRows: ReorderRow[] = [
     ...reorderStock
-      .filter((s) => dec(s.onHand).lte(dec(s.minStock)))
+      .filter((s) => needsReorder(s.onHand, s.minStock))
       .map((s) => ({
         key: `st-${s.id}`,
         kind: 'منتج' as const,
@@ -241,7 +246,7 @@ export default async function InventoryPage({
     <AppShell user={user} title="المخزون">
       <ModuleHeader
         title="المخزون"
-        count={stock.length}
+        count={fullStock.length}
         action={
           <div className="flex flex-wrap items-center gap-2">
             {canSeeProducts && (
@@ -381,6 +386,15 @@ export default async function InventoryPage({
             badge: lowStock.length,
             content: (
               <section>
+            {/* هذه القائمة آخرُ ما تحرّك (مئة صف)، والجرد الكامل جنبها يعرض كل
+                شيء ببحث — يُقال صراحةً بدل أن يُظنّ أن هذا كل المخزون. */}
+            {fullStock.length > stock.length && (
+              <p className="mb-3 rounded-lg border border-line bg-card-2 px-4 py-2.5 text-[0.7rem] text-txt-3">
+                معروضٌ هنا آخر <span className="tnum">{stock.length}</span> صنفٍ تحرّك من أصل{' '}
+                <span className="tnum font-semibold text-txt">{fullStock.length}</span> — افتح
+                «الجرد الكامل» لرؤية الكل مع البحث.
+              </p>
+            )}
             <Table
               headers={[
                 'المنتج / المتغيّر', 'المخزن', 'الموقع', 'الرصيد', 'محجوز', 'المتاح', 'تالف',

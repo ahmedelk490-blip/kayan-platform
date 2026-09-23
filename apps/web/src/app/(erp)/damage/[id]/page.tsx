@@ -19,6 +19,7 @@ import {
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
+import { ConfirmButton } from '@/components/crud/ConfirmButton';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import type { SearchParams } from '@/lib/query';
 import { PenaltyForm } from '../PenaltyForm';
@@ -142,9 +143,10 @@ export default async function DamageDetailPage({
             )}
             {canWrite && status !== 'APPROVED' && damage.penalties.length === 0 && (
               <form action={deleteDamage.bind(null, damage.id)}>
-                <button type="submit" className="erp-btn-ghost">
-                  حذف
-                </button>
+                <ConfirmButton
+                  label="حذف"
+                  message={`حذف محضر الهالك ${damage.number}؟ لا يُحذف محضر معتمد ولا محضر عليه جزاءات.`}
+                />
               </form>
             )}
           </div>

@@ -18,6 +18,7 @@ import {
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
+import { ConfirmButton } from '@/components/crud/ConfirmButton';
 import { ModuleHeader, Table, Pager, Badge } from '@/components/crud/Shell';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { IconCategory, IconClock, IconActivity } from '@/components/dashboard/Icons';
@@ -510,9 +511,10 @@ export default async function ExpensesPage({
                 )}
                 {canWrite && row.status !== 'APPROVED' && (
                   <form action={deleteExpense.bind(null, row.id)}>
-                    <button type="submit" className="text-[0.7rem] text-txt-4 hover:underline">
-                      حذف
-                    </button>
+                    <ConfirmButton
+                      label="حذف"
+                      message={`حذف المصروف ${row.number}؟ لا يُحذف المصروف المعتمد لأنه دخل ربحاً مُعلَناً.`}
+                    />
                   </form>
                 )}
               </div>

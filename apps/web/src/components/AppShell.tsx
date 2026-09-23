@@ -1,5 +1,5 @@
 import { Logo } from '@erp/brand/logo';
-import { can, userCan, dec, type PermissionKey } from '@erp/domain';
+import { can, userCan, dec, type PermissionKey, needsReorder } from '@erp/domain';
 import type { SessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logoutAction } from '@/app/(erp)/login/actions';
@@ -52,7 +52,6 @@ const NAV: NavItem[] = [
   { href: '/sales', label: 'لوحة المبيعات', permission: 'sales.view', built: true, group: 'المبيعات' },
   { href: '/invoices', label: 'فواتير المبيعات', permission: 'invoices.view', built: true, group: 'المبيعات' },
   { href: '/sales/web-orders', label: 'طلبات الموقع', permission: 'invoices.write', built: true, group: 'المبيعات' },
-  { href: '/sales/purchase-invoices', label: 'فواتير الشراء', permission: 'purchasing.view', built: true, group: 'المبيعات' },
 
   // إدارة المنتجات — قسم مستقل يجمع كل ما يخصّ المنتجات: اللوحة، قائمة
   // المنتجات وإدخالها، التصنيفات، ومراجعة عرض الموقع. لا شيء منها في القائمة
@@ -82,7 +81,9 @@ const NAV: NavItem[] = [
   { href: '/expenses', label: 'المصروفات', permission: 'expenses.view', built: true, group: 'المصروفات' },
 
   { href: '/customers', label: 'العملاء', permission: 'customers.read', built: true, group: 'العملاء' },
-  { href: '/portal', label: 'بوابة العميل', permission: 'portal.view', built: true, group: 'العملاء' },
+  // بوابة العميل لم تُبنَ بعد (صفحتها تقول ذلك بنفسها) — تُعرَض معطَّلةً
+  // بوسم «قريباً» بدل أن تَعِد بشاشةٍ فارغة.
+  { href: '/portal', label: 'بوابة العميل', permission: 'portal.view', built: false, group: 'العملاء' },
 
   // يومية اليوم — صفحة تقفيل واحدة: مبيعات ومقبوض ومرتجعات ومصاريف اليوم.
   { href: '/reports/daily', label: 'يومية اليوم', permission: 'reports.view', built: true, group: 'التقارير' },
@@ -186,7 +187,7 @@ export async function AppShell({
         : [],
     ]);
     const stockAlerts: Alert[] = lowStock
-      .filter((s) => dec(s.onHand).lte(dec(s.minStock)))
+      .filter((s) => needsReorder(s.onHand, s.minStock))
       .map((s) => ({
         id: `stock-${s.id}`,
         label: [s.variant.product.nameAr, s.variant.color?.nameAr, s.variant.size?.code].filter(Boolean).join(' · '),
@@ -194,7 +195,7 @@ export async function AppShell({
         href: '/inventory',
       }));
     const supplyAlerts: Alert[] = lowSupplies
-      .filter((s) => dec(s.onHand).lte(dec(s.minStock)))
+      .filter((s) => needsReorder(s.onHand, s.minStock))
       .map((s) => ({
         id: `supply-${s.id}`,
         label: s.nameAr,

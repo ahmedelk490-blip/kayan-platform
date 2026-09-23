@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { can, dec, formatMoney, userCan } from '@erp/domain';
+import { can, dec, formatMoney, userCan, stockState } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -61,7 +61,9 @@ export default async function ProductsAdminPage() {
       const cat = s.variant.product.category?.nameAr ?? 'غير مصنّف';
       valueByCat.set(cat, (valueByCat.get(cat) ?? dec(0)).plus(v));
     }
-    if (dec(s.minStock).gt(0) && dec(s.onHand).lte(dec(s.minStock))) lowStock += 1;
+    // نفس تعريف شاشة المخزون التي يفتحها هذا الكارت — كان يعدّ النافذ ضمن
+    // «تحت الحدّ» فيعرض رقماً أكبر مما تعرضه الشاشة عند فتحها.
+    if (stockState(s.onHand, s.minStock) === 'low') lowStock += 1;
   }
 
   const donutPoints = [...countByCat.entries()]
