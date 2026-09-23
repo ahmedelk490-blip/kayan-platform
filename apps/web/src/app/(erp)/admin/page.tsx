@@ -9,6 +9,7 @@ import { SubmitButton } from '@/components/crud/Form';
 import { listBackups } from '@/lib/backup';
 import { runBackupNow } from './backup-actions';
 import { ResetPanel } from './ResetPanel';
+import { RoleSyncButton } from './RoleSyncButton';
 import { resetCounts } from './reset-actions';
 
 export const metadata: Metadata = { title: 'الإدارة' };
@@ -114,6 +115,9 @@ export default async function AdminPage() {
         </div>
 
         <Panel title="الأدوار والصلاحيات">
+          <div className="mb-5 border-b border-line pb-5">
+            <RoleSyncButton />
+          </div>
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {roles.map((role) => (
               <li key={role.id} className="rounded-lg border border-line p-4">

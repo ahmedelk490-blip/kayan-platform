@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: 'الرواتب والموظفين' }
  * ورابط لكشفه التفصيلي.
  */
 export default async function HRPage() {
-  const user = await requirePermission('users.manage');
+  const user = await requirePermission('hr.manage');
   // حدود السنة والشهر بيوم بغداد — كباقي النظام.
   const ref = iraqNow();
   const yearStart = iraqMidnight(ref.getUTCFullYear(), 0, 1);

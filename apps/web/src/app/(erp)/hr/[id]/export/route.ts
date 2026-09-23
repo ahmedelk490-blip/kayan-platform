@@ -9,7 +9,7 @@ const day = (d: Date) => d.toISOString().slice(0, 10);
 
 /** تصدير كشف دفعات الموظف إلى شيت Excel (CSV). */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await requirePermission('users.manage');
+  const user = await requirePermission('hr.manage');
   const { id } = await params;
 
   const [employee, payments] = await withTenant(user.tenantId, (tx) =>

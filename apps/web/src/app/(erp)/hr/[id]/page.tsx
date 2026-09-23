@@ -20,7 +20,7 @@ import { deleteEmployeePayment } from '../actions';
 export const metadata: Metadata = { title: 'كشف الموظف' };
 
 export default async function EmployeeStatement({ params }: { params: Promise<{ id: string }> }) {
-  const user = await requirePermission('users.manage');
+  const user = await requirePermission('hr.manage');
   const { id } = await params;
   const year = new Date().getFullYear();
   const yearStart = new Date(year, 0, 1);

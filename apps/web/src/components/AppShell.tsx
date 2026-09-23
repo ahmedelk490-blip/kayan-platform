@@ -86,7 +86,7 @@ const NAV: NavItem[] = [
   { href: '/reports', label: 'التقارير', permission: 'reports.view', built: true, group: 'التقارير' },
 
   // الرواتب قسم مستقل بذاته — بطلب المالك، منفصل عن الإدارة.
-  { href: '/hr', label: 'الرواتب والموظفين', permission: 'users.manage', built: true, group: 'الرواتب' },
+  { href: '/hr', label: 'الرواتب والموظفين', permission: 'hr.manage', built: true, group: 'الرواتب' },
 
   { href: '/users', label: 'حسابات الفريق', permission: 'users.manage', built: true, group: 'الإدارة' },
   { href: '/content', label: 'نصوص الموقع', permission: 'settings.manage', built: true, group: 'الإدارة' },

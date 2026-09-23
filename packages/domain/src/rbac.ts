@@ -6,7 +6,7 @@
  * is the point of Article 1.
  */
 
-export const ROLE_KEYS = ['ADMIN', 'MANAGER', 'SALES', 'CASHIER', 'CUSTOMER'] as const;
+export const ROLE_KEYS = ['ADMIN', 'MANAGER', 'WAREHOUSE', 'SALES', 'CASHIER', 'CUSTOMER'] as const;
 export type RoleKey = (typeof ROLE_KEYS)[number];
 
 export interface RoleDefinition {
@@ -30,10 +30,16 @@ export const ROLES: Record<RoleKey, RoleDefinition> = {
     nameAr: 'المدير',
     landingPath: '/dashboard',
   },
+  WAREHOUSE: {
+    key: 'WAREHOUSE',
+    name: 'Warehouse Manager',
+    nameAr: 'مدير المخزن',
+    landingPath: '/inventory',
+  },
   SALES: {
     key: 'SALES',
-    name: 'Sales Representative',
-    nameAr: 'مندوب المبيعات',
+    name: 'Sales Manager',
+    nameAr: 'مدير المبيعات',
     landingPath: '/sales',
   },
   CASHIER: {
@@ -133,6 +139,9 @@ export const PERMISSIONS = {
   'returns.write': { nameAr: 'تسجيل مرتجعات المبيعات', group: 'المرتجعات' },
 
   'reports.view': { nameAr: 'عرض التقارير', group: 'التقارير' },
+  // الرواتب مفصولةٌ عن إدارة المستخدمين: مدير المخزن يصرف الرواتب والخصومات
+  // ولا يُنشئ حسابات ولا يوقفها. كانتا صلاحيةً واحدة فتلازمتا بلا سبب.
+  'hr.manage': { nameAr: 'الرواتب والخصومات والجزاءات', group: 'النظام' },
   'users.manage': { nameAr: 'إدارة المستخدمين', group: 'النظام' },
   'settings.manage': { nameAr: 'إدارة الإعدادات', group: 'النظام' },
 } as const;
@@ -210,35 +219,90 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     //   الواجهة: مدير يصنع مديرَ نظام يمنح نفسه كل شيء، وهي تصعيد صلاحيات
     //   لا تفويض.
     'users.manage',
+    'hr.manage',
   ],
 
-  SALES: [
+  /**
+   * مدير المخزن — بطلب المالك، وبالأقسام التي أشّر عليها بنفسه:
+   * المبيعات · إدارة المنتجات · المخزون · المرتجعات والهالك · المصروفات · الرواتب.
+   *
+   * ما استُثني عمداً: المشتريات (أوامر الشراء والموردون قرار شراء لا تخزين)،
+   * والعملاء كقائمة (يبيع لهم ويضيف الجديد من الكاشير، ولا يدير ملفاتهم)،
+   * والتقارير المالية ولوحة المدير (أرقام الشركة ليست من عمله)، وإدارة النظام.
+   *
+   * ويملك hr.manage لا users.manage: يصرف الرواتب والخصومات والجزاءات ولا
+   * يُنشئ حساباً ولا يوقفه.
+   */
+  WAREHOUSE: [
+    // المبيعات — يبيع ويُصدر ويحصّل كالكاشير تماماً.
     'sales.view',
     'sales.documents',
     'sales.write',
     'sales.confirm',
+    'invoices.view',
+    'invoices.write',
+    'invoices.issue',
+    'payments.record',
+
+    // إدارة المنتجات — يُدخل المنتجات ويعدّلها ويضبط أسعارها.
     'products.read',
-    'customers.read',
-    'customers.write',
-    'suppliers.read',
+    'products.write',
+    'catalog.manage',
+
+    // المخزون — قلب عمله: الحركات والجرد والمستلزمات والمعادلات.
     'inventory.read',
-    'cost.view',
-    'reports.view',
-    // A representative files their own travel and fuel claims, and cannot
-    // approve them. Entry without approval is the whole point.
+    'inventory.write',
+    'supplies.view',
+    'supplies.write',
+    'formula.view',
+
+    // المرتجعات والهالك — يستلم المرتجع ويحرّر الهالك ويعتمده، والجزاء الناتج
+    // عنه يُعتمد بيده لأنه صاحب المحضر.
+    'returns.view',
+    'returns.write',
+    'damage.view',
+    'damage.write',
+    'damage.approve',
+    'penalties.approve',
+
+    // المصروفات — يسجّلها ولا يعتمدها: الاعتماد فعلٌ منفصل يبقى للمالك،
+    // وإلا صار من يصرف هو من يُجيز الصرف.
     'expenses.view',
     'expenses.write',
-    // A representative needs to see whether their customer has paid, but
-    // must not issue a tax document or record money against one.
+
+    // الرواتب والخصومات والجزاءات.
+    'hr.manage',
+  ],
+
+  /**
+   * مدير المبيعات — بالأقسام التي أشّر عليها المالك: المبيعات · إدارة
+   * المنتجات · المخزون.
+   *
+   * تغيّر دوره: كان يرى الفاتورة ولا يُصدرها، والآن يبيع ويُصدر ويحصّل —
+   * فهو مدير مبيعات لا مندوباً. ويرى المخزون ليعرف المتوفر والنافد قبل أن
+   * يَعِد زبوناً بما ليس عنده، ولا يحرّك رصيداً (قراءة فقط).
+   *
+   * ما استُثني عمداً: المرتجعات (ردّ مالٍ وبضاعة)، والمشتريات، والمصروفات،
+   * والرواتب، وقائمة العملاء (يبيع لهم ويضيف الجديد من الكاشير)، والتقارير
+   * المالية ولوحة المدير. و cost.margin يبقى محجوباً: هامش الشركة ليس شأنه.
+   */
+  SALES: [
+    // المبيعات — كاملةً: عرض سعر، أمر بيع، فاتورة، إصدار، تحصيل.
+    'sales.view',
+    'sales.documents',
+    'sales.write',
+    'sales.confirm',
     'invoices.view',
-    // يرى المرتجعات، لكن لا يسجّلها — المرتجع يردّ مالاً ويعيد بضاعة، فهو
-    // كالإصدار والتحصيل ليس من صلاحيته.
-    'returns.view',
-    // Deliberately NOT cost.margin — a representative sees cost to quote
-    // sensibly, but company margin is not theirs to see.
-    // Deliberately NOT formula.view either — the cost is what they need to
-    // quote; the recipe that produces it is manufacturing know-how.
-    // Deliberately NOT damage or penalties — those concern staff conduct.
+    'invoices.write',
+    'invoices.issue',
+    'payments.record',
+
+    // إدارة المنتجات.
+    'products.read',
+    'products.write',
+
+    // المخزون — قراءةً فقط: يرى المتوفر والنافد ولا يعدّل رصيداً.
+    'inventory.read',
   ],
 
   // الكاشير: البيع اليومي فقط. ينشئ ويُصدر الفواتير ويحصّل الدفعات، ويرى

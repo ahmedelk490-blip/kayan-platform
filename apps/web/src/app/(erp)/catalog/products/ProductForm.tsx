@@ -176,9 +176,16 @@ function DozenSection({ values }: { values?: ProductValues }) {
   const [pieces, setPieces] = useState(values?.piecesPerDozen ?? 12);
   const [dozenCost, setDozenCost] = useState(values?.dozenCost ?? 0);
   const [dozenPrice, setDozenPrice] = useState(values?.dozenPrice ?? 0);
+  // عدد الدست: حاسبة لا تُحفظ — «عندي كم دست؟» فيرى القطع والتكلفة والقيمة
+  // قبل الشراء أو الجرد. الرصيد نفسه يُضاف من جدول المتغيّرات في صفحة المنتج،
+  // لأن الرصيد يخصّ لوناً ومقاساً بعينه لا المنتج كله.
+  const [dozens, setDozens] = useState(0);
   const per = pieces > 0 ? pieces : 1;
   const pieceCost = dozenCost / per;
   const piecePrice = dozenPrice / per;
+  const totalPieces = dozens * per;
+  const totalCost = dozens * dozenCost;
+  const totalPrice = dozens * dozenPrice;
 
   return (
     <div className="rounded-xl border border-brand/30 bg-brand-soft/40 p-4">
@@ -187,7 +194,16 @@ function DozenSection({ values }: { values?: ProductValues }) {
         كل منتج قد تختلف دستته: اكتب كم قطعة في الدستة، وتكلفة الدستة وسعرها — وتُحسب
         تكلفة/سعر القطعة تلقائياً. المخزون يُعرض بالدست والقطعة على هذا الأساس.
       </p>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-4">
+        <label className="block">
+          <span className="mb-1.5 block text-xs text-txt-2">عدد الدست</span>
+          <input type="number" min="0" step="1" dir="ltr" value={dozens}
+            onChange={(e) => setDozens(Math.max(0, Math.round(Number(e.target.value) || 0)))}
+            className="erp-input py-2.5 text-start" />
+          <span className="mt-1 block text-[0.7rem] text-txt-4">
+            = <span className="tnum font-semibold text-brand">{totalPieces}</span> قطعة
+          </span>
+        </label>
         <label className="block">
           <span className="mb-1.5 block text-xs text-txt-2">قطع الدستة</span>
           <input name="piecesPerDozen" type="number" min="1" step="1" dir="ltr" value={pieces}
@@ -209,6 +225,29 @@ function DozenSection({ values }: { values?: ProductValues }) {
           <span className="mt-1 block text-[0.7rem] text-txt-4">سعر القطعة: <span className="tnum font-semibold text-brand">{formatMoney(piecePrice)}</span></span>
         </label>
       </div>
+
+      {/* حصيلة العدد المكتوب — تظهر فقط حين يُكتب عدد، فلا تشغل مكاناً بأصفار. */}
+      {dozens > 0 && (
+        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-brand/25 bg-card px-4 py-3 text-xs">
+          <span className="text-txt-2">
+            <span className="tnum font-bold text-brand">{dozens}</span> دست ={' '}
+            <span className="tnum font-bold text-brand">{totalPieces}</span> قطعة
+          </span>
+          <span className="text-txt-3">
+            التكلفة: <span className="tnum font-semibold text-txt">{formatMoney(totalCost)}</span>
+          </span>
+          <span className="text-txt-3">
+            القيمة بالبيع: <span className="tnum font-semibold text-txt">{formatMoney(totalPrice)}</span>
+          </span>
+          <span className={totalPrice - totalCost >= 0 ? 'text-ok' : 'text-bad'}>
+            الربح: <span className="tnum font-semibold">{formatMoney(totalPrice - totalCost)}</span>
+          </span>
+        </div>
+      )}
+      <p className="mt-2 text-[0.7rem] leading-[1.8] text-txt-4">
+        «عدد الدست» حاسبةٌ للمراجعة ولا يُحفظ — لإضافة الرصيد فعلاً استخدم خانة الدست في
+        جدول المتغيّرات بصفحة المنتج، فالرصيد يخصّ لوناً ومقاساً بعينه.
+      </p>
     </div>
   );
 }

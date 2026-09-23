@@ -42,7 +42,7 @@ export async function setCompensation(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const user = await requirePermission('users.manage');
+  const user = await requirePermission('hr.manage');
 
   const employee = await prisma.user.findFirst({
     where: { id: employeeId, tenantId: user.tenantId },
@@ -81,7 +81,7 @@ export async function updateEmployee(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const user = await requirePermission('users.manage');
+  const user = await requirePermission('hr.manage');
 
   const employee = await prisma.user.findFirst({
     where: { id: employeeId, tenantId: user.tenantId },
@@ -136,7 +136,7 @@ export async function recordEmployeePayment(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const user = await requirePermission('users.manage');
+  const user = await requirePermission('hr.manage');
 
   const parsed = PaymentSchema.safeParse({
     employeeId: String(formData.get('employeeId') ?? ''),
@@ -204,7 +204,7 @@ export async function recordEmployeePayment(
  * ثانيةً، فتكرار الضغط لا يزدوج الصرف.
  */
 export async function runMonthlySalaries(_prev: FormState, formData: FormData): Promise<FormState> {
-  const user = await requirePermission('users.manage');
+  const user = await requirePermission('hr.manage');
 
   const month = num(formData.get('month'));
   const year = num(formData.get('year'));
@@ -265,7 +265,7 @@ export async function runMonthlySalaries(_prev: FormState, formData: FormData): 
 
 /** حذف دفعة (soft-delete). */
 export async function deleteEmployeePayment(id: string): Promise<void> {
-  const user = await requirePermission('users.manage');
+  const user = await requirePermission('hr.manage');
   const payment = await prisma.employeePayment.findFirst({
     where: { id, tenantId: user.tenantId, isDeleted: false },
     select: { id: true, employeeId: true },
