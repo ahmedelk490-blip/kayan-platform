@@ -12,7 +12,8 @@ import { MovementModal } from './MovementModal';
 import { MinStockCell } from './MinStockCell';
 import { ShareShortages } from './ShareShortages';
 import { StocktakeTable, type StocktakeRow } from './StocktakeTable';
-import { reverseMovement } from './actions';
+import { ConfirmButton } from '@/components/crud/ConfirmButton';
+import { reverseMovement, deleteMovement } from './actions';
 import { TYPE_LABELS } from './types';
 
 export const metadata: Metadata = { title: 'المخزون' };
@@ -447,20 +448,38 @@ export default async function InventoryPage({
                   <td className="px-4 py-3 text-txt-3">{m.reference ?? '—'}</td>
                   <td className="px-4 py-3 text-txt-3">{m.user?.nameAr ?? m.user?.name ?? '—'}</td>
                   <td className="px-4 py-3 text-end">
-                    {canWrite && !m.reversedBy && m.type !== 'REVERSAL' && (
-                      <form action={reverseMovement.bind(null, m.id)}>
-                        <button type="submit" className="text-xs text-brand hover:underline">
-                          عكس
-                        </button>
-                      </form>
-                    )}
-                    {m.reversedBy && <span className="text-[0.7rem] text-txt-4">معكوسة</span>}
+                    <div className="flex items-center justify-end gap-3">
+                      {canWrite && !m.reversedBy && m.type !== 'REVERSAL' && (
+                        <form action={reverseMovement.bind(null, m.id)}>
+                          <button type="submit" className="text-xs text-brand hover:underline">
+                            عكس
+                          </button>
+                        </form>
+                      )}
+                      {m.reversedBy && <span className="text-[0.7rem] text-txt-4">معكوسة</span>}
+                      {/* الحذف النهائي لصفوف التجربة — لا يُعرض على الحركة العكسية
+                          نفسها: تُحذف من صفّ أصلها مع أصلها معاً. */}
+                      {canWrite && m.type !== 'REVERSAL' && (
+                        <form action={deleteMovement.bind(null, m.id)}>
+                          <ConfirmButton
+                            label="حذف نهائي"
+                            message={
+                              m.reversedBy
+                                ? 'حذف هذه الحركة وعكسها نهائياً؟ الرصيد لن يتغيّر (مجموعهما صفر)، ويبقى الحذف مقيّداً في سجل التدقيق.'
+                                : 'حذف هذه الحركة نهائياً؟ سيُطرح أثرها من الرصيد ليعود كما لو لم تُسجَّل، ويبقى الحذف مقيّداً في سجل التدقيق.'
+                            }
+                          />
+                        </form>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
             </Table>
             <p className="mt-2 text-[0.7rem] text-txt-4">
-              الحركات لا تُحذف نهائياً — التصحيح يتم بحركة عكسية تُشير إلى الأصلية.
+              التصحيح المعتاد بحركة عكسية تُشير إلى الأصلية فيبقى السجل شاهداً. و«حذف
+              نهائي» لصفوف التجربة وحدها: يُسوّي الرصيد قبل الحذف فلا يتغيّر، ويُقيَّد في
+              سجل التدقيق باسم من حذف وماذا.
             </p>
               </section>
             ),

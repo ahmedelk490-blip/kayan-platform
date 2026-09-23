@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
@@ -270,4 +271,67 @@ export async function setMinStock(stockId: string, _prev: FormState, formData: F
   await audit({ tenantId: user.tenantId, userId: user.id, action: 'stock.minStock', entityType: 'Stock', entityId: stockId, detail: String(value) });
   revalidatePath('/inventory');
   return { ok: 'تم تحديث الحد الأدنى.' };
+}
+
+/**
+ * حذف حركة نهائياً — لتنظيف ما سُجِّل للتجربة.
+ *
+ * السجل في الأصل لا يُحذف: هو شاهدٌ على ما جرى ومتى، وحذفُه يُفقد القدرة على
+ * تفسير فرقٍ في الجرد لاحقاً. لكن صفّاً سُجِّل للتجربة ليس شهادةً على شيء،
+ * وإبقاؤه يُفسد القراءة إلى الأبد.
+ *
+ * فالحذف مسموح بشرطٍ واحد لا يُخرَق: **الرصيد لا يتغيّر**. أثر الحركة يُطرح
+ * من المخزون قبل حذفها، وإن كانت معكوسةً حُذفت مع عكسها معاً (مجموعهما صفر
+ * أصلاً). والحذف نفسه يُقيَّد في سجل التدقيق بكل تفاصيل المحذوف — فلا شيء
+ * يضيع بلا أثر، وإن غاب الصفّ.
+ */
+export async function deleteMovement(movementId: string): Promise<void> {
+  const user = await requirePermission('inventory.write');
+
+  const original = await prisma.stockMovement.findFirst({
+    where: { id: movementId, tenantId: user.tenantId },
+    include: { reversedBy: true, variant: { select: { sku: true } } },
+  });
+  if (!original) redirect('/inventory?tab=movements');
+
+  // حركة عكسية لا تُحذف وحدها: حذفُها يترك أصلها ساري المفعول على الرصيد
+  // بينما يظنّ القارئ أنه صُحِّح. تُحذف من صفّ أصلها.
+  if (original.type === 'REVERSAL') {
+    redirect('/inventory?tab=movements&err=reversal-child');
+  }
+
+  const meta = TYPES[original.type as MovementType] ?? TYPES.ADJUSTMENT;
+  const key = {
+    variantId: original.variantId,
+    warehouseId: original.warehouseId,
+    locationId: original.locationId,
+  };
+
+  await tenantTransaction(async (tx) => {
+    if (original.reversedBy) {
+      // الزوج مجموعه صفر: يُحذف كما هو دون أي تسوية للرصيد.
+      await tx.stockMovement.delete({ where: { id: original.reversedBy.id } });
+    } else {
+      // حركة سارية: يُطرح أثرها أولاً فيبقى الرصيد كما لو لم تُسجَّل قط.
+      await applyStockDelta(tx, key, meta.field, -Number(original.quantity));
+    }
+    await tx.stockMovement.delete({ where: { id: original.id } });
+  });
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'stock.movementDelete',
+    entityType: 'StockMovement',
+    entityId: movementId,
+    detail:
+      `حُذفت نهائياً: ${meta.labelAr} ${formatQty(original.quantity)} · ` +
+      `${original.variant?.sku ?? original.variantId} · ` +
+      `${original.occurredAt.toISOString().slice(0, 10)}` +
+      `${original.reversedBy ? ' (مع عكسها)' : ' (وسُوّي الرصيد)'}` +
+      `${original.reason ? ` · ${original.reason}` : ''}`,
+  });
+
+  revalidatePath('/inventory');
+  redirect('/inventory?tab=movements');
 }
