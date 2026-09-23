@@ -74,6 +74,8 @@ export default async function ProductsAdminPage() {
     .map(([label, v]) => ({ label, value: v.toNumber(), display: formatMoney(v) }));
 
   const canWrite = can(user.role, 'products.write');
+  // قيمة المخزون بالتكلفة رقمٌ ماليّ — لمن يملك صلاحية التكلفة وحده.
+  const seeCosts = can(user.role, 'cost.view');
   const seeInventory = can(user.role, 'inventory.read');
 
   // كل شاشات القسم كبلاطات ملوّنة — بلون هوية كل فعل.
@@ -125,13 +127,15 @@ export default async function ProductsAdminPage() {
             icon={<IconBell />}
             tone={lowStock > 0 ? 'warning' : 'success'}
           />
-          <StatCard
-            index={3}
-            label="قيمة المخزون بالتكلفة"
-            value={formatMoney(inventoryValue)}
-            icon={<IconCategory />}
-            tone="success"
-          />
+          {seeCosts && (
+            <StatCard
+              index={3}
+              label="قيمة المخزون بالتكلفة"
+              value={formatMoney(inventoryValue)}
+              icon={<IconCategory />}
+              tone="success"
+            />
+          )}
         </div>
 
         {/* رسمان تفاعليان — بصريان، بلا سطور. */}

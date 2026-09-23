@@ -88,9 +88,11 @@ export async function ProductsArea({
   ]);
 
   const canWrite = can(user.role, 'products.write');
+  // سعر الجملة (التكلفة) يُحسم على الخادم ويمرّ للنوافذ — لا يُقرَّر في المتصفح.
+  const seeCosts = can(user.role, 'cost.view');
   const formOptions = canWrite
-    ? await loadProductOptions(user.tenantId)
-    : { categories: [], materials: [], printingOptions: [], embroideryOptions: [], colors: [], sizes: [] };
+    ? { ...(await loadProductOptions(user.tenantId)), seeCosts }
+    : { categories: [], materials: [], printingOptions: [], embroideryOptions: [], colors: [], sizes: [], seeCosts };
 
   return (
     <AppShell user={user} title={title}>

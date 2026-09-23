@@ -82,6 +82,9 @@ export default async function ProductDetailPage({
   const canWrite = can(user.role, 'products.write');
   // إضافة الرصيد من هنا تكتب حركة مخزون — صلاحيتها مستقلة عن تعديل المنتج.
   const canStock = can(user.role, 'inventory.write');
+  // سعر الجملة (التكلفة) لا يُعرض إلا لمن يملك صلاحيته — أمين المخزن يُدخل
+  // المنتجات ويسعّر البيع ولا يعرف بكم اشتُريت.
+  const seeCosts = can(user.role, 'cost.view');
 
   // مقاسات هذا المنتج (من متغيّراته) — لتعريف السيريه بتوزيعها. Map يزيل التكرار.
   const productSizes = [
@@ -191,6 +194,7 @@ export default async function ProductDetailPage({
         <section className="erp-card p-6">
           <h3 className="mb-5 text-sm font-semibold text-brand">البيانات</h3>
           <ProductForm
+            seeCosts={seeCosts}
             action={update}
             // Decimal does not cross into a client component; the form is an
             // input surface and the server recalculates on submit.

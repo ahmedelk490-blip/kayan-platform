@@ -46,6 +46,9 @@ export default async function InventoryPage({
   const canAddProduct = can(user.role, 'products.write');
 
   const seeSupplies = can(user.role, 'supplies.view');
+  // التكلفة وقيمة الرصيد سعرُ جملةٍ لا يخصّ أمين المخزن: يعدّ القطع ولا
+  // يعرف بكم اشتُريت. تُعرَض لمن يملك cost.view وحده (المدير ومدير النظام).
+  const seeCosts = can(user.role, 'cost.view');
 
   const [stock, variants, movements, supplies, supplyTx, reorderStock, fullStock] = await Promise.all([
     prisma.stock.findMany({
@@ -226,8 +229,9 @@ export default async function InventoryPage({
       dozens,
       looseP,
       onHand: formatQty(s.onHand),
-      unitCost: unitCost === null ? null : formatMoney(unitCost),
-      value: value === null ? null : formatMoney(value),
+      // تُحجب عن المصدر لا بالإخفاء في الواجهة: ما لا يُرسَل لا يُقرأ من الصفحة.
+      unitCost: !seeCosts || unitCost === null ? null : formatMoney(unitCost),
+      value: !seeCosts || value === null ? null : formatMoney(value),
       status: isOut ? 'نفد' : isLow ? 'قارب على النفاد' : 'متوفّر',
       tone: isOut || isLow ? ('bad' as const) : ('ok' as const),
     };
@@ -321,7 +325,7 @@ export default async function InventoryPage({
           {
             key: 'stocktake',
             label: '📦 الجرد الكامل',
-            content: <StocktakeTable rows={stocktakeRows} totalValue={formatMoney(stocktakeValue)} />,
+            content: <StocktakeTable rows={stocktakeRows} totalValue={seeCosts ? formatMoney(stocktakeValue) : null} />,
           },
           {
             key: 'reorder',
@@ -378,7 +382,11 @@ export default async function InventoryPage({
             content: (
               <section>
             <Table
-              headers={['المنتج / المتغيّر', 'المخزن', 'الموقع', 'الرصيد', 'محجوز', 'المتاح', 'تالف', 'قيمة الرصيد', 'الحد الأدنى']}
+              headers={[
+                'المنتج / المتغيّر', 'المخزن', 'الموقع', 'الرصيد', 'محجوز', 'المتاح', 'تالف',
+                ...(seeCosts ? ['قيمة الرصيد'] : []),
+                'الحد الأدنى',
+              ]}
               empty={stock.length === 0}
             >
               {stock.map((s) => {
@@ -399,14 +407,17 @@ export default async function InventoryPage({
                   </td>
                   <td className="tnum px-4 py-3 text-txt-2">{formatQty(s.damaged)}</td>
                   {/* قيمة الرصيد بالتكلفة — تكلفة المتغيّر ثم المنتج. المجهولة تُعرض
-                      «—» لا صفراً، فالصفر يبدو قياساً وهو ليس كذلك. */}
-                  <td className="tnum px-4 py-3 text-txt-2">
-                    {unitCost === null ? (
-                      <span className="text-txt-4">—</span>
-                    ) : (
-                      formatMoney(dec(s.onHand).times(dec(unitCost)))
-                    )}
-                  </td>
+                      «—» لا صفراً، فالصفر يبدو قياساً وهو ليس كذلك. والعمود كله
+                      يغيب عمّن لا يملك cost.view. */}
+                  {seeCosts && (
+                    <td className="tnum px-4 py-3 text-txt-2">
+                      {unitCost === null ? (
+                        <span className="text-txt-4">—</span>
+                      ) : (
+                        formatMoney(dec(s.onHand).times(dec(unitCost)))
+                      )}
+                    </td>
+                  )}
                   <td className="tnum px-4 py-3">
                     {canWrite ? (
                       <MinStockCell stockId={s.id} value={Number(dec(s.minStock).toString())} />

@@ -25,7 +25,14 @@ export interface StocktakeRow {
  * الدستة، التكلفة، القيمة) خلف زر «التفاصيل» — يقرأها من يحتاجها ولا تزحم
  * من يسأل «كم باقي عندي؟».
  */
-export function StocktakeTable({ rows, totalValue }: { rows: StocktakeRow[]; totalValue: string }) {
+export function StocktakeTable({
+  rows,
+  totalValue,
+}: {
+  rows: StocktakeRow[];
+  /** null لمن لا يملك صلاحية التكلفة — فتغيب القيمة والأعمدة المالية كلها. */
+  totalValue: string | null;
+}) {
   const [query, setQuery] = useState('');
   const [details, setDetails] = useState(false);
 
@@ -37,8 +44,15 @@ export function StocktakeTable({ rows, totalValue }: { rows: StocktakeRow[]; tot
     );
   }, [rows, query]);
 
+  // التكلفة والقيمة عمودان ماليّان: يظهران فقط لمن وصلته الأرقام أصلاً
+  // (totalValue غير فارغ)، فأمين المخزن يرى العدّ ولا يرى سعر الجملة.
+  const seeCosts = totalValue !== null;
   const baseHeaders = ['الصنف', 'المخزن', 'الدست والقطعة', 'إجمالي القطع', 'الحالة'];
-  const detailHeaders = ['الصنف', 'المخزن', 'الدست والقطعة', 'إجمالي القطع', 'قطع الدستة', 'تكلفة القطعة', 'القيمة', 'الحالة'];
+  const detailHeaders = [
+    'الصنف', 'المخزن', 'الدست والقطعة', 'إجمالي القطع', 'قطع الدستة',
+    ...(seeCosts ? ['تكلفة القطعة', 'القيمة'] : []),
+    'الحالة',
+  ];
 
   return (
     <section>
@@ -51,15 +65,20 @@ export function StocktakeTable({ rows, totalValue }: { rows: StocktakeRow[]; tot
         />
         <div className="flex items-center gap-3">
           <span className="tnum text-[0.7rem] text-txt-4">
-            {filtered.length} صنف · القيمة الإجمالية{' '}
-            <span className="font-semibold text-brand">{totalValue}</span>
+            {filtered.length} صنف
+            {seeCosts && (
+              <>
+                {' '}· القيمة الإجمالية{' '}
+                <span className="font-semibold text-brand">{totalValue}</span>
+              </>
+            )}
           </span>
           <button
             type="button"
             onClick={() => setDetails((v) => !v)}
             className="rounded-lg border border-line px-3 py-1.5 text-[0.7rem] font-medium text-txt-2 transition-colors hover:border-brand hover:text-brand"
           >
-            {details ? 'إخفاء التفاصيل' : 'التفاصيل والتكاليف'}
+            {details ? 'إخفاء التفاصيل' : seeCosts ? 'التفاصيل والتكاليف' : 'التفاصيل'}
           </button>
         </div>
       </div>
@@ -76,12 +95,12 @@ export function StocktakeTable({ rows, totalValue }: { rows: StocktakeRow[]; tot
             </td>
             <td className="tnum px-4 py-3 text-txt-2">{r.onHand}</td>
             {details && <td className="tnum px-4 py-3 text-txt-4">{r.ppd}</td>}
-            {details && (
+            {details && seeCosts && (
               <td className="tnum px-4 py-3 text-txt-3">
                 {r.unitCost === null ? <span className="text-warn">—</span> : r.unitCost}
               </td>
             )}
-            {details && (
+            {details && seeCosts && (
               <td className="tnum px-4 py-3 font-medium text-brand">{r.value ?? '—'}</td>
             )}
             <td className="px-4 py-3">
@@ -92,7 +111,7 @@ export function StocktakeTable({ rows, totalValue }: { rows: StocktakeRow[]; tot
       </Table>
       <p className="mt-2 text-[0.7rem] leading-[1.8] text-txt-4">
         «الدست والقطعة» محسوبان من إجمالي القطع على أساس قطع دستة كل منتج (تُضبط من صفحة
-        المنتج). زر «التفاصيل والتكاليف» يُظهر التكلفة والقيمة لمن يحتاجها.
+        المنتج).
       </p>
     </section>
   );

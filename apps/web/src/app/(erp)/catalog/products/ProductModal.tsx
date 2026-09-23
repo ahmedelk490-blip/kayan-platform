@@ -6,6 +6,8 @@ import { ProductForm, type Option, type ProductValues } from './ProductForm';
 import { createProductInline, updateProduct } from './actions';
 
 export interface ProductFormOptions {
+  /** تُعرض التكلفة وسعر الجملة؟ يحسمها الخادم بصلاحية cost.view ويمرّرها هنا. */
+  seeCosts?: boolean;
   categories: Option[];
   materials: Option[];
   printingOptions: Option[];
@@ -31,6 +33,7 @@ export function NewProductModal({ options }: { options: ProductFormOptions }) {
     >
       {(onSuccess) => (
         <ProductForm
+          seeCosts={options.seeCosts ?? true}
           action={createProductInline}
           categories={options.categories}
           materials={options.materials}
@@ -75,6 +78,7 @@ export function EditProductModal({
             <span aria-hidden="true">افتح صفحة المنتج ←</span>
           </Link>
           <ProductForm
+            seeCosts={options.seeCosts ?? true}
           action={updateProduct.bind(null, id)}
           values={values}
           categories={options.categories}

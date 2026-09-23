@@ -254,7 +254,8 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'inventory.write',
     'supplies.view',
     'supplies.write',
-    'formula.view',
+    // لا formula.view عمداً: المعادلات تكاليفُ خاماتٍ وأحبار — سعر جملةٍ لا
+    // يخصّ أمين المخزن، وهو ما استثناه المالك صراحةً.
 
     // المرتجعات والهالك — يستلم المرتجع ويحرّر الهالك ويعتمده، والجزاء الناتج
     // عنه يُعتمد بيده لأنه صاحب المحضر.
