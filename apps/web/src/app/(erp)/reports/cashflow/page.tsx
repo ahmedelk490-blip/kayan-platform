@@ -75,7 +75,7 @@ export default async function CashflowReport({ searchParams }: { searchParams: P
         <Empty what="حركة نقدية" />
       ) : (
         <>
-          <div className="mb-8 grid gap-4 sm:grid-cols-3">
+          <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:gap-4">
             <Figure label="النقد الداخل (محصَّل)" value={formatMoney(totalIn)} strong />
             <Figure label="النقد الخارج (مصروفات)" value={formatMoney(totalOut)} />
             <Figure label="صافي التدفق" value={formatMoney(netTotal)} strong tone={netTotal.lt(0) ? 'bad' : undefined} />

@@ -152,7 +152,7 @@ export default async function DailyPage() {
       />
 
       {/* الأرقام الأربعة التي يُقفل بها اليوم. */}
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <div className="erp-card p-4">
           <p className="text-[0.7rem] text-txt-3">مبيعات اليوم</p>
           <p className="tnum mt-1 text-xl font-bold text-brand">{formatMoney(salesTotal)}</p>

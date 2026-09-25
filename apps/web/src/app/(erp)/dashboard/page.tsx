@@ -148,7 +148,7 @@ export default async function ManagerDashboard() {
         <QuickActions actions={actions} />
 
         {/* الأرقام الأربعة الحاسمة — لا أكثر. التفاصيل في التقارير. */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
           {seeMoney && (
             <StatCard
               index={0}

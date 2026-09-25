@@ -313,17 +313,17 @@ export async function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-line bg-card px-5 lg:px-8">
-          <h1 className="truncate text-base font-semibold text-brand">{title}</h1>
+        <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-card px-4 lg:h-16 lg:px-8">
+          <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-brand">{title}</h1>
 
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2 lg:gap-3">
             {/* زيارة الموقع العام — يفتح واجهة الزبون في تبويب جديد ليبقى
                 النظام مفتوحاً. متاح للجميع: أي مستخدم قد يريد رؤية ما يراه الزبون. */}
             <a
               href="/"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-txt-2 transition-colors hover:border-brand hover:text-brand"
+              className="hidden items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-txt-2 transition-colors hover:border-brand hover:text-brand sm:inline-flex"
               title="زيارة الموقع العام"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -337,11 +337,12 @@ export async function AppShell({
 
           {/* هوية المستخدم والخروج في الترويسة للموبايل والتابلت حيث يختفي
               الشريط الجانبي؛ على الديسكتوب تظهر في أسفل الشريط بدلاً منها. */}
-          <div className="flex items-center gap-4 lg:hidden">
-            <div className="text-end">
-              <p className="text-xs font-medium text-txt">{user.nameAr ?? user.name}</p>
-              <p className="text-[0.7rem] text-txt-3">{user.roleNameAr}</p>
-            </div>
+          {/* على الهاتف الاسم سطرٌ واحد بلا الدور: من يمسك الهاتف يعرف دوره،
+              وسطران فوق بعضهما في ترويسة بـ٥٦ بكسل يزحمان العنوان والجرس. */}
+          <div className="flex items-center gap-2 lg:hidden">
+            <span className="hidden max-w-28 truncate text-xs font-medium text-txt-2 min-[380px]:inline">
+              {user.nameAr ?? user.name}
+            </span>
             <form action={logoutAction}>
               <button type="submit" className="erp-btn-ghost">
                 خروج
@@ -366,7 +367,7 @@ export async function AppShell({
           }))}
         />
 
-        <main className="min-w-0 flex-1 p-5 lg:p-8">{children}</main>
+        <main className="min-w-0 flex-1 p-4 lg:p-8">{children}</main>
       </div>
     </div>
   );

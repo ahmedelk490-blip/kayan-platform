@@ -58,17 +58,17 @@ export function StatCard({
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: index * 0.06, ease: [0.16, 1, 0.3, 1] }}
-      className="erp-card erp-card-hover p-5"
+      className="erp-card erp-card-hover p-4 lg:p-5"
     >
       <div className="flex items-start justify-between gap-3">
-        <p className="text-xs text-txt-3">{label}</p>
-        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${t.chip}`}>
+        <p className="text-[0.7rem] leading-snug text-txt-3 lg:text-xs">{label}</p>
+        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg lg:h-8 lg:w-8 ${t.chip}`}>
           {icon}
         </span>
       </div>
 
-      <p className="mt-3 flex items-baseline gap-1.5">
-        <span className="text-2xl font-semibold text-brand">
+      <p className="mt-2 flex flex-wrap items-baseline gap-x-1.5 lg:mt-3">
+        <span className="text-xl font-semibold text-brand lg:text-2xl">
           {typeof value === 'number' ? <CountUp value={value} decimals={decimals} /> : value}
         </span>
         {unit && <span className="text-xs text-txt-3">{unit}</span>}

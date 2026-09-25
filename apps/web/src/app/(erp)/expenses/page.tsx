@@ -279,7 +279,7 @@ export default async function ExpensesPage({
       </form>
 
       {/* أرقام حيّة بأيقونات (المعتمد فقط = ما صُرِف فعلاً) — بأسلوب لوحة المدير. */}
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:gap-4">
         <StatCard
           index={0}
           label="المصروفات المعتمدة"

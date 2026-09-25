@@ -93,7 +93,7 @@ export default async function HRPage() {
       />
 
       {/* أرقام حيّة — وأهمها الجزاءات المعلقة: تُرى قبل تشغيل رواتب الشهر. */}
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <StatCard
           index={0}
           label="الموظفون النشطون"

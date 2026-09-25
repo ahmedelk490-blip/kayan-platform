@@ -12,9 +12,9 @@ export function ModuleHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 lg:mb-5 lg:gap-3">
       <div className="flex items-baseline gap-2.5">
-        <h2 className="text-lg font-semibold text-brand">{title}</h2>
+        <h2 className="text-base font-semibold text-brand lg:text-lg">{title}</h2>
         {count !== undefined && (
           <span className="tnum text-xs text-txt-3">{count} سجل</span>
         )}
@@ -24,7 +24,13 @@ export function ModuleHeader({
   );
 }
 
-/** جدول بيانات بسيط — لا تأثيرات، قراءة سريعة. */
+/**
+ * جدول بيانات بسيط — لا تأثيرات، قراءة سريعة.
+ *
+ * وعلى الهاتف يصير كل صفّ بطاقةً قائمة (راجع .erp-stack في erp.css).
+ * عناوين الأعمدة تُمرّر إلى CSS كمتغيّرات على الجدول نفسه، فيستطيع كل
+ * صفّ أن يعنون خلاياه بنفسه دون أن يُكتب العنوان في كل خلية في كل شاشة.
+ */
 export function Table({
   headers,
   children,
@@ -34,9 +40,14 @@ export function Table({
   children: React.ReactNode;
   empty?: boolean;
 }) {
+  // تُقتبس لأن `content` لا يقبل إلا نصاً مقتبساً، وJSON.stringify يهرّب ما يجب.
+  const labels = Object.fromEntries(
+    headers.slice(0, 12).map((h, i) => [`--h${i + 1}`, JSON.stringify(h)]),
+  ) as React.CSSProperties;
+
   return (
-    <div className="erp-card overflow-x-auto">
-      <table className="w-full text-sm">
+    <div className="erp-card erp-stack overflow-x-auto">
+      <table className="w-full text-sm" style={labels}>
         <thead>
           <tr className="border-b border-line bg-card-2">
             {headers.map((h) => (

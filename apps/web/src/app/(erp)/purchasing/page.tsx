@@ -97,7 +97,7 @@ export default async function PurchasingPage({
       />
 
       {/* أرقام حيّة بأيقونات — بأسلوب لوحة المدير نفسه. */}
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:gap-4">
         <StatCard
           index={0}
           label="قيمة الأوامر المفتوحة"

@@ -334,6 +334,76 @@
   }
 }
 
+/* ══════════════════════════════════════════════════════════
+   الجداول على الهاتف — بطاقة لكل صفّ بدل زحفٍ أفقيّ
+   ══════════════════════════════════════════════════════════
+
+   جدولٌ بأحد عشر عموداً على شاشة ٣٧٥ بكسل يُظهِر أربعة ويخبئ سبعة،
+   ورقم الفاتورة ينكسر على ثلاثة أسطر. ومن زحف يميناً ليرى المتبقي فقد
+   الترويسة والاسم معاً — فلا يعرف أيّ رقمٍ يقرأ ولا لمَن.
+
+   فتحت ٦٤٠ بكسل يصير كل صفّ بطاقةً قائمة: سطرٌ لكل خلية، عنوان العمود
+   يميناً وقيمته يساراً. والعنوان يأتي من متغيّرٍ تضعه الترويسة نفسها على الجدول
+   (h1 … h12)، فلا تُكرّر العناوين في كل خلية ولا تُمسّ الشاشات الثلاثون
+   التي تستخدم المكوّن. وعلى الديسكتوب يبقى جدولاً كما هو.                    */
+
+@media (max-width: 639px) {
+  /* الأزرار أصغر على الهاتف — زرّ بعرض نصف الشاشة يدفع العنوان إلى سطرٍ
+     وحده فيصير للترويسة سطران بدل واحد، ومع كل شاشة يتكرّر. والهدف أقلّ
+     من ٥٥ بكسل ارتفاعاً يبقى مريحاً للمس. */
+  .erp-btn { padding: 0.5rem 0.9rem; font-size: 0.8125rem; }
+  .erp-btn-ghost { padding: 0.5rem 0.85rem; font-size: 0.8125rem; }
+}
+
+@media (max-width: 639px) {
+  .erp-stack { overflow-x: visible; }
+  .erp-stack table { display: block; }
+  .erp-stack thead { display: none; }
+  .erp-stack tbody { display: block; }
+
+  .erp-stack tbody tr { display: block; padding: 0.35rem 0; }
+  .erp-stack tbody tr + tr { border-top: 1px solid var(--color-line); }
+
+  .erp-stack tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.45rem 1rem;
+    text-align: end;
+    white-space: normal;
+  }
+
+  .erp-stack tbody td::before {
+    content: var(--h, "");
+    flex: 0 0 auto;
+    color: var(--color-txt-3);
+    font-size: 0.7rem;
+    font-weight: 500;
+  }
+  .erp-stack tbody td:nth-child(1)  { --h: var(--h1, ""); }
+  .erp-stack tbody td:nth-child(2)  { --h: var(--h2, ""); }
+  .erp-stack tbody td:nth-child(3)  { --h: var(--h3, ""); }
+  .erp-stack tbody td:nth-child(4)  { --h: var(--h4, ""); }
+  .erp-stack tbody td:nth-child(5)  { --h: var(--h5, ""); }
+  .erp-stack tbody td:nth-child(6)  { --h: var(--h6, ""); }
+  .erp-stack tbody td:nth-child(7)  { --h: var(--h7, ""); }
+  .erp-stack tbody td:nth-child(8)  { --h: var(--h8, ""); }
+  .erp-stack tbody td:nth-child(9)  { --h: var(--h9, ""); }
+  .erp-stack tbody td:nth-child(10) { --h: var(--h10, ""); }
+  .erp-stack tbody td:nth-child(11) { --h: var(--h11, ""); }
+  .erp-stack tbody td:nth-child(12) { --h: var(--h12, ""); }
+
+  /* الخلية الأولى هي اسم السجلّ — عنوان البطاقة، أبرز ممّا تحته. */
+  .erp-stack tbody td:first-child { padding-top: 0.7rem; font-size: 0.875rem; font-weight: 600; }
+  .erp-stack tbody td:last-child { padding-bottom: 0.7rem; }
+  .erp-stack tbody td:empty { display: none; }
+
+  /* «لا توجد سجلات» خليةٌ ممتدة — تبقى سطراً واحداً في الوسط. */
+  .erp-stack tbody td[colspan] { display: block; text-align: center; font-weight: 400; }
+  .erp-stack tbody td[colspan]::before { content: none; }
+}
+
 /* ═══════════════════════════════════════════════════════════
    الطباعة — عروض الأسعار والفواتير
    ═══════════════════════════════════════════════════════════

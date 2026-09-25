@@ -219,7 +219,7 @@ export default async function InvoicesPage({
             إجمالي المستحق: <span className="font-semibold text-brand">{formatMoney(totalOutstanding)}</span>
           </span>
         </div>
-        <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:gap-4 xl:grid-cols-5">
           {AGEING_BUCKETS.map((bucket) => (
             <div key={bucket} className="rounded-lg border border-line p-4">
               <p className="text-[0.7rem] text-txt-3">{AGEING_BUCKET_AR[bucket]}</p>

@@ -40,7 +40,7 @@ export default async function AdminPage() {
   return (
     <AppShell user={user} title="الإدارة">
       <div className="space-y-6">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
           <Kpi label="المستخدمون" value={String(users.length)} unit="مستخدم" />
           <Kpi label="الأدوار" value={String(roles.length)} unit="دور" />
           <Kpi label="الجلسات النشطة" value={String(sessionCount)} unit="جلسة" />

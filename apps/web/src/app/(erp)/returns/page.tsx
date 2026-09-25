@@ -80,7 +80,7 @@ export default async function ReturnsPage({
       />
 
       {/* أرقام حيّة بأيقونات — إجماليات كلية من قاعدة البيانات لا من الصفحة المعروضة. */}
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:gap-4">
         <StatCard
           index={0}
           label="عدد المرتجعات (الكل)"

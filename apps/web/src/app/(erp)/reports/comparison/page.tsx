@@ -88,7 +88,7 @@ export default async function ComparisonReport({ searchParams }: { searchParams:
         <Empty what="بيانات للمقارنة" />
       ) : (
         <>
-          <div className="mb-8 grid gap-4 sm:grid-cols-3">
+          <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:gap-4">
             {metrics.map((m) => {
               const change = pct(m.cur, m.prev);
               const positive = change !== null && change >= 0;
