@@ -523,6 +523,16 @@ export function DocumentForm({
   // ما تعرضه الخانة وتُرسله — مشتقّ لا منسوخ: لا يتخلّف عن إجمالٍ تغيّر.
   const payValue = payTouched ? payAmount : totals.total.toNumber();
 
+  // الأصناف التي ستُباع بأكثر ممّا في المخزن. البيع لا يُمنع — المصنع
+  // يبيع ما سيُنتَج ومنعُه يوقف بيعاً حقيقياً — لكنه يُقال قبل الحفظ لا
+  // بعده: تلميح «متاح X» تحت مربّع المقاس يضيع على شاشة الهاتف، والنتيجة
+  // رصيدٌ سالب يُكتشَف في الجرد بعد أسبوع بلا سبب معروف.
+  const shortLines = lines.filter((l) => {
+    if (!l.variantId || l.quantity <= 0) return false;
+    const v = variants.find((x) => x.value === l.variantId);
+    return v ? l.quantity > v.available : false;
+  });
+
   const hasDiscount = !totals.discountAmount.eq(0);
   const hasTax = !totals.taxAmount.eq(0);
 
@@ -1137,6 +1147,13 @@ export function DocumentForm({
         <span className="text-sm text-txt-2">الإجمالي</span>
         <span className="tnum text-2xl font-bold text-brand">{formatMoney(totals.total)}</span>
       </div>
+      {shortLines.length > 0 && (
+        <p className="-mt-3 rounded-xl border border-warn bg-warn-soft px-4 py-2.5 text-[0.75rem] leading-[1.8] text-warn">
+          ⚠ {shortLines.length} مقاس بكمية أكبر من المتاح في المخزن — البيع مسموح
+          (ما سيُنتَج يُباع)، لكن رصيد هذه المقاسات سينزل تحت الصفر ويظهر أحمرَ
+          في «أرصدة المنتجات». سجّل الاستلام أوّلاً إن كانت البضاعة قد وصلت.
+        </p>
+      )}
       {(hasDiscount || hasTax) && (
         <p className="-mt-3 flex flex-wrap justify-end gap-x-4 text-xs text-txt-3">
           <span>المجموع <span className="tnum">{formatMoney(totals.subtotal)}</span></span>

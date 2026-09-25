@@ -123,6 +123,12 @@ export function CashierBoard({
   // الإجمالي الظاهر = البضاعة + التوصيل حين يكون على الزبون — كما سيحسبه الخادم.
   const total =
     deliveryWho === 'CUSTOMER' && fee > 0 ? merchandiseTotal.plus(dec(fee)) : merchandiseTotal;
+  // ما سيُباع بأكثر ممّا في المخزن — لا يُمنع (المصنع يبيع ما سيُنتَج)
+  // لكنه يُقال قبل البيع لا بعده، وإلا ظهر رصيدٌ سالب بلا سبب معروف.
+  const shortLines = cart.filter((l) => {
+    const v = variants.find((x) => x.value === l.variantId);
+    return v ? l.quantity > v.available : false;
+  });
   const paidValue = paidTouched ? paid : total.toNumber();
   const remaining = total.minus(paidValue);
 
@@ -254,7 +260,12 @@ export function CashierBoard({
             <p className="py-6 text-center text-xs text-txt-4">اضغط منتجاً لإضافته.</p>
           ) : (
             cart.map((l) => (
-              <div key={l.key} className="rounded-lg border border-line bg-card-2 p-2.5">
+              <div
+                key={l.key}
+                className={`rounded-lg border bg-card-2 p-2.5 ${
+                  shortLines.some((x) => x.key === l.key) ? 'border-warn' : 'border-line'
+                }`}
+              >
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-xs text-txt">{l.label}</span>
                   <button type="button" onClick={() => setCart((p) => p.filter((x) => x.key !== l.key))} className="text-[0.7rem] text-bad hover:underline">حذف</button>
@@ -478,6 +489,13 @@ export function CashierBoard({
           <input type="hidden" name="deliveryFee" value={fee} />
           <input type="hidden" name="deliveryOn" value={deliveryWho} />
         </div>
+
+        {shortLines.length > 0 && (
+          <p className="rounded-lg border border-warn bg-warn-soft px-3 py-2 text-[0.7rem] leading-[1.8] text-warn">
+            ⚠ {shortLines.length} صنف بكمية أكبر من المتاح — البيع مسموح، ورصيدها سينزل
+            تحت الصفر ويظهر أحمرَ في المخزون.
+          </p>
+        )}
 
         <div className="flex items-center justify-between border-t border-line pt-3">
           <span className="text-sm text-txt-2">الإجمالي</span>

@@ -9,47 +9,12 @@ import { dec, formatQty } from '@erp/domain';
 import { audit, fieldErrors } from '@/lib/audit';
 import { num, numeric } from '@/lib/num';
 import { TYPES, type MovementType } from './types';
+import { applyStockDelta } from '@/lib/stock';
 
 export interface FormState {
   error?: string;
   ok?: string;
   fieldErrors?: Record<string, string>;
-}
-
-type Tx = Parameters<Parameters<typeof tenantTransaction>[0]>[0];
-
-/**
- * Apply a delta to the stock projection.
- *
- * Prisma cannot target a compound unique that contains a nullable column
- * with `null` — `variantId_warehouseId_locationId` includes an optional
- * locationId — so this finds the row first and then writes, instead of
- * upserting. Same effect, and it handles "no location" correctly.
- */
-async function applyStockDelta(
-  tx: Tx,
-  key: { variantId: string; warehouseId: string; locationId: string | null },
-  field: 'onHand' | 'reserved' | 'damaged',
-  delta: number,
-) {
-  const existing = await tx.stock.findFirst({ where: key });
-
-  if (existing) {
-    await tx.stock.update({
-      where: { id: existing.id },
-      data: { [field]: { increment: delta } },
-    });
-    return;
-  }
-
-  await tx.stock.create({
-    data: {
-      ...key,
-      onHand: field === 'onHand' ? delta : 0,
-      reserved: field === 'reserved' ? delta : 0,
-      damaged: field === 'damaged' ? delta : 0,
-    },
-  });
 }
 
 const MovementSchema = z.object({

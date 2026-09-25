@@ -21,6 +21,7 @@ import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 import { nextOpsNumber, type FormState } from '@/lib/ops';
 import { numeric } from '@/lib/num';
+import { adjustStock } from '@/lib/stock';
 
 // ── Damage records ──────────────────────────────────────────
 
@@ -237,23 +238,7 @@ export async function setDamageStatus(id: string, next: string): Promise<void> {
             userId: user.id,
           },
         });
-        const st = await tx.stock.findFirst({
-          where: { variantId: damage.variantId!, warehouseId: warehouse.id, locationId: null },
-        });
-        if (st) {
-          await tx.stock.update({
-            where: { id: st.id },
-            data: { onHand: dec(st.onHand).minus(dec(damage.quantity)).toString() },
-          });
-        } else {
-          await tx.stock.create({
-            data: {
-              variantId: damage.variantId!,
-              warehouseId: warehouse.id,
-              onHand: dec(damage.quantity).negated().toString(),
-            },
-          });
-        }
+        await adjustStock(tx, damage.variantId!, warehouse.id, dec(damage.quantity).negated());
       });
       revalidatePath('/inventory');
     }

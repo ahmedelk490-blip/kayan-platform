@@ -9,6 +9,7 @@ import { audit } from '@/lib/audit';
 import { num } from '@/lib/num';
 import type { FormState } from '@/lib/ops';
 import { lockPaymentSequence, nextPaymentNumber } from '@/app/(erp)/invoices/shared';
+import { adjustStock } from '@/lib/stock';
 
 /**
  * رقم مرتجع متسلسل للسنة (سنة بغداد): RET-YYYY-N.
@@ -185,12 +186,7 @@ export async function createReturn(
             userId: user.id,
           },
         });
-        const st = await tx.stock.findFirst({ where: { variantId: r.line.variantId, warehouseId, locationId: null } });
-        if (st) {
-          await tx.stock.update({ where: { id: st.id }, data: { onHand: dec(st.onHand).plus(dec(r.qty)).toString() } });
-        } else {
-          await tx.stock.create({ data: { variantId: r.line.variantId, warehouseId, onHand: dec(r.qty).toString() } });
-        }
+        await adjustStock(tx, r.line.variantId, warehouseId, dec(r.qty));
       }
     }
 
@@ -308,12 +304,7 @@ export async function deleteReturn(id: string): Promise<void> {
             userId: user.id,
           },
         });
-        const st = await tx.stock.findFirst({ where: { variantId: l.variantId, warehouseId, locationId: null } });
-        if (st) {
-          await tx.stock.update({ where: { id: st.id }, data: { onHand: dec(st.onHand).minus(dec(l.quantity)).toString() } });
-        } else {
-          await tx.stock.create({ data: { variantId: l.variantId, warehouseId, onHand: dec(l.quantity).negated().toString() } });
-        }
+        await adjustStock(tx, l.variantId, warehouseId, dec(l.quantity).negated());
       }
     }
 

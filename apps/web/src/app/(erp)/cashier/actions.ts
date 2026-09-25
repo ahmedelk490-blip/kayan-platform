@@ -9,6 +9,7 @@ import { audit, nextCode } from '@/lib/audit';
 import { num, normalizeDigits } from '@/lib/num';
 import { DELIVERY_DESCRIPTION } from '@/lib/delivery';
 import { allocateInvoiceNumber, lockPaymentSequence, nextPaymentNumber, invoiceSettings, recordDeliveryExpense, type FormState } from '../invoices/shared';
+import { adjustStock } from '@/lib/stock';
 
 /**
  * إتمام بيع الكاشير — فاتورة مُصدَرة ومُحصَّلة تخصم المخزون، في معاملة واحدة.
@@ -232,12 +233,7 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
           userId: user.id,
         },
       });
-      const stock = await tx.stock.findFirst({ where: { variantId: v.id, warehouseId, locationId: null } });
-      if (stock) {
-        await tx.stock.update({ where: { id: stock.id }, data: { onHand: dec(stock.onHand).minus(dec(l.quantity)).toString() } });
-      } else {
-        await tx.stock.create({ data: { variantId: v.id, warehouseId, onHand: dec(l.quantity).negated().toString() } });
-      }
+      await adjustStock(tx, v.id, warehouseId, dec(l.quantity).negated());
     }
 
     return inv;

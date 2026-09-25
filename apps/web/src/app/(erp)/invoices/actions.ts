@@ -24,6 +24,7 @@ import { audit, fieldErrors, nextCode } from '@/lib/audit';
 import { readLines, decimal, normalizeDigits } from '@/app/(erp)/sales/shared';
 import { numeric } from '@/lib/num';
 import { DELIVERY_DESCRIPTION } from '@/lib/delivery';
+import { adjustStock } from '@/lib/stock';
 import {
   allocateInvoiceNumber,
   lockPaymentSequence,
@@ -457,12 +458,7 @@ async function issueStockOut(
         userId,
       },
     });
-    const st = await tx.stock.findFirst({ where: { variantId: l.variantId, warehouseId, locationId: null } });
-    if (st) {
-      await tx.stock.update({ where: { id: st.id }, data: { onHand: dec(st.onHand).minus(qty).toString() } });
-    } else {
-      await tx.stock.create({ data: { variantId: l.variantId, warehouseId, onHand: qty.negated().toString() } });
-    }
+    await adjustStock(tx, l.variantId, warehouseId, qty.negated());
   }
 }
 
@@ -492,12 +488,7 @@ async function restockIn(
         userId,
       },
     });
-    const st = await tx.stock.findFirst({ where: { variantId: l.variantId, warehouseId, locationId: null } });
-    if (st) {
-      await tx.stock.update({ where: { id: st.id }, data: { onHand: dec(st.onHand).plus(qty).toString() } });
-    } else {
-      await tx.stock.create({ data: { variantId: l.variantId, warehouseId, onHand: qty.toString() } });
-    }
+    await adjustStock(tx, l.variantId, warehouseId, qty);
   }
 }
 
@@ -632,12 +623,7 @@ export async function updateInvoiceLines(
             userId: user.id,
           },
         });
-        const stock = await tx.stock.findFirst({ where: { variantId: vid, warehouseId, locationId: null } });
-        if (stock) {
-          await tx.stock.update({ where: { id: stock.id }, data: { onHand: dec(stock.onHand).minus(delta).toString() } });
-        } else {
-          await tx.stock.create({ data: { variantId: vid, warehouseId, onHand: delta.negated().toString() } });
-        }
+        await adjustStock(tx, vid, warehouseId, delta.negated());
       }
     }
   });
