@@ -10,6 +10,7 @@ import { requirePermission } from '@/lib/guard';
 import { withTenant } from '@/lib/prisma';
 import { csvResponse, stampedName } from '../../csv';
 import { resolveRange } from '../../range';
+import { returnsByInvoice, netOwed } from '@/lib/receivables';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,11 +38,11 @@ export async function GET(request: Request) {
           status: { notIn: ['DRAFT', 'VOID'] },
           issueDate: { gte: from, lte: to },
         },
-        select: { total: true, paidAmount: true },
+        select: { id: true, total: true, paidAmount: true },
       }),
       tx.invoice.findMany({
         where: { tenantId: user.tenantId, isDeleted: false, status: { in: RECEIVABLE_STATUSES } },
-        select: { total: true, paidAmount: true },
+        select: { id: true, total: true, paidAmount: true },
       }),
       tx.secondaryExpense.findMany({
         where: {
@@ -89,7 +90,12 @@ export async function GET(request: Request) {
 
   const invoiced = invoices.reduce((s, i) => s.plus(dec(i.total)), dec(0));
   const collected = invoices.reduce((s, i) => s.plus(dec(i.paidAmount)), dec(0));
-  const outstanding = receivable.reduce((s, i) => s.plus(balance(i.total, i.paidAmount)), dec(0));
+  // المستحق بعد المرتجعات — كما تحسبه شاشة البيان المالي ولوحة المدير.
+  const receivableReturns = await returnsByInvoice(user.tenantId, receivable.map((i) => i.id));
+  const outstanding = receivable.reduce(
+    (s, i) => s.plus(balance(netOwed(i, receivableReturns), i.paidAmount)),
+    dec(0),
+  );
   const expenseTotal = expenses.reduce((s, e) => s.plus(dec(e.amount)), dec(0));
 
   const returnsOut = dec(returnsAgg._sum.totalAmount ?? 0);

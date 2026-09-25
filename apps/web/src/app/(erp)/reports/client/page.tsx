@@ -60,6 +60,8 @@ export default async function SingleClientReport({ searchParams }: { searchParam
   let collected = dec(0);
   let cost = dec(0);
   let outstanding = dec(0);
+  // خارج الكتلة ليقرأها الجدول أدناه أيضاً — رقمٌ واحد للصفحة كلها.
+  let returnsByInvoice = new Map<string, ReturnType<typeof dec>>();
   if (selected) {
     // المرتجعات تُنقص المستحق، وقاعُ balance يمنع فاتورةً زائدة الدفع من
     // إلغاء دَينٍ حقيقي على فاتورة أخرى لنفس العميل.
@@ -74,7 +76,7 @@ export default async function SingleClientReport({ searchParams }: { searchParam
           _sum: { totalAmount: true },
         })
       : [];
-    const returnsByInvoice = new Map(grouped.map((g) => [g.invoiceId, dec(g._sum.totalAmount ?? 0)]));
+    returnsByInvoice = new Map(grouped.map((g) => [g.invoiceId, dec(g._sum.totalAmount ?? 0)]));
 
     for (const inv of selected.invoices) {
       invoiced = invoiced.plus(dec(inv.total));
@@ -139,7 +141,16 @@ export default async function SingleClientReport({ searchParams }: { searchParam
                 <td className="px-4 py-3 text-txt-3">{inv.issueDate ? fmt.format(inv.issueDate) : '—'}</td>
                 <td className="tnum px-4 py-3 text-txt-2">{formatMoney(inv.total)}</td>
                 <td className="tnum px-4 py-3 text-ok">{formatMoney(inv.paidAmount)}</td>
-                <td className="tnum px-4 py-3 text-warn">{formatMoney(balance(inv.total, inv.paidAmount))}</td>
+                {/* من الصافي كإجمالي المستحقّ أعلاه — وإلا جمعت الأعمدة رقماً
+                    غير الرقم المكتوب فوقها في نفس الصفحة. */}
+                <td className="tnum px-4 py-3 text-warn">
+                  {formatMoney(
+                    balance(
+                      dec(inv.total).minus(returnsByInvoice.get(inv.id) ?? dec(0)),
+                      inv.paidAmount,
+                    ),
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <Badge tone={TONE[inv.status] ?? 'muted'}>
                     {(INVOICE_STATUS_AR as Record<string, string>)[inv.status] ?? inv.status}

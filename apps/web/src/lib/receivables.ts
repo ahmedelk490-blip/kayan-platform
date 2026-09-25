@@ -1,7 +1,9 @@
 import 'server-only';
 
 import { dec } from '@erp/domain';
-import { prisma } from './prisma';
+import { prisma, tenantTransaction } from './prisma';
+
+type Tx = Parameters<Parameters<typeof tenantTransaction>[0]>[0];
 
 /**
  * المستحق الحقيقي على الفواتير — بعد خصم ما أُرجع منها.
@@ -34,4 +36,34 @@ export function netOwed(
   returns: Map<string, ReturnType<typeof dec>>,
 ): ReturnType<typeof dec> {
   return dec(invoice.total as never).minus(returns.get(invoice.id) ?? dec(0));
+}
+
+/**
+ * قيمة ما أُرجع من فاتورة واحدة — داخل المعاملة لا خارجها.
+ *
+ * التحصيل يقرّر خلف قفل تسلسل الدفعات، ومرتجعٌ يُسجّل بين القراءة والكتابة
+ * يغيّر المستحقّ فعلاً — فتُقرأ القيمة طازجةً خلف القفل.
+ */
+export async function returnedValueInTx(
+  tx: Tx,
+  tenantId: string,
+  invoiceId: string,
+): Promise<ReturnType<typeof dec>> {
+  const agg = await tx.salesReturn.aggregate({
+    where: { tenantId, invoiceId, isDeleted: false },
+    _sum: { totalAmount: true },
+  });
+  return dec(agg._sum.totalAmount ?? 0);
+}
+
+/** ونفسُها خارج معاملة — لفحصٍ مبدئيّ أو لاشتقاق حالة. */
+export async function returnedValueOf(
+  tenantId: string,
+  invoiceId: string,
+): Promise<ReturnType<typeof dec>> {
+  const agg = await prisma.salesReturn.aggregate({
+    where: { tenantId, invoiceId, isDeleted: false },
+    _sum: { totalAmount: true },
+  });
+  return dec(agg._sum.totalAmount ?? 0);
 }

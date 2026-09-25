@@ -25,6 +25,7 @@ import { readLines, decimal, normalizeDigits } from '@/app/(erp)/sales/shared';
 import { numeric } from '@/lib/num';
 import { DELIVERY_DESCRIPTION } from '@/lib/delivery';
 import { adjustStock } from '@/lib/stock';
+import { returnedValueInTx, returnedValueOf } from '@/lib/receivables';
 import {
   allocateInvoiceNumber,
   lockPaymentSequence,
@@ -583,10 +584,15 @@ export async function updateInvoiceLines(
   const touchStock = invoice.status !== 'DRAFT' && !invoice.salesOrderId;
   const warehouseId = touchStock ? await defaultWarehouseId(user.tenantId) : null;
 
+  // وهنا كذلك: الإجمالي الجديد ناقص ما أُرجع من هذه الفاتورة.
   const newStatus =
     invoice.status === 'DRAFT'
       ? 'DRAFT'
-      : deriveInvoiceStatus(totals.total, dec(invoice.paidAmount), invoice.status as never);
+      : deriveInvoiceStatus(
+          dec(totals.total).minus(await returnedValueOf(user.tenantId, invoiceId)),
+          dec(invoice.paidAmount),
+          invoice.status as never,
+        );
 
   await tenantTransaction(async (tx) => {
     await tx.invoiceLine.deleteMany({ where: { invoiceId } });
@@ -889,10 +895,15 @@ export async function recordPayment(
   if (invoice.status === 'DRAFT') return { error: 'أصدر الفاتورة أولاً.' };
   if (invoice.status === 'VOID') return { error: 'الفاتورة ملغاة.' };
 
-  if (exceedsBalance(parsed.data.amount, invoice.total, invoice.paidAmount)) {
+  // السقف هو المستحقّ الصافي: الإجمالي ناقص ما أُرجع من الفاتورة. بضاعةٌ
+  // أعادها العميل لم تعد مستحقّةً عليه، وكان السقف يُحسب من الإجمالي وحده:
+  // فيُقبَل تحصيلٌ فوق ما يجب، وتبقى الفاتورة ناقصة السداد بعد أن سُدّدت حقاً.
+  const returnedBefore = await returnedValueOf(user.tenantId, invoiceId);
+  const netTotal = dec(invoice.total).minus(returnedBefore);
+  if (exceedsBalance(parsed.data.amount, netTotal, invoice.paidAmount)) {
     return {
       fieldErrors: {
-        amount: `المبلغ يتجاوز المتبقي (${balance(invoice.total, invoice.paidAmount).toString()}).`,
+        amount: `المبلغ يتجاوز المتبقي (${balance(netTotal, invoice.paidAmount).toString()}).`,
       },
     };
   }
@@ -911,9 +922,13 @@ export async function recordPayment(
     if (!fresh || fresh.status === 'DRAFT' || fresh.status === 'VOID') {
       return { error: 'الفاتورة غير صالحة للتحصيل.' } as const;
     }
-    if (exceedsBalance(parsed.data.amount, fresh.total, fresh.paidAmount)) {
+    // مرتجعٌ قد يُسجّل بين الفحص أعلاه وهذه اللحظة — فيُقرأ طازجاً خلف القفل.
+    const freshNet = dec(fresh.total).minus(
+      await returnedValueInTx(tx, user.tenantId, invoiceId),
+    );
+    if (exceedsBalance(parsed.data.amount, freshNet, fresh.paidAmount)) {
       return {
-        error: `المبلغ يتجاوز المتبقي (${balance(fresh.total, fresh.paidAmount).toString()}).`,
+        error: `المبلغ يتجاوز المتبقي (${balance(freshNet, fresh.paidAmount).toString()}).`,
       } as const;
     }
 
@@ -937,7 +952,8 @@ export async function recordPayment(
       where: { id: invoiceId },
       data: {
         paidAmount: paid.toString(),
-        status: deriveInvoiceStatus(fresh.total, paid, fresh.status as never),
+        // من الصافي أيضاً: وإلا بقيت فاتورةٌ سُدّدت بعد مرتجعها تظهر ديناً أبدياً.
+        status: deriveInvoiceStatus(freshNet, paid, fresh.status as never),
       },
     });
     return { number } as const;
@@ -1031,15 +1047,14 @@ export async function reversePayment(invoiceId: string, paymentId: string): Prom
     });
 
     const paid = dec(payment.invoice.paidAmount).minus(dec(payment.amount));
+    const netAfter = dec(payment.invoice.total).minus(
+      await returnedValueInTx(tx, user.tenantId, invoiceId),
+    );
     await tx.invoice.update({
       where: { id: invoiceId },
       data: {
         paidAmount: paid.toString(),
-        status: deriveInvoiceStatus(
-          payment.invoice.total,
-          paid,
-          payment.invoice.status as never,
-        ),
+        status: deriveInvoiceStatus(netAfter, paid, payment.invoice.status as never),
       },
     });
     return { number, original: payment.number };

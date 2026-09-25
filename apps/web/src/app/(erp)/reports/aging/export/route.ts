@@ -10,6 +10,7 @@ import {
 import { requirePermission } from '@/lib/guard';
 import { withTenant } from '@/lib/prisma';
 import { csvResponse, stampedName } from '../../csv';
+import { returnsByInvoice, netOwed } from '@/lib/receivables';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,16 +25,21 @@ export async function GET() {
     tx.invoice.findMany({
       where: { tenantId: user.tenantId, isDeleted: false, status: { in: RECEIVABLE_STATUSES } },
       select: {
-        number: true, total: true, paidAmount: true, dueDate: true,
+        id: true, number: true, total: true, paidAmount: true, dueDate: true,
         customer: { select: { contactName: true, companyName: true } },
       },
     }),
   );
 
+  // المرتجعات تُنقص المستحقّ — كما تفعل شاشة الأعمار نفسها. وإلا خرج الشيت
+  // بدينٍ أكبر ممّا تعرضه الشاشة، وهو ما يُرسل للمحاسب فيُطالِب عميلاً بمال
+  // بضاعةٍ أعادها.
+  const invoiceReturns = await returnsByInvoice(user.tenantId, invoices.map((i) => i.id));
+
   const headers = ['الفاتورة', 'العميل', 'تاريخ الاستحقاق', 'أيام التأخّر', 'المتبقّي', 'الفئة'];
   const rows = invoices
     .map((i) => {
-      const outstanding = balance(i.total, i.paidAmount);
+      const outstanding = balance(netOwed(i, invoiceReturns), i.paidAmount);
       const days = daysOverdue(i.dueDate, outstanding, now);
       return {
         number: i.number ?? '',

@@ -136,8 +136,12 @@ export default async function InvoicesPage({
     }),
   ]);
 
-  // المستحق بعد خصم المرتجعات — بضاعةٌ عادت ليست ديناً.
-  const invoiceReturns = await returnsByInvoice(user.tenantId, receivable.map((i) => i.id));
+  // المستحق بعد خصم المرتجعات — بضاعةٌ عادت ليست ديناً. وللصفوف
+  // المعروضة أيضاً لا للكروت وحدها: كان عمود «المتبقي» يُحسب من الإجمالي
+  // الخام فتظهر الفاتورة نفسها بمتبقٍ هنا وبمتبقٍ آخر في صفحتها وفي الكروت فوقها.
+  const invoiceReturns = await returnsByInvoice(user.tenantId, [
+    ...new Set([...receivable.map((i) => i.id), ...rows.map((r) => r.id)]),
+  ]);
   const ageing = ageingTotals(
     receivable.map((i) => ({
       dueDate: i.dueDate,
@@ -279,7 +283,7 @@ export default async function InvoicesPage({
         empty={rows.length === 0}
       >
         {rows.map((row) => {
-          const left = balance(row.total, row.paidAmount);
+          const left = balance(netOwed(row, invoiceReturns), row.paidAmount);
           const late = daysOverdue(row.dueDate, left);
           const pieces = row.lines.reduce(
             (s, l) => (isDeliveryDesc(l.description) ? s : s + Number(l.quantity)),
