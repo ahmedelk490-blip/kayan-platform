@@ -36,12 +36,16 @@ export function CustomerForm({
       <FormError message={state.error} />
 
       <div className="grid gap-4 sm:grid-cols-2">
+        {/* «المسؤول» لفظة تحتمل وجهين: من يوصل الطلب من عندنا، أو من يطلبه
+            عند العميل. وهو الثاني — اسمه هذا يُطبع على الفاتورة ويُنادى به في
+            رسائل الواتساب، فيُقال صراحةً لئلا يُكتب اسم مندوبنا مكانه. */}
         <Field
           name="contactName"
           label="اسم المسؤول"
           required
           errors={state.fieldErrors}
           defaultValue={values?.contactName}
+          hint="الشخص الذي طلب الطلب عند العميل — مَن تتصل به بشأنه، لا مندوب التوصيل."
         />
         <Field
           name="companyName"
