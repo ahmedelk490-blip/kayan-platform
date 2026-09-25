@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { dec } from '@erp/domain';
+import { balance, dec, RECEIVABLE_STATUSES } from '@erp/domain';
 import { prisma, tenantTransaction } from './prisma';
 
 type Tx = Parameters<Parameters<typeof tenantTransaction>[0]>[0];
@@ -66,4 +66,37 @@ export async function returnedValueOf(
     _sum: { totalAmount: true },
   });
   return dec(agg._sum.totalAmount ?? 0);
+}
+
+/**
+ * دين كل عميل من فواتيره المفتوحة — بعد مرتجعاتها.
+ *
+ * كان يُحسب بتجميعةٍ واحدة: مجموع الإجمالي ناقص مجموع المدفوع. وفي هذا
+ * خطأان: المرتجعات لا تُطرح، وفاتورةٌ دُفعت زيادةً تمحو ديناً حقيقياً على
+ * فاتورةٍ أخرى. والرقم لا يُقرأ على الشاشة وحده: منه تُبنى رسالة الواتساب
+ * التي تُرسل للعميل نفسه — فيُطالَب بمال بضاعةٍ أعادها.
+ *
+ * فصار لكل فاتورة حسابٌ على حدة بقاعٍ عند الصفر، ثم تُجمع — كما تفعل
+ * لوحة المدير وتقرير الأعمار. والعدد صار عددَ ما عليه فعلاً لا كلّ ما فُتح.
+ */
+export async function openDebtsByCustomer(
+  tenantId: string,
+): Promise<Map<string, { amount: number; count: number }>> {
+  const open = await prisma.invoice.findMany({
+    where: { tenantId, isDeleted: false, status: { in: RECEIVABLE_STATUSES } },
+    select: { id: true, customerId: true, total: true, paidAmount: true },
+  });
+  const returns = await returnsByInvoice(tenantId, open.map((i) => i.id));
+
+  const totals = new Map<string, { amount: ReturnType<typeof dec>; count: number }>();
+  for (const inv of open) {
+    const left = balance(netOwed(inv, returns), inv.paidAmount);
+    if (left.lte(0)) continue;
+    const cur = totals.get(inv.customerId) ?? { amount: dec(0), count: 0 };
+    totals.set(inv.customerId, { amount: cur.amount.plus(left), count: cur.count + 1 });
+  }
+
+  const out = new Map<string, { amount: number; count: number }>();
+  for (const [id, v] of totals) out.set(id, { amount: v.amount.toNumber(), count: v.count });
+  return out;
 }

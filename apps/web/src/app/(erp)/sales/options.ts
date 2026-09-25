@@ -3,10 +3,11 @@ import 'server-only';
 import { available, dec } from '@erp/domain';
 import { prisma } from '@/lib/prisma';
 import type { VariantOption, BundleOption } from './DocumentForm';
+import { openDebtsByCustomer } from '@/lib/receivables';
 
 /** Customers and sellable variants, with available-to-promise per variant. */
 export async function loadSalesOptions(tenantId: string) {
-  const [customers, variants, tiers, bundles, openInvoices] = await Promise.all([
+  const [customers, variants, tiers, bundles] = await Promise.all([
     prisma.customer.findMany({
       where: { tenantId, isDeleted: false },
       // الأحدث أولاً — فآخر عميل أُضيف يظهر أعلى القائمة (بطلب المالك).
@@ -47,22 +48,12 @@ export async function loadSalesOptions(tenantId: string) {
       },
     }),
 
-    // دين كل عميل من فواتيره المفتوحة — يظهر للبائع لحظة اختياره فيقرّر
-    // بالبيع الآجل وهو شايف. تجميعة واحدة في قاعدة البيانات لا صفوف.
-    prisma.invoice.groupBy({
-      by: ['customerId'],
-      where: { tenantId, isDeleted: false, status: { in: ['ISSUED', 'PARTIALLY_PAID'] } },
-      _sum: { total: true, paidAmount: true },
-      _count: { customerId: true },
-    }),
   ]);
 
-  // {customerId: {amount, count}} للمَدينين فقط — صغيرة مهما كبر السجل.
+  // {customerId: {amount, count}} للمَدينين فقط — بعد المرتجعات، وإلا أنذر
+  // البائعَ بدينٍ على عميلٍ أعاد بضاعته فمنعه من بيعةٍ حلال.
   const debts: Record<string, { amount: number; count: number }> = {};
-  for (const g of openInvoices) {
-    const amount = dec(g._sum.total ?? 0).minus(dec(g._sum.paidAmount ?? 0)).toNumber();
-    if (amount > 0) debts[g.customerId] = { amount, count: g._count.customerId };
-  }
+  for (const [customerId, v] of await openDebtsByCustomer(tenantId)) debts[customerId] = v;
 
   // شرائح كل منتج مجموعة، لتُلحق بمتغيّراته.
   const tiersByProduct = new Map<string, VariantOption['tiers']>();

@@ -10,6 +10,7 @@ import { Toolbar } from '@/components/crud/Toolbar';
 import { ModuleHeader, Table, Pager } from '@/components/crud/Shell';
 import { parseListQuery, skipTake, type SearchParams } from '@/lib/query';
 import { NewCustomerModal, EditCustomerModal } from './CustomerModal';
+import { openDebtsByCustomer } from '@/lib/receivables';
 
 export const metadata: Metadata = { title: 'العملاء' };
 
@@ -49,22 +50,9 @@ export default async function CustomersPage({
       : {}),
   };
 
-  // دين كل عميل المفتوح — تجميعة واحدة، فتصير قائمة العملاء قائمةَ تحصيل.
-  const openInvoices = await prisma.invoice.groupBy({
-    by: ['customerId'],
-    where: {
-      tenantId: user.tenantId,
-      isDeleted: false,
-      status: { in: ['ISSUED', 'PARTIALLY_PAID'] },
-    },
-    _sum: { total: true, paidAmount: true },
-    _count: { customerId: true },
-  });
-  const debts = new Map<string, { amount: number; count: number }>();
-  for (const g of openInvoices) {
-    const amount = dec(g._sum.total ?? 0).minus(dec(g._sum.paidAmount ?? 0)).toNumber();
-    if (amount > 0) debts.set(g.customerId, { amount, count: g._count.customerId });
-  }
+  // دين كل عميل المفتوح بعد مرتجعاته — فتصير قائمة العملاء قائمةَ تحصيل.
+  // من هذا الرقم تُبنى رسالة الواتساب أدناه، فخطؤه يصل العميل لا الشاشة وحدها.
+  const debts = await openDebtsByCustomer(user.tenantId);
 
   // فرز «الأعلى ديناً»: قائمة المدينين مرتّبة تنازلياً — قائمة التحصيل نفسها.
   const byDebt = query.sort === 'debt';
