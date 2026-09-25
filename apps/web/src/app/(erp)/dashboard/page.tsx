@@ -195,7 +195,7 @@ export default async function ManagerDashboard() {
 
         {/* ثلاث دوائر تختصر الصحة العامة — بصرية، بلا سطور. */}
         {(seeMoney || seeInventory || seeSales) && (
-          <div className="erp-card grid grid-cols-1 gap-4 p-6 sm:grid-cols-3">
+          <div className="erp-card grid grid-cols-1 divide-y divide-line p-4 sm:grid-cols-3 sm:gap-4 sm:divide-y-0 sm:p-6 [&>*]:py-3 sm:[&>*]:py-0">
             {seeMoney && (
               <Donut
                 label="نسبة التحصيل"

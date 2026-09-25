@@ -3,7 +3,7 @@ import {  userCan, dec, type PermissionKey, needsReorder } from '@erp/domain';
 import type { SessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logoutAction } from '@/app/(erp)/login/actions';
-import { MobileNav } from '@/components/NavLinks';
+import { HeaderMenu } from '@/components/HeaderMenu';
 import { AreaTabs } from '@/components/AreaTabs';
 import { GroupNav } from '@/components/GroupNav';
 import { NotificationBell, type Alert } from '@/components/NotificationBell';
@@ -317,6 +317,13 @@ export async function AppShell({
           <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-brand">{title}</h1>
 
           <div className="flex shrink-0 items-center gap-2 lg:gap-3">
+            {/* التنقّل كله خلف زرّ واحد على الهاتف — لا شريطٌ دائم يأكل سطراً. */}
+            <HeaderMenu
+              groups={groups.map((g) => ({
+                title: g.title || 'الرئيسية',
+                links: g.links.map((i) => ({ href: i.href, label: i.label })),
+              }))}
+            />
             {/* زيارة الموقع العام — يفتح واجهة الزبون في تبويب جديد ليبقى
                 النظام مفتوحاً. متاح للجميع: أي مستخدم قد يريد رؤية ما يراه الزبون. */}
             <a
@@ -351,12 +358,6 @@ export async function AppShell({
           </div>
           </div>
         </header>
-
-        {/* التنقل على الموبايل — عنصر لكل مجموعة، والتبويبات أسفله تتنقّل
-            داخلها. الشريط الجانبي مخفي تحت lg. */}
-        <MobileNav
-          items={groups.map((g) => ({ href: g.links[0].href, label: g.title || g.links[0].label }))}
-        />
 
         {/* تبويبات المنطقة الحالية — العروض والأوامر والفواتير تبويبات
             واحدة داخل المبيعات، وكذلك بقية المجموعات. */}

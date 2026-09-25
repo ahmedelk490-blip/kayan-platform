@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader } from '@/components/crud/Shell';
+import { Note } from '@/components/crud/Note';
 import { loadSalesOptions } from '@/app/(erp)/sales/options';
 import { CashierBoard } from './CashierBoard';
 
@@ -47,12 +48,12 @@ export default async function CashierPage() {
         </div>
       ) : (
         <>
-          <p className="mb-4 text-xs text-txt-3">
+          <Note>
             الأسرع: اكتب اسم الصنف في «إضافة سريعة» وحدّد الكمية والسعر — أو اضغط صورة
             المنتج (بلون واحد يُضاف فوراً، وبألوان تفتح الاختيار). للعميل الجديد: زر
             «+ عميل جديد بسرعة» — اسم وموبايل فقط. يُصرف من مخزن «{warehouse.nameAr}»
             وتظهر البيعة في المخزون وعند المدير فوراً.
-          </p>
+          </Note>
           <CashierBoard
             customers={options.customers}
             variants={options.variants}

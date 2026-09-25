@@ -41,33 +41,3 @@ export function SidebarNav({ items }: { items: NavLink[] }) {
     </ul>
   );
 }
-
-/** نفس الروابط بشكل أفقي للموبايل. */
-export function MobileNav({ items }: { items: NavLink[] }) {
-  const pathname = usePathname();
-
-  return (
-    <nav
-      aria-label="التنقل الرئيسي"
-      className="flex gap-1.5 overflow-x-auto border-b border-line bg-card-2 px-4 py-2 lg:hidden"
-    >
-      {items.map((item) => {
-        const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={active ? 'page' : undefined}
-            className={
-              active
-                ? 'shrink-0 rounded-full bg-brand px-3 py-1 text-[0.7rem] font-medium text-white'
-                : 'shrink-0 rounded-full border border-line-2 bg-card px-3 py-1 text-[0.7rem] text-txt-2 transition-colors hover:border-brand hover:text-brand'
-            }
-          >
-            {item.label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
-}

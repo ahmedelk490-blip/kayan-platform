@@ -6,6 +6,7 @@ import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Pager, Badge } from '@/components/crud/Shell';
+import { Note } from '@/components/crud/Note';
 import { Toolbar } from '@/components/crud/Toolbar';
 import { parseListQuery, skipTake, type SearchParams } from '@/lib/query';
 
@@ -91,7 +92,7 @@ export default async function DamagePage({
         }
       />
 
-      <p className="mb-5 text-xs text-txt-3">
+      <Note>
         {seeCosts ? (
           <>
             إجمالي تكلفة الهالك المعتمد:{' '}
@@ -101,7 +102,7 @@ export default async function DamagePage({
           </>
         ) : null}
         — المعتمد فقط، لأن المحضر غير المعتمد ليس تكلفة بعد.
-      </p>
+      </Note>
 
       <Toolbar placeholder="ابحث بالرقم أو السبب أو القسم…" sorts={SORTS} />
 

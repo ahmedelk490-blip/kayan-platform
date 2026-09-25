@@ -37,9 +37,12 @@ export function Donut({
   const color = TONES[tone] ?? TONES.brand;
   const centerText = center ?? (max > 0 ? `${Math.round(pct * 100)}%` : '—');
 
+  // على الهاتف سطرٌ لا بطاقة: ثلاث دوائر بقطر ١١٢ بكسل واحدةً تحت الأخرى
+  // تملأ الشاشة بثلاثة أرقام. حلقةٌ صغيرة يميناً والنصّ بجانبها تُقرأ بلمحة
+  // وتترك المكان لما تحتها. وعلى الديسكتوب تبقى ثلاثاً جنباً إلى جنب كما هي.
   return (
-    <div className="flex flex-col items-center gap-2 text-center">
-      <div className="relative h-28 w-28">
+    <div className="flex items-center gap-3 text-start sm:flex-col sm:gap-2 sm:text-center">
+      <div className="relative h-14 w-14 shrink-0 sm:h-28 sm:w-28">
         <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
           <circle cx="50" cy="50" r={R} fill="none" stroke="var(--color-line)" strokeWidth="9" />
           <circle
@@ -54,12 +57,12 @@ export function Donut({
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-lg font-semibold text-txt">{centerText}</span>
+          <span className="text-sm font-semibold text-txt sm:text-lg">{centerText}</span>
         </div>
       </div>
-      <div>
+      <div className="min-w-0">
         <p className="text-xs font-medium text-txt-2">{label}</p>
-        {sub && <p className="mt-0.5 text-[0.7rem] text-txt-4">{sub}</p>}
+        {sub && <p className="mt-0.5 text-[0.7rem] leading-snug text-txt-4">{sub}</p>}
       </div>
     </div>
   );

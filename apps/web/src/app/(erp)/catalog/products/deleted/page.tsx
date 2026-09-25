@@ -4,6 +4,7 @@ import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
+import { Note } from '@/components/crud/Note';
 import { restoreProduct } from '../actions';
 
 export const metadata: Metadata = { title: 'المنتجات المحذوفة' };
@@ -32,10 +33,10 @@ export default async function DeletedProductsPage() {
         action={<Link href="/catalog/products" className="erp-btn-ghost">المنتجات</Link>}
       />
 
-      <p className="mb-4 text-xs leading-[1.9] text-txt-4">
+      <Note>
         الحذف ناعم — المنتج لا يُمحى فعلياً بل يُخفى من النظام والموقع. استرجاعه يعيده كما كان
         (ويظهر على الموقع إن كان نشطاً ومعروضاً).
-      </p>
+      </Note>
 
       <Table headers={['الكود', 'الاسم', 'التصنيف', 'المتغيّرات', 'حُذف في', '']} empty={rows.length === 0}>
         {rows.map((p) => (

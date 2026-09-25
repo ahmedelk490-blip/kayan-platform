@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
+import { Note } from '@/components/crud/Note';
 import { rejectWebOrder } from './actions';
 
 export const metadata: Metadata = { title: 'طلبات الموقع' };
@@ -38,11 +39,11 @@ export default async function WebOrdersPage() {
     <AppShell user={user} title="طلبات الموقع">
       <ModuleHeader title="طلبات الموقع" count={pending} />
 
-      <p className="mb-6 text-xs leading-[1.9] text-txt-3">
+      <Note>
         طلبات المنتجات الواردة من الموقع العام. «تحويل لفاتورة» يفتح فاتورة جديدة
         مملوءة بالعميل والصنف والكمية — تختار الخدمة فيُحسب السعر، ثم تُصدرها. الطلب لا
         يصير فاتورة بلا مراجعتك.
-      </p>
+      </Note>
 
       <Table
         headers={['رقم الطلب', 'التاريخ', 'العميل', 'الجوال', 'الطلب', 'الحالة', '']}
