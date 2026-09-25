@@ -12,9 +12,9 @@ import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { IconProduct, IconClock, IconBell, IconActivity } from '@/components/dashboard/Icons';
 import { MovementModal } from './MovementModal';
-import { MinStockCell } from './MinStockCell';
 import { ShareShortages } from './ShareShortages';
 import { StocktakeTable, type StocktakeRow } from './StocktakeTable';
+import { BalancesByProduct, type ProductGroup } from './BalancesByProduct';
 import { ConfirmButton } from '@/components/crud/ConfirmButton';
 import { reverseMovement, deleteMovement } from './actions';
 import { TYPE_LABELS } from './types';
@@ -53,17 +53,7 @@ export default async function InventoryPage({
   // يعرف بكم اشتُريت. تُعرَض لمن يملك cost.view وحده (المدير ومدير النظام).
   const seeCosts = allows(user, 'cost.view');
 
-  const [stock, variants, movements, supplies, supplyTx, reorderStock, fullStock] = await Promise.all([
-    prisma.stock.findMany({
-      where: { variant: { product: { tenantId: user.tenantId } } },
-      include: {
-        variant: { include: { product: true, color: true, size: true } },
-        warehouse: true,
-        location: true,
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: 100,
-    }),
+  const [variants, movements, supplies, supplyTx, reorderStock, fullStock] = await Promise.all([
     prisma.productVariant.findMany({
       where: { isDeleted: false, product: { tenantId: user.tenantId, isDeleted: false } },
       include: { product: true, color: true, size: true },
@@ -123,6 +113,7 @@ export default async function InventoryPage({
       include: {
         variant: { include: { product: true, color: true, size: true } },
         warehouse: { select: { nameAr: true } },
+        location: { select: { code: true } },
       },
       orderBy: { variant: { sku: 'asc' } },
     }),
@@ -241,6 +232,90 @@ export default async function InventoryPage({
       tone: isOut || isLow ? ('bad' as const) : ('ok' as const),
     };
   });
+
+  // تجميع الأرصدة بالموديل ثم باللون — السؤال اليومي «شنو ناقص من هذا
+  // الموديل؟» لا «ماذا تحرّك آخراً؟»، فالشاشة تُجيب عن الأول.
+  // ومن الجرد الكامل لا من مئة صفٍّ: موديل نافذ لم يتحرّك منذ شهر هو
+  // بالضبط ما يجب أن يُرى، وكان يسقط من القائمة لأنه لم يتحرّك.
+  const groupMap = new Map<string, ProductGroup & { colorOrder: Map<string, number> }>();
+  for (const st of fullStock) {
+    const prod = st.variant.product;
+    let g = groupMap.get(prod.id);
+    if (!g) {
+      g = {
+        id: prod.id,
+        name: prod.nameAr,
+        sku: prod.sku,
+        colors: [],
+        pieces: 0,
+        dozens: 0,
+        loose: 0,
+        perDozen: prod.piecesPerDozen || 12,
+        out: 0,
+        low: 0,
+        variants: 0,
+        valueText: null,
+        colorOrder: new Map<string, number>(),
+      };
+      groupMap.set(prod.id, g);
+    }
+
+    const state = stockState(st.onHand, st.minStock);
+    const atp = available(st.onHand, st.reserved);
+    const unitCost = st.variant.cost ?? prod.cost ?? null;
+    const colorKey = st.variant.colorId ?? 'none';
+
+    if (!g.colorOrder.has(colorKey)) {
+      g.colorOrder.set(colorKey, st.variant.color?.sortOrder ?? 0);
+      g.colors.push({
+        key: colorKey,
+        name: st.variant.color?.nameAr ?? 'بلا لون',
+        hex: st.variant.color?.hex ?? null,
+        cells: [],
+      });
+    }
+    g.colors
+      .find((c) => c.key === colorKey)!
+      .cells.push({
+        id: st.id,
+        sizeCode: st.variant.size?.code ?? 'موحّد',
+        sizeOrder: st.variant.size?.sortOrder ?? 0,
+        onHand: Math.trunc(dec(st.onHand).toNumber()),
+        onHandText: formatQty(st.onHand),
+        reservedText: formatQty(st.reserved),
+        availableText: formatQty(atp),
+        availableNeg: atp.lte(0),
+        damagedText: formatQty(st.damaged),
+        warehouse: st.warehouse.nameAr,
+        location: st.location?.code ?? '—',
+        // القيمة سعرُ جملة: ما لا يُرسل لا يُقرأ من الصفحة.
+        valueText:
+          !seeCosts || unitCost === null ? null : formatMoney(dec(st.onHand).times(dec(unitCost))),
+        minStock: Number(dec(st.minStock).toString()),
+        minStockText: formatQty(st.minStock),
+        state,
+      });
+
+    g.pieces += Math.trunc(dec(st.onHand).toNumber());
+    g.variants += 1;
+    if (state === 'out') g.out += 1;
+    else if (state === 'low') g.low += 1;
+  }
+
+  const balanceGroups: ProductGroup[] = [...groupMap.values()]
+    .map(({ colorOrder, ...g }) => {
+      const pieces = Math.max(0, g.pieces);
+      return {
+        ...g,
+        dozens: Math.floor(pieces / g.perDozen),
+        loose: pieces - Math.floor(pieces / g.perDozen) * g.perDozen,
+        colors: g.colors
+          .map((c) => ({ ...c, cells: [...c.cells].sort((a, b) => a.sizeOrder - b.sizeOrder) }))
+          .sort((a, b) => (colorOrder.get(a.key) ?? 0) - (colorOrder.get(b.key) ?? 0)),
+      };
+    })
+    // الأسوأ أوّلاً: ما نفد منه أكثر، ثم ما قارب، ثم الاسم.
+    .sort((a, b) => b.out - a.out || b.low - a.low || a.name.localeCompare(b.name, 'ar'));
 
   return (
     <AppShell user={user} title="المخزون">
@@ -383,69 +458,9 @@ export default async function InventoryPage({
           {
             key: 'balances',
             label: '📋 أرصدة المنتجات',
-            badge: lowStock.length,
+            badge: lowStock.length + outOfStock.length,
             content: (
-              <section>
-            {/* هذه القائمة آخرُ ما تحرّك (مئة صف)، والجرد الكامل جنبها يعرض كل
-                شيء ببحث — يُقال صراحةً بدل أن يُظنّ أن هذا كل المخزون. */}
-            {fullStock.length > stock.length && (
-              <p className="mb-3 rounded-lg border border-line bg-card-2 px-4 py-2.5 text-[0.7rem] text-txt-3">
-                معروضٌ هنا آخر <span className="tnum">{stock.length}</span> صنفٍ تحرّك من أصل{' '}
-                <span className="tnum font-semibold text-txt">{fullStock.length}</span> — افتح
-                «الجرد الكامل» لرؤية الكل مع البحث.
-              </p>
-            )}
-            <Table
-              headers={[
-                'المنتج / المتغيّر', 'المخزن', 'الموقع', 'الرصيد', 'محجوز', 'المتاح', 'تالف',
-                ...(seeCosts ? ['قيمة الرصيد'] : []),
-                'الحد الأدنى',
-              ]}
-              empty={stock.length === 0}
-            >
-              {stock.map((s) => {
-                const atp = available(s.onHand, s.reserved);
-                const unitCost = s.variant.cost ?? s.variant.product.cost ?? null;
-                return (
-                <tr key={s.id} className="hover:bg-card-2">
-                  <td className="px-4 py-3 text-txt">{variantLabel(s.variant)}</td>
-                  <td className="px-4 py-3 text-txt-2">{s.warehouse.nameAr}</td>
-                  <td dir="ltr" className="px-4 py-3 text-start text-txt-3">
-                    {s.location?.code ?? '—'}
-                  </td>
-                  <td className="tnum px-4 py-3 text-txt-2">{formatQty(s.onHand)}</td>
-                  <td className="tnum px-4 py-3 text-txt-2">{formatQty(s.reserved)}</td>
-                  {/* المتاح = الرصيد − المحجوز */}
-                  <td className={`tnum px-4 py-3 font-medium ${atp.lte(0) ? 'text-bad' : 'text-txt'}`}>
-                    {formatQty(atp)}
-                  </td>
-                  <td className="tnum px-4 py-3 text-txt-2">{formatQty(s.damaged)}</td>
-                  {/* قيمة الرصيد بالتكلفة — تكلفة المتغيّر ثم المنتج. المجهولة تُعرض
-                      «—» لا صفراً، فالصفر يبدو قياساً وهو ليس كذلك. والعمود كله
-                      يغيب عمّن لا يملك cost.view. */}
-                  {seeCosts && (
-                    <td className="tnum px-4 py-3 text-txt-2">
-                      {unitCost === null ? (
-                        <span className="text-txt-4">—</span>
-                      ) : (
-                        formatMoney(dec(s.onHand).times(dec(unitCost)))
-                      )}
-                    </td>
-                  )}
-                  <td className="tnum px-4 py-3">
-                    {canWrite ? (
-                      <MinStockCell stockId={s.id} value={Number(dec(s.minStock).toString())} />
-                    ) : dec(s.minStock).gt(0) && dec(s.onHand).lte(dec(s.minStock)) ? (
-                      <Badge tone="bad">{formatQty(s.minStock)}</Badge>
-                    ) : (
-                      <span className="text-txt-3">{formatQty(s.minStock)}</span>
-                    )}
-                  </td>
-                </tr>
-                );
-              })}
-            </Table>
-              </section>
+              <BalancesByProduct groups={balanceGroups} canWrite={canWrite} seeCosts={seeCosts} />
             ),
           },
           {
