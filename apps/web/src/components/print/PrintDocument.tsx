@@ -176,7 +176,10 @@ export function PrintDocument({
               {returnedAmount !== undefined && !dec(returnedAmount as never).isZero() && (
                 <Row label="المرتجع" value={`− ${formatMoney(returnedAmount as never)}`} />
               )}
-              <Row label="المدفوع" value={formatMoney(paidAmount as never)} />
+              {/* الفاتورة تُرسَل للزبون قبل أن يدفع — يستلم الطلب ثم يدفع. فسطرا
+                  «المدفوع» و«المتبقي» حالةُ سدادٍ داخلية تُعرَض علينا وتُطبع على
+                  ورقنا، ويسقطان من الصورة المرسَلة إليه (‏.print-private‏). */}
+              <Row label="المدفوع" value={formatMoney(paidAmount as never)} internal />
               {/* Through the domain's `balance`, not JS subtraction. Every
                   other figure in this system is exact decimal; a printed
                   document that disagrees with the screen by a rounding cent
@@ -193,6 +196,7 @@ export function PrintDocument({
                   ),
                 )}
                 strong
+                internal
               />
             </>
           )}
@@ -228,9 +232,21 @@ export function PrintDocument({
   );
 }
 
-function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+function Row({
+  label,
+  value,
+  strong,
+  internal,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+  /** حالة السداد — تبقى عندنا ولا تدخل الصورة المرسَلة للزبون. */
+  internal?: boolean;
+}) {
+  const className = [strong ? 'strong' : '', internal ? 'print-private' : ''].filter(Boolean).join(' ');
   return (
-    <div className={strong ? 'strong' : undefined}>
+    <div className={className || undefined}>
       <dt>{label}</dt>
       <dd>{value}</dd>
     </div>

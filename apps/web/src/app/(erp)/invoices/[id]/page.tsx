@@ -118,8 +118,9 @@ export default async function InvoicePage({
             <Link href="/invoices" className="erp-btn-ghost">
               رجوع
             </Link>
+            {/* من هنا تُحفظ الصورة أيضاً — فيُذكَر في الزر وإلا لم يُهتدَ إليها. */}
             <Link href={`/invoices/${invoice.id}/print`} className="erp-btn-print">
-              طباعة / PDF
+              طباعة / PDF / صورة
             </Link>
             {waUrl && (
               <a href={waUrl} target="_blank" rel="noopener noreferrer" className="erp-btn-wa">

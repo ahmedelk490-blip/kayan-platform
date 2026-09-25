@@ -73,9 +73,15 @@ export default async function QuotationPrintPage({
     .filter(Boolean)
     .join('\n');
 
+  const fileBase = `عرض-سعر-${quotation.number.replace(/[\/:*?"<>|]/g, '-')}`;
+
   return (
     <main className="min-h-screen bg-canvas py-6 print:bg-white print:py-0">
-      <PrintActions shareText={shareText} backHref={`/sales/quotations/${quotation.id}`} />
+      <PrintActions
+        shareText={shareText}
+        backHref={`/sales/quotations/${quotation.id}`}
+        fileBase={fileBase}
+      />
 
       <PrintDocument
         kind="quotation"

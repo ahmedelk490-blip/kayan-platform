@@ -416,6 +416,11 @@
   color: var(--color-brand);
 }
 
+/* النسخة المرسومة كصورة للزبون — الصورة تُرسَل قبل الدفع، فحالةُ السداد
+   (‏المدفوع والمتبقي‏) تبقى على الشاشة وعلى ورقنا ولا تخرج معها.
+   الصنف يُضاف على النسخة المستنسخة وقت الرسم فقط، لا على الصفحة نفسها. */
+.print-as-image .print-private { display: none !important; }
+
 .print-notes { margin-top: 8mm; }
 .print-foot {
   margin-top: 12mm;

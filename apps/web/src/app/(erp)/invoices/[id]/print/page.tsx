@@ -64,9 +64,16 @@ export default async function InvoicePrintPage({
     .filter(Boolean)
     .join('\n');
 
+  // اسم ملف الصورة — الرقم يُنظَّف من محارف لا تقبلها أنظمة الملفات.
+  const fileBase = `فاتورة-${(invoice.number ?? 'مسودة').replace(/[\/:*?"<>|]/g, '-')}`;
+
   return (
     <main className="min-h-screen bg-canvas py-6 print:bg-white print:py-0">
-      <PrintActions shareText={shareText} backHref={`/invoices/${invoice.id}`} />
+      <PrintActions
+        shareText={shareText}
+        backHref={`/invoices/${invoice.id}`}
+        fileBase={fileBase}
+      />
 
       <PrintDocument
         kind="invoice"
