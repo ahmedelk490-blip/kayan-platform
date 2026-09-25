@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
-import { can, formatMoney, formatQty, DAMAGE_STATUSES, DAMAGE_STATUS_AR, userCan} from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { formatMoney, formatQty, DAMAGE_STATUSES, DAMAGE_STATUS_AR, userCan} from '@erp/domain';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Pager, Badge } from '@/components/crud/Shell';
@@ -75,7 +75,7 @@ export default async function DamagePage({
     }),
   ]);
 
-  const canWrite = can(user.role, 'damage.write');
+  const canWrite = allows(user, 'damage.write');
 
   return (
     <AppShell user={user} title="محاضر الهالك">

@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
-  can,
   dec,
   formatMoney,
   formatQty,
@@ -10,7 +9,7 @@ import {
   SUPPLY_CATEGORY_AR,
   SUPPLY_TX_TYPE_AR,
   type SupplyKind, userCan,} from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
@@ -69,7 +68,7 @@ export default async function SuppliesPage({
     }),
   ]);
 
-  const canWrite = can(user.role, 'supplies.write');
+  const canWrite = allows(user, 'supplies.write');
 
   const purchases = dec(monthSpend.find((g) => g.type === 'PURCHASE')?._sum.totalCost ?? 0);
   const consumption = dec(monthSpend.find((g) => g.type === 'CONSUMPTION')?._sum.totalCost ?? 0);

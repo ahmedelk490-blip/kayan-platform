@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
-  can,
   dec,
   formatMoney,
   formatQty,
@@ -12,7 +11,7 @@ import {
   isQuotationStatus,
   type QuotationStatus,
 } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { waLink } from '@/lib/wa';
 import { AppShell } from '@/components/AppShell';
@@ -58,7 +57,7 @@ export default async function QuotationDetailPage({
   if (!quotation) notFound();
 
   const options = await loadSalesOptions(user.tenantId);
-  const canWrite = can(user.role, 'sales.write');
+  const canWrite = allows(user, 'sales.write');
   const status = isQuotationStatus(quotation.status)
     ? (quotation.status as QuotationStatus)
     : 'DRAFT';

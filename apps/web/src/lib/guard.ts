@@ -38,6 +38,19 @@ export async function requireUser(): Promise<SessionUser> {
  * rather than to login — bouncing them to a sign-in form they have already
  * satisfied is the classic confusing redirect loop.
  */
+/**
+ * هل يملك هذا المستخدم هذه الصلاحية؟ — **مع تخصيصاته الفردية**.
+ *
+ * حرّاس المسارات تستعمل userCan (فتحترم ما مُنح أو مُنع لكل موظف على حدة)،
+ * بينما كانت أزرار الصفحات تستعمل can(role) وحدها — فيمنح المالك موظفاً
+ * صلاحيةً من شاشة الصلاحيات، ويفتح الموظف الصفحة فعلاً، ولا يجد الزر.
+ *
+ * هذه هي الدالة الوحيدة التي تُستعمل داخل الصفحات، فلا يتكرر الخطأ.
+ */
+export function allows(user: SessionUser, permission: PermissionKey): boolean {
+  return userCan(user.role, user.overrides, permission);
+}
+
 export async function requirePermission(permission: PermissionKey): Promise<SessionUser> {
   const user = await requireUser();
   if (!userCan(user.role, user.overrides, permission)) {

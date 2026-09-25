@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
-import { can, FORMULA_KINDS, FORMULA_KIND_AR } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { FORMULA_KINDS, FORMULA_KIND_AR } from '@erp/domain';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { Toolbar } from '@/components/crud/Toolbar';
@@ -52,7 +52,7 @@ export default async function FormulasPage({
     prisma.formula.count({ where }),
   ]);
 
-  const canWrite = can(user.role, 'formula.write');
+  const canWrite = allows(user, 'formula.write');
 
   return (
     <AppShell user={user} title="المعادلات">

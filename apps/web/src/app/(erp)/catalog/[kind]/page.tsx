@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { can } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
@@ -121,7 +120,7 @@ export default async function CatalogPage({ params }: { params: Promise<{ kind: 
   if (!isKind(kind)) notFound();
 
   const rows = await load(kind, user.tenantId);
-  const canManage = can(user.role, 'catalog.manage');
+  const canManage = allows(user, 'catalog.manage');
 
   return (
     <AppShell user={user} title={KINDS[kind].labelAr}>

@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
-import { can, formatMoney, PURCHASE_STATUSES, PURCHASE_STATUS_AR } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { formatMoney, PURCHASE_STATUSES, PURCHASE_STATUS_AR } from '@erp/domain';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { Toolbar } from '@/components/crud/Toolbar';
@@ -80,7 +80,7 @@ export default async function PurchasingPage({
     }),
   ]);
 
-  const canWrite = can(user.role, 'purchasing.write');
+  const canWrite = allows(user, 'purchasing.write');
 
   return (
     <AppShell user={user} title="أوامر الشراء">

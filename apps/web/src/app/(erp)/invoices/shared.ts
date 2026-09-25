@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { Prisma } from '@prisma/client';
-import { iraqYear, can, dec } from '@erp/domain';
+import { iraqYear, dec } from '@erp/domain';
 import { prisma } from '@/lib/prisma';
 import { nextOpsNumber } from '@/lib/ops';
 
@@ -133,7 +133,7 @@ export function deliveryExpenseTag(invoiceId: string): string {
  * الاعتماد يُسجَّل مصروفه معتمداً فوراً، كالمصروفات الثابتة الشهرية.
  */
 export async function recordDeliveryExpense(
-  user: { tenantId: string; id: string; role: Parameters<typeof can>[0] },
+  user: { tenantId: string; id: string },
   fee: number,
   invoice: { id: string; number: string | null },
 ): Promise<void> {
@@ -168,7 +168,6 @@ export async function recordDeliveryExpense(
     return;
   }
 
-  const approved = can(user.role, 'expenses.approve');
   await prisma.secondaryExpense.create({
     data: {
       tenantId: user.tenantId,
@@ -177,9 +176,16 @@ export async function recordDeliveryExpense(
       category: 'SHIPPING',
       amount: dec(fee).toString(),
       notes,
-      status: approved ? 'APPROVED' : 'PENDING',
-      approvedById: approved ? user.id : null,
-      approvedAt: approved ? new Date() : null,
+      // معتمدٌ فوراً مهما كان من سجّل الفاتورة.
+      //
+      // اعتماد المصروفات فعلٌ منفصل لأن المصروف مطالبةٌ يقدّمها صاحبها لنفسه؛
+      // وهذا ليس كذلك: أجرةٌ لازمة عن فاتورةٍ بعينها، مبلغها مكتوب عليها، ولا
+      // أحد يقبضها. وكان يُسجَّل «بانتظار الاعتماد» حين ينشئ الفاتورة موظفٌ
+      // بلا صلاحية اعتماد — فيختار المالك «التوصيل علينا» ولا يُخصم من ربحه
+      // شيء حتى يعتمده بيده، وهو ما طلب ألا يحدث.
+      status: 'APPROVED',
+      approvedById: user.id,
+      approvedAt: new Date(),
       createdById: user.id,
     },
   });

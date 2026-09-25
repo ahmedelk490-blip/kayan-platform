@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
-import { can } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { Toolbar } from '@/components/crud/Toolbar';
@@ -55,7 +54,7 @@ export default async function SuppliersPage({
     prisma.supplier.count({ where }),
   ]);
 
-  const canWrite = can(user.role, 'suppliers.write');
+  const canWrite = allows(user, 'suppliers.write');
 
   return (
     <AppShell user={user} title="الموردون">

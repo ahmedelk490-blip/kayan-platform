@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
-import { can, ORDER_STATUSES, ORDER_STATUS_AR, formatMoney } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { ORDER_STATUSES, ORDER_STATUS_AR, formatMoney } from '@erp/domain';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { Toolbar } from '@/components/crud/Toolbar';
@@ -80,7 +80,7 @@ export default async function OrdersPage({
   const statusCount = new Map(byStatus.map((g) => [g.status, g._count._all]));
   const statusTotal = byStatus.reduce((s, g) => s + g._count._all, 0);
 
-  const canWrite = can(user.role, 'sales.write');
+  const canWrite = allows(user, 'sales.write');
 
   return (
     <AppShell user={user} title="أوامر البيع">

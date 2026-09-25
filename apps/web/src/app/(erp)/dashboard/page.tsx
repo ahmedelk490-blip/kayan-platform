@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import {
-  can,
   dec,
   formatMoney,
   balance,
@@ -8,7 +7,7 @@ import {
   RECEIVABLE_STATUSES,
   stockState,
 } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { returnsByInvoice, netOwed } from '@/lib/receivables';
 import { AppShell } from '@/components/AppShell';
@@ -36,11 +35,11 @@ export default async function ManagerDashboard() {
   const user = await requirePermission('dashboard.view');
   const tenantId = user.tenantId;
 
-  const seeSales = can(user.role, 'sales.documents');
-  const seeInventory = can(user.role, 'inventory.read');
-  const seeCustomers = can(user.role, 'customers.read');
-  const seeMoney = can(user.role, 'invoices.view');
-  const canSell = can(user.role, 'invoices.write');
+  const seeSales = allows(user, 'sales.documents');
+  const seeInventory = allows(user, 'inventory.read');
+  const seeCustomers = allows(user, 'customers.read');
+  const seeMoney = allows(user, 'invoices.view');
+  const canSell = allows(user, 'invoices.write');
 
   // نبض اليوم بتوقيت بغداد — أول ما يهم المدير صباحاً.
   const dayStart = (() => {
@@ -135,10 +134,10 @@ export default async function ManagerDashboard() {
   const actions: QuickAction[] = [
     { href: '/cashier', label: 'الكاشير', description: 'بيع سريع — صور أو كتابة', available: canSell, emoji: '🛒', gradient: 'from-emerald-500 to-teal-700' },
     { href: '/invoices/new', label: 'فاتورة جديدة', description: 'عميل وأصناف وإصدار فوري', available: canSell, emoji: '🧾', gradient: 'from-[#7d3349] to-[#5c2535]' },
-    { href: '/returns/new', label: 'مرتجع جديد', description: 'إرجاع من فاتورة', available: can(user.role, 'returns.write'), emoji: '↩️', gradient: 'from-amber-500 to-orange-600' },
-    { href: '/reports/daily', label: 'يومية اليوم', description: 'مبيعات ومقبوض ومصاريف', available: can(user.role, 'reports.view'), emoji: '📊', gradient: 'from-sky-500 to-blue-700' },
+    { href: '/returns/new', label: 'مرتجع جديد', description: 'إرجاع من فاتورة', available: allows(user, 'returns.write'), emoji: '↩️', gradient: 'from-amber-500 to-orange-600' },
+    { href: '/reports/daily', label: 'يومية اليوم', description: 'مبيعات ومقبوض ومصاريف', available: allows(user, 'reports.view'), emoji: '📊', gradient: 'from-sky-500 to-blue-700' },
     { href: '/inventory', label: 'المخزون', description: lowStock > 0 ? `${lowStock} صنف تحت الحد` : 'كل الأصناف فوق الحد', available: seeInventory, emoji: '📦', gradient: 'from-violet-500 to-purple-700' },
-    { href: '/reports', label: 'التقارير', description: 'كل الأرقام بالتفصيل', available: can(user.role, 'reports.view'), emoji: '📈', gradient: 'from-slate-500 to-slate-700' },
+    { href: '/reports', label: 'التقارير', description: 'كل الأرقام بالتفصيل', available: allows(user, 'reports.view'), emoji: '📈', gradient: 'from-slate-500 to-slate-700' },
   ];
 
   return (

@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { can, available, dec, formatQty, formatMoney,
+import { available, dec, formatQty, formatMoney,
   stockState,
   needsReorder,
 } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { SegmentedTabs } from '@/components/SegmentedTabs';
@@ -42,16 +42,16 @@ export default async function InventoryPage({
   // ?tab=reorder يفتح «نواقص وإعادة الطلب» مباشرة — رابط جرس التنبيهات.
   const sp = (await searchParams) ?? {};
   const initialTab = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab;
-  const canWrite = can(user.role, 'inventory.write');
+  const canWrite = allows(user, 'inventory.write');
   // إدخال المنتجات يعيش في الكتالوج، لكنه موصولٌ من هنا ليبقى المخزون
   // والمنتجات في مكان واحد — بطلب المالك.
-  const canSeeProducts = can(user.role, 'products.read');
-  const canAddProduct = can(user.role, 'products.write');
+  const canSeeProducts = allows(user, 'products.read');
+  const canAddProduct = allows(user, 'products.write');
 
-  const seeSupplies = can(user.role, 'supplies.view');
+  const seeSupplies = allows(user, 'supplies.view');
   // التكلفة وقيمة الرصيد سعرُ جملةٍ لا يخصّ أمين المخزن: يعدّ القطع ولا
   // يعرف بكم اشتُريت. تُعرَض لمن يملك cost.view وحده (المدير ومدير النظام).
-  const seeCosts = can(user.role, 'cost.view');
+  const seeCosts = allows(user, 'cost.view');
 
   const [stock, variants, movements, supplies, supplyTx, reorderStock, fullStock] = await Promise.all([
     prisma.stock.findMany({

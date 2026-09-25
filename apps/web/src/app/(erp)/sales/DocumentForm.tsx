@@ -250,8 +250,18 @@ export function DocumentForm({
   const [szColorId, setSzColorId] = useState('');
   const [szQty, setSzQty] = useState<Record<string, number>>({});
   const [szMsg, setSzMsg] = useState<string | null>(null);
+  const [szService, setSzService] = useState('');
   const szColors = szProductId ? colorsOf(variants, szProductId) : [];
   const szSizes = szProductId ? sizesOf(variants, szProductId, szColorId) : [];
+  /** خدمات هذا المنتج (تطريز/طباعة…) — تُحدِّد الشريحة فيتغيّر السعر المقترح. */
+  const szServices = (() => {
+    const seen: string[] = [];
+    for (const v of variants) {
+      if (v.productId !== szProductId) continue;
+      for (const t of v.tiers) if (!seen.includes(t.service)) seen.push(t.service);
+    }
+    return seen;
+  })();
 
   function addBySizes() {
     const makeLine = (sizeId: string, qty: number): DocLine | null => {
@@ -263,7 +273,9 @@ export function DocumentForm({
         colorId: szColorId,
         sizeId,
         variantId: v.value,
-        service: services[0] ?? '',
+        // الخدمة المختارة تُطبَّق على كل المقاسات المضافة — كانت تُؤخذ أول
+        // خدمةٍ في القائمة دائماً، فيُقترح سعر التطريز لطلبِ طباعة.
+        service: szService && services.includes(szService) ? szService : services[0] ?? '',
         quantity: qty,
         unitPrice: 0,
         discountAmount: 0,
@@ -435,6 +447,45 @@ export function DocumentForm({
     );
   }
 
+
+  /**
+   * تجميع السطور بطاقةً واحدة لكل (منتج × لون × خدمة) ومقاساتها داخلها.
+   *
+   * كان كل مقاسٍ بطاقةً كاملة بمنتجه ولونه وخدمته وسعره وخانة تفاصيله — فطلبٌ
+   * بستة مقاسات يملأ الشاشة بستّ بطاقات متطابقة إلا في حرفٍ واحد. الآن
+   * البطاقات تختلف باللون أو المنتج فقط، والمقاسات صفٌّ من العدّادات فيها.
+   *
+   * السطور تحت الغطاء تبقى سطراً لكل مقاس كما هي — المخزون والفاتورة يحتاجان
+   * متغيّراً بعينه، وهذا عرضٌ لا تغييرُ بنية.
+   */
+  const groups = (() => {
+    const map = new Map<string, { key: string; items: { line: DocLine; index: number }[] }>();
+    lines.forEach((line, index) => {
+      if (!line.variantId) return;
+      const key = `${line.productId}|${line.colorId}|${line.service}`;
+      const g = map.get(key) ?? { key, items: [] };
+      g.items.push({ line, index });
+      map.set(key, g);
+    });
+    return [...map.values()];
+  })();
+  /** السطور التي لم يُختَر صنفها بعد — تبقى بمحرّرها الكامل لاختيار المنتج. */
+  const pendingLines = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => !line.variantId);
+
+  /** تغييرٌ يسري على كل مقاسات البطاقة — السعر والتفاصيل تخصّ المجموعة كلها. */
+  function updateGroup(indexes: number[], patch: Partial<DocLine>) {
+    setLines((prev) => prev.map((l, i) => (indexes.includes(i) ? { ...l, ...patch } : l)));
+  }
+
+  function removeIndexes(indexes: number[]) {
+    setLines((prev) => {
+      const next = prev.filter((_, i) => !indexes.includes(i));
+      return next.length > 0 ? next : [emptyLine()];
+    });
+  }
+
   const computed = lines
     .filter((l) => l.variantId && l.quantity > 0)
     .map((l) => calcLine(l));
@@ -553,6 +604,7 @@ export function DocumentForm({
                   const colors = colorsOf(variants, pid);
                   setSzColorId(colors.length === 1 ? colors[0].id : '');
                   setSzQty({});
+                  setSzService('');
                   setSzMsg(null);
                 }}
                 className="erp-input py-2.5"
@@ -581,6 +633,31 @@ export function DocumentForm({
               </select>
             </label>
           </div>
+
+          {/* الخدمة — أزرارٌ ظاهرة لا قائمة مخفية: هي ما يحدّد السعر المقترح،
+              وكانت تُؤخذ تلقائياً فيُسعَّر طلبُ طباعةٍ بسعر التطريز. */}
+          {szProductId && szServices.length > 0 && (
+            <div className="mt-3">
+              <p className="mb-2 text-xs text-txt-3">الخدمة</p>
+              <div className="flex flex-wrap gap-2">
+                {szServices.map((sv) => {
+                  const on = (szService || szServices[0]) === sv;
+                  return (
+                    <button
+                      key={sv}
+                      type="button"
+                      onClick={() => setSzService(sv)}
+                      className={`rounded-full border px-4 py-2 text-xs font-medium transition-colors ${
+                        on ? 'border-ok bg-ok text-white' : 'border-line-2 bg-card text-txt-2'
+                      }`}
+                    >
+                      {PRICE_SERVICE_AR[sv as PriceService] ?? sv}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {szProductId && (szColors.length === 0 || szColorId) && (
             <div className="mt-3">
@@ -735,22 +812,162 @@ export function DocumentForm({
         <h3 className="mb-3 text-sm font-semibold text-brand">الأصناف</h3>
 
         <div className="space-y-3">
-          {lines.map((line, index) => {
-            const t = calcLine(line);
-            const variant =
-              resolveVariant(variants, line.productId, line.colorId, line.sizeId) ??
-              variants.find((v) => v.value === line.variantId);
-            const colors = colorsOf(variants, line.productId);
-            const sizes = sizesOf(variants, line.productId, line.colorId);
-            const short = variant && line.quantity > variant.available;
-            const services = variant ? servicesOf(variant) : [];
-            const suggestion = suggestedPrice(line);
+          {/* بطاقةٌ لكل (منتج × لون × خدمة) ومقاساتها صفُّ عدّادات داخلها —
+              بنفس شكل «إضافة بالمقاسات» أعلاه، بطلب المالك. */}
+          {groups.map((g) => {
+            const first = g.items[0].line;
+            const indexes = g.items.map((it) => it.index);
+            const productLabel = products.find((pp) => pp.id === first.productId)?.label;
+            const colorName = colorsOf(variants, first.productId).find((c) => c.id === first.colorId)?.label;
+            const svcAr = first.service
+              ? (PRICE_SERVICE_AR as Record<string, string>)[first.service] ?? first.service
+              : null;
+            const pieces = g.items.reduce((n, it) => n + it.line.quantity, 0);
+            const money = g.items.reduce((m, it) => m.plus(calcLine(it.line).lineTotal), dec(0));
+            const suggestion = suggestedPrice(first);
             const lastPrice =
-              customerId && line.variantId ? lastPrices[`${customerId}:${line.variantId}`] : undefined;
+              customerId && first.variantId ? lastPrices[`${customerId}:${first.variantId}`] : undefined;
 
             return (
-              <div key={index} className="rounded-xl border border-line bg-card-2 p-4">
-                <div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-[1.6fr_1fr_0.8fr_1fr_0.7fr_auto]">
+              <div key={g.key} className="rounded-xl border border-line bg-card-2 p-4">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-txt">{productLabel ?? '—'}</span>
+                    {colorName && (
+                      <span className="rounded-full border border-line-2 bg-card px-2.5 py-1 text-[0.7rem] text-txt-2">
+                        {colorName}
+                      </span>
+                    )}
+                    {svcAr && svcAr !== 'بدون' && (
+                      <span className="rounded-full border border-brand/40 bg-brand-soft px-2.5 py-1 text-[0.7rem] text-brand">
+                        {svcAr}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeIndexes(indexes)}
+                    className="text-[0.7rem] text-bad hover:underline"
+                  >
+                    حذف الصنف
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {g.items.map(({ line, index }) => {
+                    const sizeLabel =
+                      sizesOf(variants, line.productId, line.colorId).find((z) => z.id === line.sizeId)?.label ??
+                      'الكمية';
+                    const v = variants.find((x) => x.value === line.variantId);
+                    const short = v ? line.quantity > v.available : false;
+                    return (
+                      <div
+                        key={index}
+                        className={`flex items-center gap-1.5 rounded-lg border bg-card px-2 py-1.5 ${short ? 'border-bad' : 'border-line'}`}
+                      >
+                        <span className="min-w-8 text-center text-xs font-semibold text-txt">{sizeLabel}</span>
+                        <button
+                          type="button"
+                          aria-label="أنقص"
+                          onClick={() =>
+                            line.quantity <= 1
+                              ? removeIndexes([index])
+                              : update(index, { quantity: line.quantity - 1 })
+                          }
+                          className="grid h-9 w-9 place-items-center rounded-md border border-line-2 text-base text-txt-2 active:bg-card-2"
+                        >
+                          −
+                        </button>
+                        <span className="tnum min-w-6 text-center text-sm font-medium text-txt">{line.quantity}</span>
+                        <button
+                          type="button"
+                          aria-label="زد"
+                          onClick={() => update(index, { quantity: line.quantity + 1 })}
+                          className="grid h-9 w-9 place-items-center rounded-md border border-line-2 text-base text-txt-2 active:bg-card-2"
+                        >
+                          +
+                        </button>
+                        {short && v && <span className="text-[0.65rem] text-bad">متاح {v.available}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* سطرٌ لكل مقاس يصل الخادم كما يتوقّعه — العرض مجموعٌ لا البنية. */}
+                {g.items.map(({ line, index }) => (
+                  <span key={`h-${index}`} className="hidden">
+                    <input type="hidden" name="lineVariantId" value={line.variantId} />
+                    <input type="hidden" name="lineService" value={line.service} />
+                    <input type="hidden" name="lineQuantity" value={line.quantity} />
+                    <input type="hidden" name="lineUnitPrice" value={line.unitPrice} />
+                    <input type="hidden" name="lineNotes" value={line.notes} />
+                    <input type="hidden" name="lineDiscount" value={0} />
+                    <input type="hidden" name="lineTaxRate" value={0} />
+                  </span>
+                ))}
+
+                <label className="mt-3 block">
+                  <span className="mb-1.5 block text-xs text-txt-2">تفاصيل الصنف — تسري على كل المقاسات</span>
+                  <input
+                    value={first.notes}
+                    onChange={(e) => updateGroup(indexes, { notes: e.target.value })}
+                    placeholder="مثال: طباعة شعار على الصدر…"
+                    className="erp-input py-2.5"
+                  />
+                </label>
+
+                <div className="mt-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2 border-t border-line/60 pt-3">
+                  <div className="w-44">
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs text-txt-2">سعر القطعة — لكل المقاسات</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        dir="ltr"
+                        value={first.unitPrice}
+                        onChange={(e) => updateGroup(indexes, { unitPrice: Number(e.target.value) || 0 })}
+                        className="erp-input py-2.5 text-start"
+                      />
+                    </label>
+                    {suggestion != null && suggestion !== first.unitPrice ? (
+                      <button
+                        type="button"
+                        onClick={() => updateGroup(indexes, { unitPrice: suggestion })}
+                        className="mt-0.5 block text-[0.65rem] text-brand hover:underline"
+                      >
+                        المقترح {formatMoney(dec(suggestion))} — اضغط لاعتماده
+                      </button>
+                    ) : (
+                      <span className="mt-0.5 block text-[0.65rem] text-txt-4">السعر بيدك — اكتبه مباشرة</span>
+                    )}
+                    {lastPrice && lastPrice.price !== first.unitPrice && (
+                      <button
+                        type="button"
+                        onClick={() => updateGroup(indexes, { unitPrice: lastPrice.price })}
+                        className="mt-0.5 block text-[0.65rem] text-ok hover:underline"
+                        title={lastPrice.date ? `بتاريخ ${lastPrice.date}` : undefined}
+                      >
+                        آخر سعر لهذا العميل {formatMoney(dec(lastPrice.price))} — اضغط لاعتماده
+                      </button>
+                    )}
+                  </div>
+                  <div className="text-end text-sm">
+                    <span className="tnum block text-[0.7rem] text-txt-3">{pieces} قطعة</span>
+                    <span className="text-xs text-txt-3">الإجمالي </span>
+                    <span className="tnum font-semibold text-txt">{formatMoney(money)}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* صنفٌ لم يُحلّ متغيّره بعد — يبقى بمحرّره حتى يُختار، ثم ينضمّ لبطاقته. */}
+          {pendingLines.map(({ line, index }) => {
+            const colors = colorsOf(variants, line.productId);
+            const sizes = sizesOf(variants, line.productId, line.colorId);
+            return (
+              <div key={`p-${index}`} className="rounded-xl border border-dashed border-line bg-card-2 p-4">
+                <div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-[1.6fr_1fr_0.8fr_auto]">
                   <label className="block">
                     <span className="mb-1.5 block text-xs text-txt-2">المنتج</span>
                     <select
@@ -759,12 +976,11 @@ export function DocumentForm({
                       className="erp-input py-2.5"
                     >
                       <option value="">اختر المنتج…</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>{p.label}</option>
+                      {products.map((pp) => (
+                        <option key={pp.id} value={pp.id}>{pp.label}</option>
                       ))}
                     </select>
                   </label>
-
                   <label className="block">
                     <span className="mb-1.5 block text-xs text-txt-2">اللون</span>
                     <select
@@ -779,7 +995,6 @@ export function DocumentForm({
                       ))}
                     </select>
                   </label>
-
                   <label className="block">
                     <span className="mb-1.5 block text-xs text-txt-2">المقاس</span>
                     <select
@@ -789,110 +1004,23 @@ export function DocumentForm({
                       className="erp-input py-2.5 disabled:opacity-50"
                     >
                       <option value="">{sizes.length ? 'اختر المقاس…' : '—'}</option>
-                      {sizes.map((s) => (
-                        <option key={s.id} value={s.id}>{s.label}</option>
+                      {sizes.map((z) => (
+                        <option key={z.id} value={z.id}>{z.label}</option>
                       ))}
                     </select>
                   </label>
-
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs text-txt-2">الخدمة</span>
-                    <select
-                      value={line.service}
-                      onChange={(e) => update(index, { service: e.target.value })}
-                      disabled={services.length === 0}
-                      className="erp-input py-2.5 disabled:opacity-50"
-                    >
-                      {services.length === 0 && <option value="">—</option>}
-                      {services.map((s) => (
-                        <option key={s} value={s}>
-                          {PRICE_SERVICE_AR[s as PriceService] ?? s}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <NumberCell
-                    label="الكمية"
-                    name="lineQuantity"
-                    value={line.quantity}
-                    onChange={(v) => update(index, { quantity: v })}
-                    integer
-                  />
-
                   <button
                     type="button"
-                    onClick={() => setLines((p) => (p.length > 1 ? p.filter((_, i) => i !== index) : p))}
-                    disabled={lines.length === 1}
-                    className="grid h-[42px] w-10 place-items-center rounded-lg border border-line text-txt-3 transition-colors hover:border-bad hover:text-bad disabled:opacity-30"
+                    onClick={() => removeIndexes([index])}
+                    className="grid h-[42px] w-10 place-items-center rounded-lg border border-line text-txt-3 transition-colors hover:border-bad hover:text-bad"
                     aria-label="حذف الصنف"
-                    title="حذف الصنف"
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                      <path d="M18 6 6 18M6 6l12 12" />
-                    </svg>
+                    ✕
                   </button>
                 </div>
-
-                {/* المتغيّر المحلول والخدمة يُرسلان للخادم من حقول مخفية دائمة
-                    الوجود (select الخدمة قد يُعطَّل فلا يُرسَل)؛ والخصم والضريبة صفر. */}
-                <input type="hidden" name="lineVariantId" value={line.variantId} />
-                <input type="hidden" name="lineService" value={line.service} />
-                <input type="hidden" name="lineDiscount" value={0} />
-                <input type="hidden" name="lineTaxRate" value={0} />
-
-                {/* تفاصيل حرّة للصنف: اللون، الطباعة، أي ملاحظة — تُحفظ مع سطر الفاتورة. */}
-                <label className="mt-3 block">
-                  <span className="mb-1.5 block text-xs text-txt-2">تفاصيل الصنف — اللون، الطباعة، أي ملاحظة</span>
-                  <input
-                    name="lineNotes"
-                    value={line.notes}
-                    onChange={(e) => update(index, { notes: e.target.value })}
-                    placeholder="مثال: أسود، طباعة شعار على الصدر…"
-                    className="erp-input py-2.5"
-                  />
-                </label>
-
-                {/* السطر السفلي: سعر الوحدة بيد البائع — يكتبه بنفسه، والمقترح تلميح اختياري. */}
-                <div className="mt-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2 border-t border-line/60 pt-3">
-                  <div className="w-40">
-                    <NumberCell
-                      label="سعر الوحدة"
-                      name="lineUnitPrice"
-                      value={line.unitPrice}
-                      onChange={(v) => update(index, { unitPrice: v })}
-                    />
-                    {suggestion != null && suggestion !== line.unitPrice ? (
-                      <button
-                        type="button"
-                        onClick={() => update(index, { unitPrice: suggestion })}
-                        className="mt-0.5 block text-[0.65rem] text-brand hover:underline"
-                      >
-                        المقترح {formatMoney(dec(suggestion))} — اضغط لاعتماده
-                      </button>
-                    ) : (
-                      <span className="mt-0.5 block text-[0.65rem] text-txt-4">السعر بيدك — اكتبه مباشرة</span>
-                    )}
-                    {lastPrice && lastPrice.price !== line.unitPrice && (
-                      <button
-                        type="button"
-                        onClick={() => update(index, { unitPrice: lastPrice.price })}
-                        className="mt-0.5 block text-[0.65rem] text-ok hover:underline"
-                        title={lastPrice.date ? `بتاريخ ${lastPrice.date}` : undefined}
-                      >
-                        آخر سعر لهذا العميل {formatMoney(dec(lastPrice.price))} — اضغط لاعتماده
-                      </button>
-                    )}
-                  </div>
-                  <div className="text-end text-sm">
-                    {variant && short && (
-                      <span className="block text-xs text-bad">المتاح {variant.available} فقط</span>
-                    )}
-                    <span className="text-xs text-txt-3">الإجمالي </span>
-                    <span className="tnum font-semibold text-txt">{formatMoney(t.lineTotal)}</span>
-                  </div>
-                </div>
-
+                <p className="mt-2 text-[0.7rem] text-txt-4">
+                  اختر المنتج واللون والمقاس — ينضمّ الصنف عندها لبطاقته مع بقية مقاساته.
+                </p>
               </div>
             );
           })}
@@ -1097,36 +1225,3 @@ export function DocumentForm({
   );
 }
 
-function NumberCell({
-  label,
-  name,
-  value,
-  onChange,
-  integer = false,
-}: {
-  label: string;
-  name: string;
-  value: number;
-  onChange: (v: number) => void;
-  /** الكمية بالعدد الصحيح: تزيد ١، ٢، ٣ لا بالكسور. */
-  integer?: boolean;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs text-txt-2">{label}</span>
-      <input
-        name={name}
-        type="number"
-        step={integer ? 1 : 0.01}
-        min={integer ? 1 : undefined}
-        dir="ltr"
-        value={value}
-        onChange={(e) => {
-          const n = Number(e.target.value) || 0;
-          onChange(integer ? Math.max(0, Math.round(n)) : n);
-        }}
-        className="erp-input py-2.5 text-start"
-      />
-    </label>
-  );
-}

@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import {
-  can,
   userCan,
   dec,
   formatMoney,
@@ -9,7 +8,7 @@ import {
   monthlySeries,
   periodRange,
 } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { returnsByInvoice, netOwed } from '@/lib/receivables';
 import { AppShell } from '@/components/AppShell';
@@ -34,10 +33,10 @@ export default async function SalesDashboard() {
   const user = await requirePermission('sales.view');
   const tenantId = user.tenantId;
 
-  const seeDocs = can(user.role, 'sales.documents');
-  const seeMoney = can(user.role, 'invoices.view');
-  const seeCustomers = can(user.role, 'customers.read');
-  const canSell = can(user.role, 'invoices.write');
+  const seeDocs = allows(user, 'sales.documents');
+  const seeMoney = allows(user, 'invoices.view');
+  const seeCustomers = allows(user, 'customers.read');
+  const canSell = allows(user, 'invoices.write');
   // من لا يملك «عرض فواتير كل الموظفين» ترى لوحته مبيعاته هو فقط.
   const seeAll = userCan(user.role, user.overrides, 'invoices.viewAll');
   const ownerScope = seeAll ? {} : { createdById: user.id };

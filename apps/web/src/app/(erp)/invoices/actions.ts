@@ -14,12 +14,11 @@ import {
   calcLine,
   calcDocument,
   dec,
-  can,
   isOrderSource,
   PRICE_SERVICE_AR,
   type PriceService,
 } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors, nextCode } from '@/lib/audit';
 import { readLines, decimal, normalizeDigits } from '@/app/(erp)/sales/shared';
@@ -245,7 +244,7 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
   const issueNow = ['1', 'on', 'true'].includes(String(formData.get('issueNow') ?? ''));
 
   if (issueNow) {
-    if (!can(user.role, 'invoices.issue')) {
+    if (!allows(user, 'invoices.issue')) {
       return { error: 'لا تملك صلاحية إصدار الفواتير — احفظها كمسوّدة ثم اطلب إصدارها.' };
     }
 
@@ -254,7 +253,7 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
     const wantsPayment = payAmount.gt(0);
 
     if (wantsPayment) {
-      if (!can(user.role, 'payments.record')) {
+      if (!allows(user, 'payments.record')) {
         return { error: 'لا تملك صلاحية تسجيل الدفعات.' };
       }
       if (!isPaymentMethod(payMethodRaw)) {

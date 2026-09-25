@@ -1,5 +1,5 @@
 import { Logo } from '@erp/brand/logo';
-import { can, userCan, dec, type PermissionKey, needsReorder } from '@erp/domain';
+import {  userCan, dec, type PermissionKey, needsReorder } from '@erp/domain';
 import type { SessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logoutAction } from '@/app/(erp)/login/actions';

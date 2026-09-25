@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
-  can,
   formatMoney,
   formatQty,
   FORMULA_KIND_AR,
@@ -11,7 +10,7 @@ import {
   COST_BASIS_AR,
   unpricedLines,
 } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
@@ -85,7 +84,7 @@ export default async function FormulaDetailPage({
   });
   if (!formula) notFound();
 
-  const canWrite = can(user.role, 'formula.write');
+  const canWrite = allows(user, 'formula.write');
   const draft = formula.versions.find((v) => v.status === 'DRAFT');
   const current = formula.versions.find((v) => v.id === formula.currentVersionId);
   // The draft is what you edit; if there is none, the published version is

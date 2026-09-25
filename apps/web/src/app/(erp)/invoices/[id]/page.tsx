@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
-  can,
   userCan,
   dec,
   formatMoney,
@@ -16,7 +15,7 @@ import {
   PAYMENT_METHOD_AR,
   type InvoiceStatus,
 } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
@@ -70,9 +69,9 @@ export default async function InvoicePage({
 
   const company = await prisma.company.findFirst({ where: { tenantId: user.tenantId } });
 
-  const canIssue = can(user.role, 'invoices.issue');
-  const canPay = can(user.role, 'payments.record');
-  const canWrite = can(user.role, 'invoices.write');
+  const canIssue = allows(user, 'invoices.issue');
+  const canPay = allows(user, 'payments.record');
+  const canWrite = allows(user, 'invoices.write');
   const canSeeCustomer = userCan(user.role, user.overrides, 'customers.read');
   const canSeeOrders = userCan(user.role, user.overrides, 'sales.documents');
 

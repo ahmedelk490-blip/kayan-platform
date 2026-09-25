@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
-import { can, dec, PRICE_SERVICE_AR, type PriceService } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { dec, PRICE_SERVICE_AR, type PriceService } from '@erp/domain';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
@@ -19,7 +19,7 @@ export const metadata: Metadata = { title: 'مراجعة عرض الموقع' };
  */
 export default async function ReviewPage() {
   const user = await requirePermission('products.read');
-  const canWrite = can(user.role, 'products.write');
+  const canWrite = allows(user, 'products.write');
 
   const products = await prisma.product.findMany({
     where: { tenantId: user.tenantId, isDeleted: false },

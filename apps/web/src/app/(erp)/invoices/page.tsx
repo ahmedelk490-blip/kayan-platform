@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
 import {
-  can,
   userCan,
   dec,
   formatMoney,
@@ -19,7 +18,7 @@ import {
   ORDER_SOURCES,
   ORDER_SOURCE_AR,
 } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { returnsByInvoice, netOwed } from '@/lib/receivables';
 import { isDeliveryDesc } from '@/lib/delivery';
@@ -150,12 +149,12 @@ export default async function InvoicesPage({
     dec(0),
   );
 
-  const canWrite = can(user.role, 'invoices.write');
+  const canWrite = allows(user, 'invoices.write');
 
   // الأقسام المبسّطة أسفل الفواتير — عروض الأسعار وأوامر البيع وطلبات الموقع
   // لم تعد تبويبات مستقلة، بل لمحة سريعة هنا مع رابط لكل شاشة كاملة.
-  const seeDocs = can(user.role, 'sales.documents');
-  const seeRequests = can(user.role, 'customers.read');
+  const seeDocs = allows(user, 'sales.documents');
+  const seeRequests = allows(user, 'customers.read');
   const [recentQuotations, recentOrders, recentRequests] = await Promise.all([
     seeDocs
       ? prisma.quotation.findMany({

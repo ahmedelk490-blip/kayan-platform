@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
-  can,
   dec,
   formatQty,
   formatMoney,
@@ -15,7 +14,7 @@ import {
   isProductionStatus,
   type ProductionStatus,
 } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
@@ -65,11 +64,11 @@ export default async function ProductionOrderPage({
   });
   if (!order) notFound();
 
-  const canWrite = can(user.role, 'manufacturing.write');
-  const canConfirm = can(user.role, 'manufacturing.confirm');
-  const canCost = can(user.role, 'cost.view');
-  const canMargin = can(user.role, 'cost.margin');
-  const canSeeDamage = can(user.role, 'damage.view');
+  const canWrite = allows(user, 'manufacturing.write');
+  const canConfirm = allows(user, 'manufacturing.confirm');
+  const canCost = allows(user, 'cost.view');
+  const canMargin = allows(user, 'cost.margin');
+  const canSeeDamage = allows(user, 'damage.view');
 
   // The newest calculation is what the page shows. Older ones are kept and
   // never altered — they are the audit trail of what was believed and when.

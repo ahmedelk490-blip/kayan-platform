@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { balance, can, dec, formatMoney } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { balance, dec, formatMoney } from '@erp/domain';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { waLink } from '@/lib/wa';
 import { AppShell } from '@/components/AppShell';
@@ -46,8 +46,8 @@ export default async function CustomerDetailPage({
 
   if (!customer) notFound();
 
-  const canWrite = can(user.role, 'customers.write');
-  const canSell = can(user.role, 'invoices.write');
+  const canWrite = allows(user, 'customers.write');
+  const canSell = allows(user, 'invoices.write');
   const update = updateCustomer.bind(null, customer.id);
   const remove = deleteCustomer.bind(null, customer.id);
 

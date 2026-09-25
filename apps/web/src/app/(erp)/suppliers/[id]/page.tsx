@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { can, formatMoney } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { formatMoney } from '@erp/domain';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
@@ -35,7 +35,7 @@ export default async function SupplierDetailPage({
     select: { id: true, nameAr: true, sku: true },
   });
 
-  const canWrite = can(user.role, 'suppliers.write');
+  const canWrite = allows(user, 'suppliers.write');
   const update = updateSupplier.bind(null, supplier.id);
   const remove = deleteSupplier.bind(null, supplier.id);
   const linkedIds = new Set(supplier.products.map((p) => p.productId));

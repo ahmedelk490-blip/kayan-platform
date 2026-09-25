@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { waLink } from '@/lib/wa';
-import { can, dec, formatMoney, CUSTOMER_SOURCE_AR } from '@erp/domain';
+import { dec, formatMoney, CUSTOMER_SOURCE_AR } from '@erp/domain';
 import { AppShell } from '@/components/AppShell';
 import { Toolbar } from '@/components/crud/Toolbar';
 import { ModuleHeader, Table, Pager } from '@/components/crud/Shell';
@@ -92,7 +92,7 @@ export default async function CustomersPage({
     ]);
   }
 
-  const canWrite = can(user.role, 'customers.write');
+  const canWrite = allows(user, 'customers.write');
 
   return (
     <AppShell user={user} title="العملاء">

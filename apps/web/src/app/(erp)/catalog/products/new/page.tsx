@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { can } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader } from '@/components/crud/Shell';
 import { ProductForm } from '../ProductForm';
@@ -12,7 +11,7 @@ export const metadata: Metadata = { title: 'منتج جديد' };
 
 export default async function NewProductPage() {
   const user = await requirePermission('products.write');
-  const seeCosts = can(user.role, 'cost.view');
+  const seeCosts = allows(user, 'cost.view');
   const options = await loadProductOptions(user.tenantId);
 
   return (

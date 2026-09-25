@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
-  can,
   formatMoney,
   formatQty,
   outstanding,
@@ -11,7 +10,7 @@ import {
   isPurchaseStatus,
   type PurchaseStatus,
 } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
@@ -76,9 +75,9 @@ export default async function PurchaseOrderPage({
     select: { id: true, nameAr: true },
   });
 
-  const canWrite = can(user.role, 'purchasing.write');
-  const canConfirm = can(user.role, 'purchasing.confirm');
-  const canReceive = can(user.role, 'purchasing.receive');
+  const canWrite = allows(user, 'purchasing.write');
+  const canConfirm = allows(user, 'purchasing.confirm');
+  const canReceive = allows(user, 'purchasing.receive');
 
   const status: PurchaseStatus = isPurchaseStatus(order.status) ? order.status : 'DRAFT';
   const open = status === 'CONFIRMED' || status === 'PARTIALLY_RECEIVED';

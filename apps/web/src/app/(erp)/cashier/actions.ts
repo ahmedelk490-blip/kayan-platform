@@ -2,8 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { dec, dueDate, deriveInvoiceStatus, exceedsBalance, isPaymentMethod, isOrderSource, can } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { dec, dueDate, deriveInvoiceStatus, exceedsBalance, isPaymentMethod, isOrderSource } from '@erp/domain';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, nextCode } from '@/lib/audit';
 import { num, normalizeDigits } from '@/lib/num';
@@ -19,7 +19,7 @@ import { allocateInvoiceNumber, lockPaymentSequence, nextPaymentNumber, invoiceS
  */
 export async function cashierCheckout(_prev: FormState, formData: FormData): Promise<FormState> {
   const user = await requirePermission('invoices.write');
-  if (!can(user.role, 'invoices.issue') || !can(user.role, 'payments.record')) {
+  if (!allows(user, 'invoices.issue') || !allows(user, 'payments.record')) {
     return { error: 'تحتاج صلاحيتَي الإصدار والتحصيل لإتمام البيع.' };
   }
 

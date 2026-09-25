@@ -19,7 +19,7 @@ import {
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
-import { nextOpsNumber, parseDateOr, type FormState } from '@/lib/ops';
+import { nextOpsNumber, type FormState } from '@/lib/ops';
 import { numeric } from '@/lib/num';
 
 // ── Damage records ──────────────────────────────────────────

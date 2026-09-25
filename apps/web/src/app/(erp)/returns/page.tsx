@@ -1,10 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { formatMoney, dec } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { isDeliveryDesc } from '@/lib/delivery';
-import { can } from '@erp/domain';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Pager } from '@/components/crud/Shell';
 import { StatCard } from '@/components/dashboard/StatCard';
@@ -23,7 +22,7 @@ export default async function ReturnsPage({
   searchParams: Promise<SearchParams>;
 }) {
   const user = await requirePermission('returns.view');
-  const canWrite = can(user.role, 'returns.write');
+  const canWrite = allows(user, 'returns.write');
   const params = await searchParams;
   const query = parseListQuery(params, {
     defaultSort: 'returnDate',

@@ -1,8 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
-import { can } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { Toolbar } from '@/components/crud/Toolbar';
@@ -87,9 +86,9 @@ export async function ProductsArea({
     }),
   ]);
 
-  const canWrite = can(user.role, 'products.write');
+  const canWrite = allows(user, 'products.write');
   // سعر الجملة (التكلفة) يُحسم على الخادم ويمرّ للنوافذ — لا يُقرَّر في المتصفح.
-  const seeCosts = can(user.role, 'cost.view');
+  const seeCosts = allows(user, 'cost.view');
   const formOptions = canWrite
     ? { ...(await loadProductOptions(user.tenantId)), seeCosts }
     : { categories: [], materials: [], printingOptions: [], embroideryOptions: [], colors: [], sizes: [], seeCosts };

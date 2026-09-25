@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
 import {
-  can,
   dec,
   formatMoney,
   netProfit,
@@ -15,7 +14,7 @@ import {
   type ExpenseCategory,
   userCan,
 } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ConfirmButton } from '@/components/crud/ConfirmButton';
@@ -194,8 +193,8 @@ export default async function ExpensesPage({
     }),
   ]);
 
-  const canWrite = can(user.role, 'expenses.write');
-  const canApprove = can(user.role, 'expenses.approve');
+  const canWrite = allows(user, 'expenses.write');
+  const canApprove = allows(user, 'expenses.approve');
 
   // مصروفات بمبالغ غير منطقية (فوق مليار) — تُفسد كل التقارير حتى تُحذف.
   const suspicious = await prisma.secondaryExpense.findMany({

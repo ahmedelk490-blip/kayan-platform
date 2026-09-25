@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
-  can,
   dec,
   formatMoney,
   formatQty,
@@ -14,7 +13,7 @@ import {
   INVOICE_STATUS_AR,
   type OrderStatus,
 } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
@@ -65,10 +64,10 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   });
   if (!order) notFound();
 
-  const canConfirm = can(user.role, 'sales.confirm');
-  const canWrite = can(user.role, 'sales.write');
-  const canProduce = can(user.role, 'manufacturing.write');
-  const canInvoice = can(user.role, 'invoices.write');
+  const canConfirm = allows(user, 'sales.confirm');
+  const canWrite = allows(user, 'sales.write');
+  const canProduce = allows(user, 'manufacturing.write');
+  const canInvoice = allows(user, 'invoices.write');
   const status = isOrderStatus(order.status) ? (order.status as OrderStatus) : 'DRAFT';
   const nextStates = ORDER_TRANSITIONS[status].filter((s) => s !== 'CANCELLED');
   const holdsReservations = RESERVING_STATUSES.includes(status);

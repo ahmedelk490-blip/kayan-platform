@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { isExpenseCategory, APPROVAL_TRANSITIONS, isApprovalStatus } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 import { nextOpsNumber, parseDateOr, type FormState } from '@/lib/ops';
@@ -135,7 +135,7 @@ export async function deleteExpense(id: string): Promise<void> {
 
 // ── المصروفات الثابتة المتكرّرة ──────────────────────────────
 
-import { can, isExpenseCategory as isCat } from '@erp/domain';
+import {  isExpenseCategory as isCat } from '@erp/domain';
 
 const RecurringSchema = z.object({
   nameAr: z.string().trim().min(2, 'اسم المصروف مطلوب.').max(120),
@@ -186,7 +186,7 @@ export async function deleteRecurring(id: string): Promise<void> {
 export async function postRecurring(monthKey: string): Promise<void> {
   const user = await requirePermission('expenses.write');
   const yyyymm = /^\d{4}-\d{2}$/.test(monthKey) ? monthKey : new Date().toISOString().slice(0, 7);
-  const canApprove = can(user.role, 'expenses.approve');
+  const canApprove = allows(user, 'expenses.approve');
 
   const templates = await prisma.recurringExpense.findMany({
     where: { tenantId: user.tenantId, isActive: true },

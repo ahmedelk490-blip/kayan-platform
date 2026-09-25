@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { can, dec, formatMoney, userCan, stockState } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { dec, formatMoney, userCan, stockState } from '@erp/domain';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader } from '@/components/crud/Shell';
@@ -75,10 +75,10 @@ export default async function ProductsAdminPage() {
     .slice(0, 8)
     .map(([label, v]) => ({ label, value: v.toNumber(), display: formatMoney(v) }));
 
-  const canWrite = can(user.role, 'products.write');
+  const canWrite = allows(user, 'products.write');
   // قيمة المخزون بالتكلفة رقمٌ ماليّ — لمن يملك صلاحية التكلفة وحده.
   const seeCosts = userCan(user.role, user.overrides, 'cost.view');
-  const seeInventory = can(user.role, 'inventory.read');
+  const seeInventory = allows(user, 'inventory.read');
 
   // كل شاشات القسم كبلاطات ملوّنة — بلون هوية كل فعل.
   const actions: QuickAction[] = [

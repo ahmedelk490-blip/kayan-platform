@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
-  can,
   formatMoney,
   piecePrice,
   damageCharge,
@@ -16,7 +15,7 @@ import {
   isPenaltyStatus,
   type DamageStatus,
   type PenaltyStatus, userCan,} from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ConfirmButton } from '@/components/crud/ConfirmButton';
@@ -87,9 +86,9 @@ export default async function DamageDetailPage({
     orderBy: { name: 'asc' },
   });
 
-  const canWrite = can(user.role, 'damage.write');
-  const canApprove = can(user.role, 'damage.approve');
-  const canPenalise = can(user.role, 'penalties.approve');
+  const canWrite = allows(user, 'damage.write');
+  const canApprove = allows(user, 'damage.approve');
+  const canPenalise = allows(user, 'penalties.approve');
 
   const status: DamageStatus = isDamageStatus(damage.status) ? damage.status : 'DRAFT';
   // قيمة ما فُقد بسعر البيع — أساس الجزاء وسقفه (بطلب المالك). تُحسب هنا

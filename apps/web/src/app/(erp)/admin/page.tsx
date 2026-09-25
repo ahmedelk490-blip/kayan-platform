@@ -1,9 +1,8 @@
 import type { Metadata } from 'next';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { Kpi, Panel } from '@/components/Kpi';
-import { can } from '@erp/domain';
 import { SeedButton } from './SeedButton';
 import { SubmitButton } from '@/components/crud/Form';
 import { listBackups } from '@/lib/backup';
@@ -96,7 +95,7 @@ export default async function AdminPage() {
           </div>
         </Panel>
 
-        {can(user.role, 'products.write') && (
+        {allows(user, 'products.write') && (
           <Panel title="تهيئة الأسعار والألوان والمعادلات">
             <SeedButton />
           </Panel>

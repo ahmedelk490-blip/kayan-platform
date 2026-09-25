@@ -2,14 +2,13 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
 import {
-  can,
   formatQty,
   PRODUCTION_STATUSES,
   PRODUCTION_STATUS_AR,
   PRIORITY_WEIGHT,
   type Priority,
 } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { Toolbar } from '@/components/crud/Toolbar';
@@ -88,7 +87,7 @@ export default async function ManufacturingPage({
         .slice(skipTake(query).skip, skipTake(query).skip + query.perPage)
     : rows;
 
-  const canWrite = can(user.role, 'manufacturing.write');
+  const canWrite = allows(user, 'manufacturing.write');
 
   return (
     <AppShell user={user} title="أوامر الإنتاج">

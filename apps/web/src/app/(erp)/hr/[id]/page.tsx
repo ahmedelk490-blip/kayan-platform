@@ -2,14 +2,13 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
-  can,
   dec,
   formatMoney,
   paymentSign,
   EMPLOYEE_PAYMENT_KIND_AR,
   type EmployeePaymentKind,
 } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
@@ -24,7 +23,7 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
   const user = await requirePermission('hr.manage');
   // الربح والعمولة أرقامٌ للمالك وحده: مَن يصرف الرواتب لا يلزمه أن يعرف
   // ربح المصنع من فواتير كل مندوب (قاعدة المالك: الجملة والربح للمدير فقط).
-  const seeProfit = can(user.role, 'cost.margin');
+  const seeProfit = allows(user, 'cost.margin');
   const { id } = await params;
   const year = new Date().getFullYear();
   const yearStart = new Date(year, 0, 1);

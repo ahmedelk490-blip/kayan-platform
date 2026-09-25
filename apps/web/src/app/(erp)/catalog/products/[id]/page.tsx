@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { can, dec, formatQty, PRICE_SERVICE_AR, coverageGaps } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { dec, formatQty, PRICE_SERVICE_AR, coverageGaps } from '@erp/domain';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
@@ -80,12 +80,12 @@ export default async function ProductDetailPage({
     orderBy: { sortOrder: 'asc' },
     select: { id: true, nameAr: true, hex: true },
   });
-  const canWrite = can(user.role, 'products.write');
+  const canWrite = allows(user, 'products.write');
   // إضافة الرصيد من هنا تكتب حركة مخزون — صلاحيتها مستقلة عن تعديل المنتج.
-  const canStock = can(user.role, 'inventory.write');
+  const canStock = allows(user, 'inventory.write');
   // سعر الجملة (التكلفة) لا يُعرض إلا لمن يملك صلاحيته — أمين المخزن يُدخل
   // المنتجات ويسعّر البيع ولا يعرف بكم اشتُريت.
-  const seeCosts = can(user.role, 'cost.view');
+  const seeCosts = allows(user, 'cost.view');
 
   // مقاسات هذا المنتج (من متغيّراته) — لتعريف السيريه بتوزيعها. Map يزيل التكرار.
   const productSizes = [
@@ -99,7 +99,7 @@ export default async function ProductDetailPage({
   // Phase 6. Read-only here on purpose: a formula is assigned from the
   // formula's own page, where its version and lines are visible. Assigning
   // one blind from the product page invites picking the wrong recipe.
-  const canSeeFormulas = can(user.role, 'formula.view');
+  const canSeeFormulas = allows(user, 'formula.view');
   const formulas = canSeeFormulas
     ? await prisma.productFormula.findMany({
         where: { productId: product.id },

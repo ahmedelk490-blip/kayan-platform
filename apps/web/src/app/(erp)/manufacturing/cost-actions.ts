@@ -2,8 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { can } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import { costVariant } from '@/lib/cost';
@@ -28,7 +27,7 @@ export async function calculateProductionCost(
   // Writing to a production order and seeing cost are different rights, and
   // this action does both.
   const user = await requirePermission('manufacturing.write');
-  if (!can(user.role, 'cost.view')) redirect(`/manufacturing/${productionOrderId}`);
+  if (!allows(user, 'cost.view')) redirect(`/manufacturing/${productionOrderId}`);
 
   const order = await prisma.productionOrder.findFirst({
     where: { id: productionOrderId, tenantId: user.tenantId, isDeleted: false },
