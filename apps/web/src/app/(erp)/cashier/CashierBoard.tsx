@@ -18,6 +18,7 @@ import { SearchableSelect } from '@/components/crud/SearchableSelect';
 import type { VariantOption } from '@/app/(erp)/sales/DocumentForm';
 import type { FormState } from '@/app/(erp)/invoices/shared';
 import { cashierCheckout } from './actions';
+import { DELIVERY_DEFAULT_FEE } from '@/lib/delivery';
 
 interface CartLine {
   key: string;
@@ -33,7 +34,7 @@ interface Choice { id: string; label: string }
  * أجرة التوصيل الافتراضية — أشيع رقمٍ في المدينة (بطلب المالك). تُملأ بمجرّد
  * تشغيل المفتاح فلا يكتبها الكاشير في كل بيعة، وتبقى قابلة للتعديل بضغطة.
  */
-const DELIVERY_DEFAULT = 5000;
+const DELIVERY_DEFAULT = DELIVERY_DEFAULT_FEE;
 const DELIVERY_STEP = 1000;
 const DELIVERY_QUICK = [5000, 10000, 15000];
 
@@ -56,7 +57,10 @@ export function CashierBoard({
   const [cart, setCart] = useState<CartLine[]>([]);
   const [picking, setPicking] = useState<string | null>(null); // productId being configured
   const [customerId, setCustomerId] = useState('');
+  // المدفوع يتبع الإجمالي ما لم يُكتب باليد — زبون الكاشير يدفع كاملاً
+  // في العادة، والخانة تبقى مفتوحة للدفعة الجزئية.
   const [paid, setPaid] = useState(0);
+  const [paidTouched, setPaidTouched] = useState(false);
   const [method, setMethod] = useState('CASH');
 
   // التوصيل: مفتاح واحد يُشغّله بأجرةٍ افتراضية، ثم مَن يدفعها — على الزبون
@@ -119,7 +123,8 @@ export function CashierBoard({
   // الإجمالي الظاهر = البضاعة + التوصيل حين يكون على الزبون — كما سيحسبه الخادم.
   const total =
     deliveryWho === 'CUSTOMER' && fee > 0 ? merchandiseTotal.plus(dec(fee)) : merchandiseTotal;
-  const remaining = total.minus(paid);
+  const paidValue = paidTouched ? paid : total.toNumber();
+  const remaining = total.minus(paidValue);
 
   // إضافة عدة سطور دفعة واحدة (كمية لكل مقاس)، مع دمج المتكرّر بالمتغيّر.
   function addLines(newLines: CartLine[]) {
@@ -384,7 +389,10 @@ export function CashierBoard({
               🚚 توصيل
             </span>
             {deliveryOn && (
-              <span className="tnum ms-auto text-sm font-bold text-brand">{formatMoney(dec(fee))}</span>
+              <span className="tnum ms-auto text-sm font-bold text-brand">
+                {/* الأجرة علينا تعني صفراً على الزبون — فلا يُعرض رقمٌ يُظنّ مضافاً. */}
+                {deliveryWho === 'US' ? 'على الزبون: 0' : formatMoney(dec(fee))}
+              </span>
             )}
           </label>
 
@@ -461,7 +469,7 @@ export function CashierBoard({
               <p className="text-[0.65rem] leading-[1.7] text-txt-4">
                 {deliveryWho === 'CUSTOMER'
                   ? 'يُضاف بند «🚚 أجور توصيل» على الفاتورة — الزبون يدفعه.'
-                  : 'الإجمالي لا يتغيّر — يُسجَّل مصروف «شحن وتوصيل» يُخصم من الربح.'}
+                  : 'الزبون لا يدفع شيئاً عن التوصيل — مصروف «شحن وتوصيل» يُخصم من ربحنا.'}
               </p>
             </div>
           )}
@@ -484,8 +492,12 @@ export function CashierBoard({
         <div className="grid grid-cols-2 gap-2">
           <label className="block">
             <span className="mb-1 block text-[0.7rem] text-txt-3">المدفوع</span>
-            <input name="paymentAmount" type="number" value={paid} dir="ltr" onChange={(e) => setPaid(Math.max(0, Number(e.target.value) || 0))} className="erp-input py-2 text-start" />
-            <button type="button" onClick={() => setPaid(total.toNumber())} className="mt-0.5 text-[0.7rem] text-brand hover:underline">المبلغ كامل</button>
+            <input name="paymentAmount" type="number" value={paidValue} dir="ltr" onChange={(e) => { setPaidTouched(true); setPaid(Math.max(0, Number(e.target.value) || 0)); }} className="erp-input py-2 text-start" />
+            {paidTouched ? (
+              <button type="button" onClick={() => setPaidTouched(false)} className="mt-0.5 text-[0.7rem] text-brand hover:underline">المبلغ كامل</button>
+            ) : (
+              <span className="mt-0.5 block text-[0.7rem] text-txt-4">المبلغ كامل تلقائياً</span>
+            )}
           </label>
           <label className="block">
             <span className="mb-1 block text-[0.7rem] text-txt-3">طريقة السداد</span>

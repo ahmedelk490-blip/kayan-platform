@@ -14,6 +14,7 @@ import {
 } from '@erp/domain';
 import { Field, TextArea, SubmitButton, FormError } from '@/components/crud/Form';
 import { SearchableSelect } from '@/components/crud/SearchableSelect';
+import { DELIVERY_DEFAULT_FEE } from '@/lib/delivery';
 import type { FormState } from './shared';
 
 /** شريحة سعر مبسّطة تعبر إلى العميل — أرقام لا Decimal. */
@@ -218,11 +219,30 @@ export function DocumentForm({
   const [docDiscountPct, setDocDiscountPct] = useState(values?.discountPercent ?? 0);
   const [issueNow, setIssueNow] = useState(instantDefault);
   const [payMethod, setPayMethod] = useState('CASH');
+  // المبلغ المدفوع يتبع الإجمالي ما لم يُكتب باليد: الأشيع أن يدفع
+  // الزبون كاملاً، فلا يُكتب الرقم كل مرة — ومع ذلك الخانة مفتوحة
+  // للدفعة الجزئية، وأوَّل حرف يُكتب يوقف المتابعة فلا يُداس على ما كُتب.
   const [payAmount, setPayAmount] = useState(0);
+  const [payTouched, setPayTouched] = useState(false);
 
-  // سعر التوصيل: على الزبون (بند يرفع الإجمالي) أو علينا (مصروف يُخصم من الربح).
-  const [deliveryFee, setDeliveryFee] = useState(values?.deliveryFee ?? 0);
-  const [deliveryOn, setDeliveryOn] = useState<'CUSTOMER' | 'US'>(values?.deliveryOn ?? 'CUSTOMER');
+  // سعر التوصيل — ثلاث حالات لا خانة واحدة غامضة: بلا توصيل، أو على
+  // الزبون (بند يرفع إجمالي الفاتورة)، أو علينا (الزبون لا يدفع شيئاً
+  // — صفر — والمبلغ مصروف شحن يُخصم من ربحنا).
+  const [deliveryMode, setDeliveryMode] = useState<'NONE' | 'CUSTOMER' | 'US'>(
+    (values?.deliveryFee ?? 0) > 0 ? (values?.deliveryOn ?? 'CUSTOMER') : 'NONE',
+  );
+  const [deliveryFee, setDeliveryFee] = useState(values?.deliveryFee || DELIVERY_DEFAULT_FEE);
+  const deliveryOn = deliveryMode === 'US' ? 'US' : 'CUSTOMER';
+  // ما يصل الخادم: صفر يعني بلا توصيل، وأي مبلغ يُفسَّر بـ deliveryOn.
+  const deliverySubmitted = deliveryMode === 'NONE' ? 0 : deliveryFee;
+  // ما يدفعه الزبون فعلاً — صفر حين تكون الأجرة علينا.
+  const deliveryOnCustomer = deliveryMode === 'CUSTOMER' ? deliveryFee : 0;
+
+  /** اختيار وجهة الأجرة — يملأ الرقم المعتاد إن كانت الخانة صفراً. */
+  function chooseDelivery(mode: 'NONE' | 'CUSTOMER' | 'US') {
+    setDeliveryMode(mode);
+    if (mode !== 'NONE' && deliveryFee <= 0) setDeliveryFee(DELIVERY_DEFAULT_FEE);
+  }
 
   // «+ عميل جديد» داخل الفورم: اسم وهاتف بدل مغادرة الفاتورة والرجوع.
   const [newCustomer, setNewCustomer] = useState(false);
@@ -490,13 +510,18 @@ export function DocumentForm({
     .filter((l) => l.variantId && l.quantity > 0)
     .map((l) => calcLine(l));
   // توصيل «على الزبون» يدخل الحسبة كسطر — نفس ما سيحسبه الخادم تماماً.
-  if (withDelivery && deliveryOn === 'CUSTOMER' && deliveryFee > 0) {
-    computed.push(calcLine({ quantity: 1, unitPrice: deliveryFee, discountAmount: 0, taxRate: 0 }));
+  if (withDelivery && deliveryOnCustomer > 0) {
+    computed.push(
+      calcLine({ quantity: 1, unitPrice: deliveryOnCustomer, discountAmount: 0, taxRate: 0 }),
+    );
   }
   const totals = calcDocument(computed, {
     discountAmount: docDiscount,
     discountPercent: docDiscountPct,
   });
+
+  // ما تعرضه الخانة وتُرسله — مشتقّ لا منسوخ: لا يتخلّف عن إجمالٍ تغيّر.
+  const payValue = payTouched ? payAmount : totals.total.toNumber();
 
   const hasDiscount = !totals.discountAmount.eq(0);
   const hasTax = !totals.taxAmount.eq(0);
@@ -1039,49 +1064,69 @@ export function DocumentForm({
           شحن وتوصيل يُخصم من الربح، والفاتورة لا تتغيّر). اختياري: صفر = بلا. */}
       {withDelivery && (
         <section className="rounded-xl border border-line bg-card-2 p-4">
-          <h3 className="mb-3 text-sm font-semibold text-txt">
-            🚚 سعر التوصيل <span className="font-normal text-txt-4">(اختياري — اتركه صفراً إن لا توصيل)</span>
-          </h3>
-          <div className="flex flex-wrap items-center gap-3">
-            <input
-              name="deliveryFee"
-              type="number"
-              min="0"
-              step="0.01"
-              dir="ltr"
-              value={deliveryFee}
-              onChange={(e) => setDeliveryFee(Math.max(0, Number(e.target.value) || 0))}
-              className="erp-input w-36 py-2.5 text-start"
-            />
-            <div className="flex flex-wrap gap-2">
-              {(
-                [
-                  { value: 'CUSTOMER', label: 'على الزبون' },
-                  { value: 'US', label: 'علينا' },
-                ] as const
-              ).map((o) => (
-                <label
-                  key={o.value}
-                  className="cursor-pointer rounded-full border border-line-2 px-4 py-2 text-xs font-medium text-txt-2 transition-colors has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:checked]:text-brand"
-                >
-                  <input
-                    type="radio"
-                    name="deliveryOn"
-                    value={o.value}
-                    checked={deliveryOn === o.value}
-                    onChange={() => setDeliveryOn(o.value)}
-                    className="sr-only"
-                  />
-                  {o.label}
-                </label>
-              ))}
-            </div>
+          <h3 className="mb-3 text-sm font-semibold text-txt">🚚 التوصيل</h3>
+
+          {/* الاختيار أولاً، والمبلغ يُملأ بنفسه — لا رقم يُكتب كل مرة. */}
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { value: 'CUSTOMER', label: 'على الزبون' },
+                { value: 'US', label: 'علينا' },
+                { value: 'NONE', label: 'بلا توصيل' },
+              ] as const
+            ).map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => chooseDelivery(o.value)}
+                className={`rounded-full border px-4 py-2 text-xs font-medium transition-colors ${
+                  deliveryMode === o.value
+                    ? 'border-brand bg-brand-soft text-brand'
+                    : 'border-line-2 text-txt-2 hover:border-line'
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
           </div>
-          {deliveryFee > 0 && (
+          <input type="hidden" name="deliveryFee" value={deliverySubmitted} />
+          <input type="hidden" name="deliveryOn" value={deliveryOn} />
+
+          {deliveryMode !== 'NONE' && (
+            <div className="mt-3 flex flex-wrap items-end gap-4">
+              <label className="block">
+                <span className="mb-1.5 block text-xs text-txt-2">
+                  {deliveryMode === 'CUSTOMER' ? 'المبلغ على الزبون' : 'يُخصم من ربحنا'}
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="500"
+                  dir="ltr"
+                  value={deliveryFee}
+                  onChange={(e) => setDeliveryFee(Math.max(0, Number(e.target.value) || 0))}
+                  className="erp-input w-36 py-2.5 text-start"
+                />
+              </label>
+
+              {/* حين تكون الأجرة علينا يُقال صراحةً إن الزبون لا يدفع شيئاً —
+                  وإلا ظنَّ من يرى الرقم أنه مضاف على الفاتورة. */}
+              {deliveryMode === 'US' && (
+                <div className="block">
+                  <span className="mb-1.5 block text-xs text-txt-2">على الزبون</span>
+                  <div className="tnum rounded-lg border border-line bg-card px-3 py-2.5 text-sm font-bold text-ok">
+                    0
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {deliveryMode !== 'NONE' && deliveryFee > 0 && (
             <p className="mt-2 text-[0.7rem] leading-[1.8] text-txt-4">
-              {deliveryOn === 'CUSTOMER'
+              {deliveryMode === 'CUSTOMER'
                 ? `يُضاف بند «🚚 أجور توصيل» بقيمة ${formatMoney(dec(deliveryFee))} على الفاتورة — الزبون يدفعه.`
-                : `إجمالي الفاتورة لا يتغيّر — يُسجَّل مصروف «شحن وتوصيل» بقيمة ${formatMoney(dec(deliveryFee))} يُخصم من الربح في التقارير.`}
+                : `الزبون لا يدفع شيئاً عن التوصيل، ويُسجَّل مصروف «شحن وتوصيل» بقيمة ${formatMoney(dec(deliveryFee))} يُخصم من الربح في التقارير.`}
             </p>
           )}
         </section>
@@ -1109,7 +1154,10 @@ export function DocumentForm({
             <input
               type="checkbox"
               checked={issueNow}
-              onChange={(e) => setIssueNow(e.target.checked)}
+              onChange={(e) => {
+                setIssueNow(e.target.checked);
+                setPayTouched(false);
+              }}
               className="h-4 w-4 accent-[var(--color-brand)]"
             />
             <span className="text-sm font-medium text-txt">إصدار وتحصيل فوري</span>
@@ -1130,17 +1178,26 @@ export function DocumentForm({
                   step="0.01"
                   min="0"
                   dir="ltr"
-                  value={payAmount}
-                  onChange={(e) => setPayAmount(Math.max(0, Number(e.target.value) || 0))}
+                  value={payValue}
+                  onChange={(e) => {
+                    setPayTouched(true);
+                    setPayAmount(Math.max(0, Number(e.target.value) || 0));
+                  }}
                   className="erp-input py-2.5 text-start"
                 />
-                <button
-                  type="button"
-                  onClick={() => setPayAmount(totals.total.toNumber())}
-                  className="mt-1 text-[0.7rem] text-brand hover:underline"
-                >
-                  المبلغ كامل ({formatMoney(totals.total)})
-                </button>
+                {payTouched ? (
+                  <button
+                    type="button"
+                    onClick={() => setPayTouched(false)}
+                    className="mt-1 text-[0.7rem] text-brand hover:underline"
+                  >
+                    المبلغ كامل ({formatMoney(totals.total)})
+                  </button>
+                ) : (
+                  <span className="mt-1 block text-[0.7rem] text-txt-4">
+                    المبلغ كامل تلقائياً — غيّره إن دفع جزءاً.
+                  </span>
+                )}
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-xs text-txt-2">طريقة السداد</span>
@@ -1161,10 +1218,10 @@ export function DocumentForm({
                 <span className="mb-1.5 block text-xs text-txt-2">المتبقّي على العميل</span>
                 <div
                   className={`tnum rounded-lg border border-line bg-card px-3 py-2.5 text-sm font-bold ${
-                    dec(totals.total).minus(payAmount).lte(0) ? 'text-ok' : 'text-warn'
+                    dec(totals.total).minus(payValue).lte(0) ? 'text-ok' : 'text-warn'
                   }`}
                 >
-                  {formatMoney(dec(totals.total).minus(payAmount))}
+                  {formatMoney(dec(totals.total).minus(payValue))}
                 </div>
               </div>
             </div>
@@ -1215,7 +1272,7 @@ export function DocumentForm({
       <SubmitButton
         label={
           instantIssue && issueNow
-            ? payAmount > 0
+            ? payValue > 0
               ? 'إنشاء وإصدار وتحصيل'
               : 'إنشاء وإصدار'
             : submitLabel

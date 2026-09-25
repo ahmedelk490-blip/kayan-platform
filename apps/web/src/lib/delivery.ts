@@ -14,3 +14,9 @@ export const DELIVERY_DESCRIPTION = '🚚 أجور توصيل';
 export function isDeliveryDesc(description: string | null | undefined): boolean {
   return !!description && description.trim().startsWith('🚚');
 }
+
+/**
+ * أجرة التوصيل المعتادة داخل بغداد — تُملأ تلقائياً عند اختيار
+ * التوصيل وتبقى قابلة للتعديل: الرقم الشائع لا قاعدة مقفلة.
+ */
+export const DELIVERY_DEFAULT_FEE = 5000;
