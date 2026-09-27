@@ -22,7 +22,14 @@ import { ConfirmButton } from '@/components/crud/ConfirmButton';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import type { SearchParams } from '@/lib/query';
 import { PenaltyForm } from '../PenaltyForm';
-import { setDamageStatus, deleteDamage, createPenalty, setPenaltyStatus } from '../actions';
+import {
+  setDamageStatus,
+  deleteDamage,
+  createPenalty,
+  setPenaltyStatus,
+  collectPenaltyInstallment,
+} from '../actions';
+import { PenaltyPlanForm } from '../PenaltyPlanForm';
 
 export const metadata: Metadata = { title: 'محضر الهالك' };
 
@@ -196,7 +203,7 @@ export default async function DamageDetailPage({
             </div>
 
             <Table
-              headers={['الرقم', 'الموظف', 'المبلغ', 'السبب', 'الحالة', '']}
+              headers={['الرقم', 'الموظف', 'المبلغ', 'الأقساط', 'المستقطَع', 'السبب', 'الحالة', '']}
               empty={damage.penalties.length === 0}
             >
               {damage.penalties.map((p) => {
@@ -211,6 +218,42 @@ export default async function DamageDetailPage({
                     </td>
                     <td className="tnum px-4 py-3 font-medium text-brand">
                       {formatMoney(p.amount)}
+                    </td>
+                    {/* الخطّة تُعدّل ما دام الجزاء لم يُستوفَ — المبلغ قرارٌ اعتُمد،
+                        ووتيرة قبضه ليست كذلك. */}
+                    <td className="px-4 py-3">
+                      {canPenalise && pStatus !== 'PAID' && pStatus !== 'CANCELLED' ? (
+                        <PenaltyPlanForm
+                          damageId={damage.id}
+                          penaltyId={p.id}
+                          installments={p.installments}
+                          perInstallment={formatMoney(
+                            dec(p.amount).dividedBy(Math.max(1, p.installments)),
+                          )}
+                        />
+                      ) : (
+                        <span className="tnum text-xs text-txt-3">{p.installments}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="tnum block text-xs text-txt-2">
+                        {formatMoney(p.collectedAmount)}
+                      </span>
+                      {dec(p.amount).gt(dec(p.collectedAmount)) && (
+                        <span className="tnum block text-[0.65rem] text-txt-4">
+                          باقٍ {formatMoney(dec(p.amount).minus(dec(p.collectedAmount)))}
+                        </span>
+                      )}
+                      {canPenalise && pStatus === 'APPROVED' && (
+                        <form action={collectPenaltyInstallment.bind(null, damage.id, p.id)}>
+                          <button
+                            type="submit"
+                            className="mt-1 rounded-md border border-line-2 px-2 py-1 text-[0.65rem] text-txt-3 hover:border-brand hover:text-brand"
+                          >
+                            استقطع قسطاً
+                          </button>
+                        </form>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-[0.7rem] text-txt-3">{p.reason}</td>
                     <td className="px-4 py-3">

@@ -43,7 +43,7 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
     }),
     prisma.penalty.findMany({
       where: { tenantId: user.tenantId, employeeId: id, status: { in: ['APPROVED', 'PAID'] } },
-      select: { amount: true },
+      select: { amount: true, collectedAmount: true },
     }),
     prisma.invoice.findMany({
       where: {
@@ -153,8 +153,17 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
     .reduce((s, p) => s.plus(dec(p.amount)), dec(0));
   const commissionDue = commissionEarned.minus(commissionPaid);
 
+  // الجزاء المعتمد خطّةٌ لا مالٌ خرج.
+  //
+  // كان يُطرح كاملاً من صافي الموظّف لحظة اعتماده، فيظهر من عليه جزاءٌ
+  // براتب شهر وكأنّه لم يقبض شيئاً — وهو لم يُستقطع منه بعد. المال يخرج بصفّ
+  // خصمٍ (قسط) وهو داخلٌ في `deducted` أصلاً، فطرحه مرّتين مضاعفة.
+  //
+  // فالصافي يقول ما تحرّك فعلاً، والباقي من الجزاءات يُعرض خبراً لا خصماً.
   const penaltyTotal = penalties.reduce((s, p) => s.plus(dec(p.amount)), dec(0));
-  const netPaid = paidOut.minus(deducted).minus(penaltyTotal);
+  const penaltyCollected = penalties.reduce((s, p) => s.plus(dec(p.collectedAmount)), dec(0));
+  const penaltyRemaining = penaltyTotal.minus(penaltyCollected);
+  const netPaid = paidOut.minus(deducted);
 
   const name = employee.nameAr ?? employee.name;
   const fmt = new Intl.DateTimeFormat('ar-IQ', { dateStyle: 'medium' });
@@ -193,16 +202,20 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
         )}
         <Figure
           label="المحمّل عليه"
-          value={formatMoney(deducted.plus(penaltyTotal))}
+          value={formatMoney(deducted)}
           hint="خصومات وخسائر وسلف + جزاءات"
-          tone={deducted.plus(penaltyTotal).gt(0) ? 'warn' : undefined}
+          tone={deducted.gt(0) ? 'warn' : undefined}
         />
         <Figure label="صافي المصروف له" value={formatMoney(netPaid)} hint="مدفوعات ناقص المحمّل" strong tone={netPaid.lt(0) ? 'warn' : undefined} />
       </div>
 
       {penaltyTotal.gt(0) && (
-        <p className="mb-4 rounded-lg border border-warn bg-warn-soft px-4 py-2.5 text-xs text-warn">
-          جزاءات معتمدة على الموظف بقيمة {formatMoney(penaltyTotal)} (من شاشة الهالك والجزاءات) — مخصومة من الصافي أعلاه.
+        <p className="mb-4 rounded-lg border border-warn bg-warn-soft px-4 py-2.5 text-xs leading-[1.9] text-warn">
+          جزاءات على الموظف بقيمة {formatMoney(penaltyTotal)} — استُقطِع منها{' '}
+          {formatMoney(penaltyCollected)}
+          {penaltyRemaining.gt(0) && <> وباقٍ {formatMoney(penaltyRemaining)}</>}. المستقطَع وحده
+          داخلٌ في الصافي أعلاه (كصفّ خصم) — والباقي يُستقطع قسطاً قسطاً من شاشة
+          «الهالك والجزاءات».
         </p>
       )}
 

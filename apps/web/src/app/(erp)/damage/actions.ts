@@ -20,7 +20,7 @@ import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 import { nextOpsNumber, type FormState } from '@/lib/ops';
-import { numeric } from '@/lib/num';
+import { numeric, normalizeDigits } from '@/lib/num';
 import { adjustStock } from '@/lib/stock';
 
 // ── Damage records ──────────────────────────────────────────
@@ -392,6 +392,130 @@ export async function createPenalty(
 
   revalidatePath(`/damage/${damageId}`);
   return { ok: `تم تسجيل الجزاء ${penalty.number} بانتظار الاعتماد.` };
+}
+
+/**
+ * خطّة تقسيط الجزاء — عدد الأقساط الشهرية.
+ *
+ * جزاءٌ يعادل راتب شهر يُستقطع دفعةً واحدة يترك الموظّف بلا شيء ذلك
+ * الشهر، وهذا ليس ما أراده من اعتمده. فالخطّة تُعدّل ما دام الجزاء لم
+ * يُستوفَ بعد — المبلغ لا يُمسّ (هو قرارٌ اعتُمد)، وإنما وتيرة قبضه.
+ */
+export async function setPenaltyPlan(
+  damageId: string,
+  penaltyId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requirePermission('penalties.approve');
+
+  const count = Number(normalizeDigits(String(formData.get('installments') ?? '')));
+  if (!Number.isInteger(count) || count < 1 || count > 36) {
+    return { fieldErrors: { installments: 'عدد الأقساط بين ١ و٣٦.' } };
+  }
+
+  const penalty = await prisma.penalty.findFirst({
+    where: { id: penaltyId, tenantId: user.tenantId },
+    select: { id: true, number: true, status: true },
+  });
+  if (!penalty) return { error: 'الجزاء غير موجود.' };
+  if (penalty.status === 'PAID' || penalty.status === 'CANCELLED') {
+    return { error: 'جزاءٌ مُستوفٍ أو ملغٍ لا تُعدّل خطّته.' };
+  }
+
+  await prisma.penalty.update({ where: { id: penaltyId }, data: { installments: count } });
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'penalty.plan',
+    entityType: 'Penalty',
+    entityId: penaltyId,
+    detail: `${penalty.number} — ${count} قسط`,
+  });
+
+  revalidatePath(`/damage/${damageId}`);
+  return { ok: `الخطّة الآن ${count} قسطاً.` };
+}
+
+/**
+ * استقطاع قسطٍ من جزاء معتمد.
+ *
+ * الجزاء المعتمد خطّةٌ لا مالٌ تحرّك: المال يخرج بصفّ خصمٍ على الموظّف
+ * يظهر في كشفه كبقية الحركات. وآخر قسط يأخذ الباقي كلّه ويغلق الجزاء،
+ * فلا يبقى منه كسرٌ معلّق من القسمة.
+ */
+export async function collectPenaltyInstallment(
+  damageId: string,
+  penaltyId: string,
+): Promise<void> {
+  const user = await requirePermission('penalties.approve');
+
+  await tenantTransaction(async (tx) => {
+    const penalty = await tx.penalty.findFirst({
+      where: { id: penaltyId, tenantId: user.tenantId, status: 'APPROVED' },
+      select: {
+        id: true,
+        number: true,
+        employeeId: true,
+        amount: true,
+        installments: true,
+        collectedAmount: true,
+        reason: true,
+      },
+    });
+    if (!penalty) return;
+
+    const total = dec(penalty.amount);
+    const collected = dec(penalty.collectedAmount);
+    const remaining = total.minus(collected);
+    if (remaining.lte(0)) return;
+
+    const per = total.dividedBy(Math.max(1, penalty.installments));
+    // آخر قسط يبتلع كسر القسمة فلا يبقى دينارٌ معلّق.
+    const take = per.gte(remaining) ? remaining : per;
+
+    await tx.employeePayment.create({
+      data: {
+        tenantId: user.tenantId,
+        // نفس بادئة دفعات الموظّفين فلا يتصادم رقمان من مولّدين.
+        number: await nextOpsNumber('employeePayment', 'EP', user.tenantId),
+        employeeId: penalty.employeeId,
+        kind: 'DEDUCTION',
+        amount: take.toString(),
+        paidAt: new Date(),
+        note: `قسط من الجزاء ${penalty.number}`,
+        createdById: user.id,
+      },
+    });
+
+    const after = collected.plus(take);
+    const settled = after.gte(total);
+    await tx.penalty.update({
+      where: { id: penaltyId },
+      data: {
+        collectedAmount: after.toString(),
+        ...(settled ? { status: 'PAID', paidAt: new Date() } : {}),
+      },
+    });
+    if (settled) {
+      await tx.penaltyEvent.create({
+        data: { penaltyId, fromStatus: 'APPROVED', toStatus: 'PAID', userId: user.id },
+      });
+    }
+  });
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'penalty.installment',
+    entityType: 'Penalty',
+    entityId: penaltyId,
+    detail: 'قسط مستقطَع',
+  });
+
+  revalidatePath(`/damage/${damageId}`);
+  revalidatePath('/hr');
 }
 
 export async function setPenaltyStatus(

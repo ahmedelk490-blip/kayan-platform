@@ -29,11 +29,32 @@ export interface SchemaState {
  * فيتخطّاه بريزما كما لو طبّقه بنفسه.
  */
 
-/** بصمة prisma/migrations/20260927120000_supplier_payments/migration.sql */
-const SUPPLIER_PAYMENTS = {
-  name: '20260927120000_supplier_payments',
-  checksum: 'cc967ee58a8ff708c88a76cb158625501db9140ef74456c667690fcc632f9201',
-};
+/** بصمات ملفات الترحيل — SHA-256 لمحتوى migration.sql، كما تحسبها بريزما. */
+const MIGRATIONS = {
+  supplierPayments: {
+    name: '20260927120000_supplier_payments',
+    checksum: 'cc967ee58a8ff708c88a76cb158625501db9140ef74456c667690fcc632f9201',
+  },
+  penaltyInstallments: {
+    name: '20260927140000_penalty_installments',
+    checksum: '10f1bce2410739a5cac884760b33a2c3a6efc6e65d9ebe1141666432e79ae30c',
+  },
+} as const;
+
+/** يُقيَّد الترحيل في دفتر بريزما فلا يصطدم به `migrate deploy` لاحقاً. */
+async function recordMigration(m: { name: string; checksum: string }): Promise<void> {
+  if (!(await hasTable('_prisma_migrations'))) return;
+  const seen = await prisma.$queryRawUnsafe<{ n: bigint }[]>(
+    'SELECT COUNT(*) AS n FROM `_prisma_migrations` WHERE `migration_name` = ?',
+    m.name,
+  );
+  if (Number(seen[0]?.n ?? 0) > 0) return;
+  await prisma.$executeRawUnsafe(
+    'INSERT INTO `_prisma_migrations` (`id`, `checksum`, `finished_at`, `migration_name`, `logs`, `rolled_back_at`, `started_at`, `applied_steps_count`) VALUES (UUID(), ?, NOW(3), ?, NULL, NULL, NOW(3), 1)',
+    m.checksum,
+    m.name,
+  );
+}
 
 async function hasTable(name: string): Promise<boolean> {
   const rows = await prisma.$queryRawUnsafe<{ n: bigint }[]>(
@@ -101,21 +122,27 @@ export async function applyPendingSchema(): Promise<SchemaState> {
       }
       done.push('جدول دفعات الموردين');
     }
+    if (done.length > 0) await recordMigration(MIGRATIONS.supplierPayments);
 
-    // يُقيَّد في دفتر بريزما فلا يُعاد تطبيقه من سطر الأوامر لاحقاً.
-    if (done.length > 0 && (await hasTable('_prisma_migrations'))) {
-      const seen = await prisma.$queryRawUnsafe<{ n: bigint }[]>(
-        'SELECT COUNT(*) AS n FROM `_prisma_migrations` WHERE `migration_name` = ?',
-        SUPPLIER_PAYMENTS.name,
+    // تقسيط الجزاء — عمودان على Penalty.
+    let penaltyDone = false;
+    if (!(await hasColumn('Penalty', 'installments'))) {
+      await prisma.$executeRawUnsafe(
+        'ALTER TABLE `Penalty` ADD COLUMN `installments` INTEGER NOT NULL DEFAULT 1',
       );
-      if (Number(seen[0]?.n ?? 0) === 0) {
-        await prisma.$executeRawUnsafe(
-          'INSERT INTO `_prisma_migrations` (`id`, `checksum`, `finished_at`, `migration_name`, `logs`, `rolled_back_at`, `started_at`, `applied_steps_count`) VALUES (UUID(), ?, NOW(3), ?, NULL, NULL, NOW(3), 1)',
-          SUPPLIER_PAYMENTS.checksum,
-          SUPPLIER_PAYMENTS.name,
-        );
-      }
+      penaltyDone = true;
     }
+    if (!(await hasColumn('Penalty', 'collectedAmount'))) {
+      await prisma.$executeRawUnsafe(
+        'ALTER TABLE `Penalty` ADD COLUMN `collectedAmount` DECIMAL(19,4) NOT NULL DEFAULT 0',
+      );
+      penaltyDone = true;
+    }
+    if (penaltyDone) {
+      done.push('تقسيط الجزاءات');
+      await recordMigration(MIGRATIONS.penaltyInstallments);
+    }
+
   } catch (err) {
     return {
       error: `تعذّر التطبيق: ${err instanceof Error ? err.message : 'خطأ غير معروف'}`,

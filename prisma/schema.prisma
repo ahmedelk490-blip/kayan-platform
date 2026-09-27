@@ -2086,6 +2086,18 @@ model Penalty {
   amount Decimal @db.Decimal(19, 4)
   reason String
 
+  /// عدد الأقساط المتفق عليها — ١ يعني دفعةً واحدة.
+  ///
+  /// جزاءٌ يعادل راتب شهر يُستقطع دفعةً واحدة يترك الموظّف بلا شيء،
+  /// وهذا ليس ما أراده من اعتمده. فالخطّة جزء من الجزاء لا قرارٌ منفصل.
+  installments Int @default(1)
+
+  /// ما استُقطِع فعلاً من هذا الجزاء — مجموع أقساطه المقبوضة.
+  ///
+  /// الجزاء المعتمد خطّةٌ لا مالٌ تحرّك: المال يخرج بصفّ خصمٍ على الموظّف،
+  /// وهذا العمود يقول كم خرج منه وكم بقي.
+  collectedAmount Decimal @default(0) @db.Decimal(19, 4)
+
   /// PENDING | APPROVED | PAID | CANCELLED
   status       String    @default("PENDING")
   approvedById String?

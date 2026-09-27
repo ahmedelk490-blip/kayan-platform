@@ -15,7 +15,7 @@ export interface FormState {
   fieldErrors?: Record<string, string>;
 }
 
-type Numbered = 'secondaryExpense' | 'damageRecord' | 'penalty';
+type Numbered = 'secondaryExpense' | 'damageRecord' | 'penalty' | 'employeePayment';
 
 /**
  * Next document number, scoped to tenant and year: EXP-2026-0001.
@@ -38,7 +38,9 @@ export async function nextOpsNumber(
       ? await prisma.secondaryExpense.findMany({ where, select })
       : model === 'damageRecord'
         ? await prisma.damageRecord.findMany({ where, select })
-        : await prisma.penalty.findMany({ where, select });
+        : model === 'penalty'
+          ? await prisma.penalty.findMany({ where, select })
+          : await prisma.employeePayment.findMany({ where, select });
 
   const max = rows.reduce((acc, r) => {
     const n = Number.parseInt(r.number.slice(stem.length), 10);
