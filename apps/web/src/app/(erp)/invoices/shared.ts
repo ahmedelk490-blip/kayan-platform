@@ -124,33 +124,42 @@ export function deliveryExpenseTag(invoiceId: string): string {
 }
 
 /**
- * «التوصيل علينا»: مصروف «شحن وتوصيل» باسم الفاتورة — يُخصم من الربح في
- * التقارير دون أن يمسّ إجمالي الفاتورة.
+ * أجور التوصيل: مصروف «شحن وتوصيل» باسم الفاتورة.
  *
- * مُكرَّر-آمن عبر الوسم: الحفظ الثاني لنفس الفاتورة يجد المصروف فيحدّث مبلغه
- * إن كان لا يزال بانتظار الاعتماد، ويتركه إن اعتُمد (مصروف معتمد دخل ربحاً
- * مُبلَّغاً — لا يُعدَّل بصمت، كقاعدة حذف المصروفات نفسها). من يملك صلاحية
- * الاعتماد يُسجَّل مصروفه معتمداً فوراً، كالمصروفات الثابتة الشهرية.
+ * يُسجَّل كلّما كانت هناك أجرة، لا حين تكون «علينا» وحدها: السائق يأخذها منّا
+ * في الحالتين، وبند الفاتورة هو من يردّها حين تكون على الزبون — فيصير أثرها
+ * في الربح صفراً هناك وخصماً كاملاً هنا.
+ *
+ * ── وتاريخه تاريخ الطلب ─────────────────────────────────────
+ *
+ * لا لحظةَ الحفظ ولا يومَ استلام الزبون. فاتورةٌ تُعدَّل بعد أسبوع كانت تنقل
+ * أجرتها إلى يوم التعديل: فيخرج تقرير يوم البيع بربحٍ أعلى من حقيقته،
+ * ويُحمَّل يومٌ آخر مصروفاً ليس له.
+ *
+ * ── وهو صفٌّ يتبع الفاتورة ───────────────────────────────────
+ *
+ * مُكرَّر-آمن عبر الوسم: الحفظ الثاني لنفس الفاتورة يجد المصروف فيطابقه عليها
+ * بدل أن يُنشئ ثانياً. وهذا ليس مصروفاً يقدّمه صاحبه لنفسه حتى يُحمى من
+ * التعديل بعد الاعتماد: هو مرآةُ خانةٍ في الفاتورة، فيتغيّر بتغيّرها ويزول
+ * بزوالها — وإلا بقي يخصم من الربح أجرةً أُلغيت أو مبلغاً لم يعد صحيحاً.
  */
 export async function recordDeliveryExpense(
   user: { tenantId: string; id: string },
   fee: number,
-  invoice: { id: string; number: string | null },
+  invoice: { id: string; number: string | null; date?: Date | null },
 ): Promise<void> {
   const tag = deliveryExpenseTag(invoice.id);
   const notes = `أجور توصيل الفاتورة ${invoice.number ?? 'مسودة'} ${tag}`;
+  const expenseDate = invoice.date ?? new Date();
 
   const existing = await prisma.secondaryExpense.findFirst({
     where: { tenantId: user.tenantId, category: 'SHIPPING', isDeleted: false, notes: { contains: tag } },
-    select: { id: true, status: true, amount: true },
+    select: { id: true, amount: true, expenseDate: true },
   });
 
-  // صفر يعني: لا توصيل لهذه الفاتورة (أُلغي أو لم يكن). المصروف القديم
-  // يُلغى وإلا بقي يخصم من الربح أجرةً لم تُدفع. ومَن يدفعها لا يغيّر شيئاً
-  // هنا: السائق يأخذها منّا في الحالتين، وبند الفاتورة هو من يردّها حين تكون على الزبون.
-  // المعتمد لا يُمسّ صمتاً — يُترك ليحذفه صاحب الصلاحية بنفسه، كقاعدة المصروفات.
+  // صفر يعني: لا توصيل لهذه الفاتورة (أُلغي أو لم يكن).
   if (!(fee > 0)) {
-    if (existing && existing.status !== 'APPROVED') {
+    if (existing) {
       await prisma.secondaryExpense.update({
         where: { id: existing.id },
         data: { isDeleted: true, deletedAt: new Date() },
@@ -160,10 +169,12 @@ export async function recordDeliveryExpense(
   }
 
   if (existing) {
-    if (existing.status === 'PENDING' && !dec(existing.amount).eq(dec(fee))) {
+    const sameAmount = dec(existing.amount).eq(dec(fee));
+    const sameDate = existing.expenseDate.getTime() === expenseDate.getTime();
+    if (!sameAmount || !sameDate) {
       await prisma.secondaryExpense.update({
         where: { id: existing.id },
-        data: { amount: dec(fee).toString(), notes },
+        data: { amount: dec(fee).toString(), expenseDate, notes },
       });
     }
     return;
@@ -173,7 +184,7 @@ export async function recordDeliveryExpense(
     data: {
       tenantId: user.tenantId,
       number: await nextOpsNumber('secondaryExpense', 'EXP', user.tenantId),
-      expenseDate: new Date(),
+      expenseDate,
       category: 'SHIPPING',
       amount: dec(fee).toString(),
       notes,

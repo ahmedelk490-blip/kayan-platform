@@ -320,7 +320,11 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
     // الفاتورة — فتُسجّل مصروفاً في الحالتين (بطلب المالك). ومع بند التوصيل
     // على الفاتورة يصير أثره في الربح صفراً بدل أن يُحسب ربحاً لا مقابل له.
     if (delivery.fee > 0) {
-      await recordDeliveryExpense(user, delivery.fee, { id: created.id, number: created.number });
+      await recordDeliveryExpense(user, delivery.fee, {
+        id: created.id,
+        number: created.number,
+        date: created.issueDate,
+      });
       revalidatePath('/expenses');
     }
 
@@ -344,7 +348,11 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
   });
 
   if (delivery.fee > 0) {
-    await recordDeliveryExpense(user, delivery.fee, { id: invoice.id, number: null });
+    await recordDeliveryExpense(user, delivery.fee, {
+      id: invoice.id,
+      number: null,
+      date: invoice.issueDate ?? invoice.createdAt,
+    });
     revalidatePath('/expenses');
   }
 
@@ -641,6 +649,8 @@ export async function updateInvoiceLines(
   await recordDeliveryExpense(user, delivery.fee, {
     id: invoiceId,
     number: invoice.number,
+    // تاريخ الطلب لا يوم التعديل — الأجرة تخصّ الطلب.
+    date: invoice.issueDate ?? invoice.createdAt,
   });
   revalidatePath('/expenses');
 

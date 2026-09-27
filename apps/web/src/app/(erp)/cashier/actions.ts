@@ -243,7 +243,11 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
   // الفاتورة — فتُسجّل مصروفاً في الحالتين (بطلب المالك). ومع بند التوصيل
   // على الفاتورة يصير أثره في الربح صفراً بدل أن يُحسب ربحاً لا مقابل له.
   if (deliveryFee > 0) {
-    await recordDeliveryExpense(user, deliveryFee, { id: created.id, number: created.number });
+    await recordDeliveryExpense(user, deliveryFee, {
+      id: created.id,
+      number: created.number,
+      date: created.issueDate,
+    });
     revalidatePath('/expenses');
   }
 
