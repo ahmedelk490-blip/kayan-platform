@@ -23,7 +23,7 @@ import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors, nextCode } from '@/lib/audit';
 import { readLines, decimal, normalizeDigits } from '@/app/(erp)/sales/shared';
 import { numeric } from '@/lib/num';
-import { DELIVERY_DESCRIPTION } from '@/lib/delivery';
+import { DELIVERY_DESCRIPTION, isDeliveryDesc } from '@/lib/delivery';
 import { adjustStock } from '@/lib/stock';
 import { returnedValueInTx, returnedValueOf } from '@/lib/receivables';
 import {
@@ -32,6 +32,7 @@ import {
   nextPaymentNumber,
   invoiceSettings,
   recordDeliveryExpense,
+  deliveryExpenseTag,
   type FormState,
 } from './shared';
 
@@ -413,6 +414,31 @@ export async function duplicateInvoice(invoiceId: string): Promise<void> {
     },
     select: { id: true },
   });
+
+  // النسخة تحمل أجرة توصيلها كما تحمل بنودها.
+  //
+  // كان بند «🚚 أجور توصيل» يُنسخ وحده بلا مصروفه: فاتورةٌ مكرّرة تدخل
+  // الخمسة آلاف إيراداً بلا تكلفةٍ تقابلها، فتعود أجرة التوصيل ربحاً من حيث
+  // أُخرجت. ومصدر الأجرة هو مصدرها في شاشة التعديل: البند أوّلاً، وإلا فمصروف
+  // الشحن الموسوم بمعرّف الفاتورة الأصل (حين كانت علينا فلا بند لها).
+  const srcDeliveryLine = src.lines.find((l) => !l.variantId && isDeliveryDesc(l.description));
+  let dupFee = srcDeliveryLine ? Number(srcDeliveryLine.unitPrice) : 0;
+  if (!srcDeliveryLine) {
+    const srcExpense = await prisma.secondaryExpense.findFirst({
+      where: {
+        tenantId: user.tenantId,
+        category: 'SHIPPING',
+        isDeleted: false,
+        notes: { contains: deliveryExpenseTag(src.id) },
+      },
+      select: { amount: true },
+    });
+    if (srcExpense) dupFee = Number(srcExpense.amount);
+  }
+  if (dupFee > 0) {
+    await recordDeliveryExpense(user, dupFee, { id: created.id, number: null });
+    revalidatePath('/expenses');
+  }
 
   await audit({
     tenantId: user.tenantId,
@@ -853,6 +879,11 @@ export async function voidInvoice(
       await restockIn(tx, user.tenantId, user.id, restockWh, invoice.number ?? null, invoice.lines);
     }
   });
+
+  // أجرة توصيل فاتورةٍ أُلغيت لم تُدفع: الطلب لم يُوصَّل. وكان المصروف
+  // يبقى بعد الإلغاء فيخصم من الربح إلى الأبد — وإيراده المقابل ذهب مع الفاتورة.
+  await recordDeliveryExpense(user, 0, { id, number: invoice.number });
+  revalidatePath('/expenses');
 
   await audit({
     tenantId: user.tenantId,
