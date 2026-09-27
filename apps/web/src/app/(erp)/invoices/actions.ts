@@ -316,8 +316,10 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
       return inv;
     });
 
-    // توصيل «علينا»: مصروف شحن وتوصيل باسم الفاتورة — يُخصم من الربح.
-    if (delivery.onUs) {
+    // أجرة السائق تُدفع من عندنا في الحالتين — من جيبنا أو من مال الزبون على
+    // الفاتورة — فتُسجّل مصروفاً في الحالتين (بطلب المالك). ومع بند التوصيل
+    // على الفاتورة يصير أثره في الربح صفراً بدل أن يُحسب ربحاً لا مقابل له.
+    if (delivery.fee > 0) {
       await recordDeliveryExpense(user, delivery.fee, { id: created.id, number: created.number });
       revalidatePath('/expenses');
     }
@@ -341,7 +343,7 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
     data: { ...baseData, status: 'DRAFT' },
   });
 
-  if (delivery.onUs) {
+  if (delivery.fee > 0) {
     await recordDeliveryExpense(user, delivery.fee, { id: invoice.id, number: null });
     revalidatePath('/expenses');
   }
@@ -636,7 +638,7 @@ export async function updateInvoiceLines(
 
   // يُستدعى دائماً عند التعديل: بصفرٍ يُلغي مصروف توصيلٍ سابق لم يعد علينا
   // (حُوِّل للزبون أو أُلغي)، وإلا بقي يخصم من الربح والزبون يدفعه على الفاتورة.
-  await recordDeliveryExpense(user, delivery.onUs ? delivery.fee : 0, {
+  await recordDeliveryExpense(user, delivery.fee, {
     id: invoiceId,
     number: invoice.number,
   });

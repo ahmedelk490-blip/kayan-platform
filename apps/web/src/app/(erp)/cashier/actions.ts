@@ -239,8 +239,10 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
     return inv;
   });
 
-  // «التوصيل علينا»: مصروف شحن وتوصيل باسم الفاتورة — يُخصم من الربح.
-  if (deliveryOnUs) {
+  // أجرة السائق تُدفع من عندنا في الحالتين — من جيبنا أو من مال الزبون على
+  // الفاتورة — فتُسجّل مصروفاً في الحالتين (بطلب المالك). ومع بند التوصيل
+  // على الفاتورة يصير أثره في الربح صفراً بدل أن يُحسب ربحاً لا مقابل له.
+  if (deliveryFee > 0) {
     await recordDeliveryExpense(user, deliveryFee, { id: created.id, number: created.number });
     revalidatePath('/expenses');
   }
