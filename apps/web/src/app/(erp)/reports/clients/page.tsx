@@ -43,6 +43,7 @@ export default async function ClientsReport({ searchParams }: { searchParams: Pr
           quantity: true,
           // الوصف لاستثناء بند التوصيل 🚚 — مالٌ لا بضاعة لها تكلفة.
           description: true,
+          lineTotal: true,
           variant: { select: { cost: true, product: { select: { cost: true } } } },
         },
       },
@@ -71,6 +72,8 @@ export default async function ClientsReport({ searchParams }: { searchParams: Pr
     invoiced: ReturnType<typeof dec>;
     collected: ReturnType<typeof dec>;
     cost: ReturnType<typeof dec>;
+    /** أجور التوصيل المفوترة — مالٌ يمرّ لا ربح، فيُطرح من أساس الربح. */
+    delivery: ReturnType<typeof dec>;
     /** المستحق الصافي لهذا العميل — بقاعٍ عند الصفر لكل فاتورة على حدة. */
     outstanding: ReturnType<typeof dec>;
     last: Date | null;
@@ -81,7 +84,7 @@ export default async function ClientsReport({ searchParams }: { searchParams: Pr
     const name = inv.customer.companyName ?? inv.customer.contactName;
     const row =
       byClient.get(id) ??
-      { id, name, count: 0, invoiced: dec(0), collected: dec(0), cost: dec(0), outstanding: dec(0), last: null };
+      { id, name, count: 0, invoiced: dec(0), collected: dec(0), cost: dec(0), delivery: dec(0), outstanding: dec(0), last: null };
     row.count += 1;
     row.invoiced = row.invoiced.plus(dec(inv.total));
     row.collected = row.collected.plus(dec(inv.paidAmount));
@@ -90,7 +93,13 @@ export default async function ClientsReport({ searchParams }: { searchParams: Pr
       balance(dec(inv.total).minus(returnsByInvoice.get(inv.id) ?? dec(0)), inv.paidAmount),
     );
     for (const l of inv.lines) {
-      if (isDeliveryDesc(l.description)) continue;
+      // بند التوصيل مالٌ يمرّ لا ربح: الزبون يدفعه والسائق يأخذه،
+      // والمصروف المقابل له ليس في تكلفة هذا التقرير (تُحسب من البنود). فيُطرح
+      // من أساس الربح وإلا ظهر كلّه ربحاً.
+      if (isDeliveryDesc(l.description)) {
+        row.delivery = row.delivery.plus(dec(l.lineTotal));
+        continue;
+      }
       const unitCost = l.variant?.cost ?? l.variant?.product?.cost ?? null;
       if (unitCost !== null) row.cost = row.cost.plus(dec(l.quantity).times(dec(unitCost)));
     }
@@ -144,7 +153,7 @@ export default async function ClientsReport({ searchParams }: { searchParams: Pr
             {rows.map((r) => {
               const outstanding = r.outstanding;
               const rate = r.invoiced.lte(0) ? dec(0) : r.collected.dividedBy(r.invoiced).times(100);
-              const profit = r.invoiced.minus(r.cost);
+              const profit = r.invoiced.minus(r.delivery).minus(r.cost);
               return (
                 <tr key={r.id}>
                   <td className="px-4 py-3 text-txt">{r.name}</td>

@@ -22,7 +22,7 @@ export async function GET(request: Request) {
         paidAmount: true,
         customerId: true,
         customer: { select: { contactName: true, companyName: true } },
-        lines: { select: { quantity: true, description: true, variant: { select: { cost: true, product: { select: { cost: true } } } } } },
+        lines: { select: { quantity: true, description: true, lineTotal: true, variant: { select: { cost: true, product: { select: { cost: true } } } } } },
       },
     }),
   );
@@ -43,12 +43,12 @@ export async function GET(request: Request) {
 
   const map = new Map<
     string,
-    { name: string; count: number; invoiced: ReturnType<typeof dec>; collected: ReturnType<typeof dec>; cost: ReturnType<typeof dec>; outstanding: ReturnType<typeof dec> }
+    { name: string; count: number; invoiced: ReturnType<typeof dec>; collected: ReturnType<typeof dec>; cost: ReturnType<typeof dec>; delivery: ReturnType<typeof dec>; outstanding: ReturnType<typeof dec> }
   >();
   for (const inv of invoices) {
     const id = inv.customerId;
     const name = inv.customer.companyName ?? inv.customer.contactName;
-    const row = map.get(id) ?? { name, count: 0, invoiced: dec(0), collected: dec(0), cost: dec(0), outstanding: dec(0) };
+    const row = map.get(id) ?? { name, count: 0, invoiced: dec(0), collected: dec(0), cost: dec(0), delivery: dec(0), outstanding: dec(0) };
     row.count += 1;
     row.invoiced = row.invoiced.plus(dec(inv.total));
     row.collected = row.collected.plus(dec(inv.paidAmount));
@@ -56,7 +56,13 @@ export async function GET(request: Request) {
       balance(dec(inv.total).minus(returnsByInvoice.get(inv.id) ?? dec(0)), inv.paidAmount),
     );
     for (const l of inv.lines) {
-      if (isDeliveryDesc(l.description)) continue;
+      // بند التوصيل مالٌ يمرّ لا ربح: الزبون يدفعه والسائق يأخذه،
+      // والمصروف المقابل له ليس في تكلفة هذا التقرير (تُحسب من البنود). فيُطرح
+      // من أساس الربح وإلا ظهر كلّه ربحاً.
+      if (isDeliveryDesc(l.description)) {
+        row.delivery = row.delivery.plus(dec(l.lineTotal));
+        continue;
+      }
       const unitCost = l.variant?.cost ?? l.variant?.product?.cost ?? null;
       if (unitCost !== null) row.cost = row.cost.plus(dec(l.quantity).times(dec(unitCost)));
     }
@@ -69,7 +75,7 @@ export async function GET(request: Request) {
     .map((r) => {
       const outstanding = r.outstanding;
       const rate = r.invoiced.lte(0) ? 0 : Number(r.collected.dividedBy(r.invoiced).times(100).toFixed(0));
-      return [r.name, r.count, r.invoiced.toNumber(), r.collected.toNumber(), outstanding.toNumber(), rate, r.invoiced.minus(r.cost).toNumber()];
+      return [r.name, r.count, r.invoiced.toNumber(), r.collected.toNumber(), outstanding.toNumber(), rate, r.invoiced.minus(r.delivery).minus(r.cost).toNumber()];
     });
 
   return csvResponse(stampedName('kayan-clients'), headers, rows);

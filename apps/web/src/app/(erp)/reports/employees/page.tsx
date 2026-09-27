@@ -50,6 +50,7 @@ export default async function EmployeeReport({
             quantity: true,
             // الوصف لاستثناء بند التوصيل 🚚 — ليس قطعة ولا يجعل التكلفة «مجهولة».
             description: true,
+            lineTotal: true,
             variant: { select: { cost: true, product: { select: { cost: true } } } },
           },
         },
@@ -102,6 +103,7 @@ export default async function EmployeeReport({
     invoices: number;
     pieces: ReturnType<typeof dec>;
     revenue: ReturnType<typeof dec>;
+    delivery: ReturnType<typeof dec>;
     cost: ReturnType<typeof dec>;
     costKnown: boolean;
     expenses: ReturnType<typeof dec>;
@@ -112,7 +114,7 @@ export default async function EmployeeReport({
   };
   const byEmp = new Map<string, Row>();
   const blank = (id: string, name: string): Row => ({
-    id, name, invoices: 0, pieces: dec(0), revenue: dec(0), cost: dec(0),
+    id, name, invoices: 0, pieces: dec(0), revenue: dec(0), delivery: dec(0), cost: dec(0),
     costKnown: true, expenses: dec(0), salary: dec(0), bonus: dec(0), returns: dec(0), hasInvoices: false,
   });
 
@@ -124,7 +126,13 @@ export default async function EmployeeReport({
     row.invoices += 1;
     row.revenue = row.revenue.plus(dec(inv.total));
     for (const l of inv.lines) {
-      if (isDeliveryDesc(l.description)) continue;
+      // بند التوصيل مالٌ يمرّ لا ربح: الزبون يدفعه والسائق يأخذه،
+      // والمصروف المقابل له ليس في تكلفة هذا التقرير. فيُطرح من أساس
+      // الربح وإلا ظهر كلّه ربحاً.
+      if (isDeliveryDesc(l.description)) {
+        row.delivery = row.delivery.plus(dec(l.lineTotal));
+        continue;
+      }
       row.pieces = row.pieces.plus(dec(l.quantity));
       const unitCost = l.variant?.cost ?? l.variant?.product?.cost ?? null;
       if (unitCost === null) row.costKnown = false;
@@ -209,7 +217,7 @@ export default async function EmployeeReport({
             empty={false}
           >
             {rows.map((r) => {
-              const profit = r.revenue.minus(r.cost);
+              const profit = r.revenue.minus(r.delivery).minus(r.cost);
               const n = net(r);
               return (
                 <tr key={r.id} className="hover:bg-card-2">

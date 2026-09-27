@@ -20,7 +20,7 @@ export async function GET(request: Request) {
         select: {
           total: true, createdById: true,
           createdBy: { select: { nameAr: true, name: true } },
-          lines: { select: { quantity: true, description: true, variant: { select: { cost: true, product: { select: { cost: true } } } } } },
+          lines: { select: { quantity: true, description: true, lineTotal: true, variant: { select: { cost: true, product: { select: { cost: true } } } } } },
         },
       }),
       tx.employeePayment.findMany({
@@ -53,9 +53,9 @@ export async function GET(request: Request) {
     }
   }
 
-  type Row = { name: string; invoices: number; pieces: ReturnType<typeof dec>; revenue: ReturnType<typeof dec>; cost: ReturnType<typeof dec>; expenses: ReturnType<typeof dec>; salary: ReturnType<typeof dec>; bonus: ReturnType<typeof dec>; returns: ReturnType<typeof dec> };
+  type Row = { name: string; invoices: number; pieces: ReturnType<typeof dec>; revenue: ReturnType<typeof dec>; delivery: ReturnType<typeof dec>; cost: ReturnType<typeof dec>; expenses: ReturnType<typeof dec>; salary: ReturnType<typeof dec>; bonus: ReturnType<typeof dec>; returns: ReturnType<typeof dec> };
   const map = new Map<string, Row>();
-  const blank = (name: string): Row => ({ name, invoices: 0, pieces: dec(0), revenue: dec(0), cost: dec(0), expenses: dec(0), salary: dec(0), bonus: dec(0), returns: dec(0) });
+  const blank = (name: string): Row => ({ name, invoices: 0, pieces: dec(0), revenue: dec(0), delivery: dec(0), cost: dec(0), expenses: dec(0), salary: dec(0), bonus: dec(0), returns: dec(0) });
 
   for (const inv of invoices) {
     const id = inv.createdById ?? '—';
@@ -64,8 +64,12 @@ export async function GET(request: Request) {
     row.invoices += 1;
     row.revenue = row.revenue.plus(dec(inv.total));
     for (const l of inv.lines) {
-      // بند التوصيل 🚚 ليس قطعة — نفس استثناء الشاشة، وإلا خالف الملفُ التقرير.
-      if (isDeliveryDesc(l.description)) continue;
+      // بند التوصيل 🚚 ليس قطعة ولا ربحاً: الزبون يدفعه والسائق يأخذه،
+      // والمصروف المقابل ليس في تكلفة هذا التقرير — نفس استثناء الشاشة.
+      if (isDeliveryDesc(l.description)) {
+        row.delivery = row.delivery.plus(dec(l.lineTotal));
+        continue;
+      }
       row.pieces = row.pieces.plus(dec(l.quantity));
       const unitCost = l.variant?.cost ?? l.variant?.product?.cost ?? null;
       if (unitCost !== null) row.cost = row.cost.plus(dec(l.quantity).times(dec(unitCost)));
@@ -92,13 +96,13 @@ export async function GET(request: Request) {
     map.set(id, row);
   }
 
-  const net = (r: Row) => r.revenue.minus(r.cost).minus(r.expenses).minus(r.salary).minus(r.bonus).minus(r.returns);
+  const net = (r: Row) => r.revenue.minus(r.delivery).minus(r.cost).minus(r.expenses).minus(r.salary).minus(r.bonus).minus(r.returns);
   const headers = ['الموظف', 'عدد الفواتير', 'القطع المباعة', 'المبيعات', 'التكلفة', 'الربح', 'مرتجعاته', 'مصروفاته', 'راتبه', 'مكافآته', 'صافي المساهمة'];
   const rows = [...map.values()]
     .sort((a, b) => net(b).minus(net(a)).toNumber())
     .map((r) => [
       r.name, r.invoices, r.pieces.toNumber(), r.revenue.toNumber(), r.cost.toNumber(),
-      r.revenue.minus(r.cost).toNumber(), r.returns.toNumber(), r.expenses.toNumber(), r.salary.toNumber(), r.bonus.toNumber(), net(r).toNumber(),
+      r.revenue.minus(r.delivery).minus(r.cost).toNumber(), r.returns.toNumber(), r.expenses.toNumber(), r.salary.toNumber(), r.bonus.toNumber(), net(r).toNumber(),
     ]);
 
   return csvResponse(stampedName('kayan-employees'), headers, rows);

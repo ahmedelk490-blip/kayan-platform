@@ -49,7 +49,7 @@ export default async function SingleClientReport({ searchParams }: { searchParam
             orderBy: { issueDate: 'desc' },
             select: {
               id: true, number: true, total: true, paidAmount: true, issueDate: true, dueDate: true, status: true,
-              lines: { select: { quantity: true, description: true, variant: { select: { cost: true, product: { select: { cost: true } } } } } },
+              lines: { select: { quantity: true, description: true, lineTotal: true, variant: { select: { cost: true, product: { select: { cost: true } } } } } },
             },
           },
         },
@@ -59,6 +59,7 @@ export default async function SingleClientReport({ searchParams }: { searchParam
   let invoiced = dec(0);
   let collected = dec(0);
   let cost = dec(0);
+  let delivery = dec(0);
   let outstanding = dec(0);
   // خارج الكتلة ليقرأها الجدول أدناه أيضاً — رقمٌ واحد للصفحة كلها.
   let returnsByInvoice = new Map<string, ReturnType<typeof dec>>();
@@ -85,13 +86,19 @@ export default async function SingleClientReport({ searchParams }: { searchParam
         balance(dec(inv.total).minus(returnsByInvoice.get(inv.id) ?? dec(0)), inv.paidAmount),
       );
       for (const l of inv.lines) {
-        if (isDeliveryDesc(l.description)) continue;
+        // بند التوصيل مالٌ يمرّ لا ربح: الزبون يدفعه والسائق يأخذه،
+        // والمصروف المقابل له ليس في تكلفة هذا التقرير. فيُطرح من أساس
+        // الربح وإلا ظهر كلّه ربحاً.
+        if (isDeliveryDesc(l.description)) {
+          delivery = delivery.plus(dec(l.lineTotal));
+          continue;
+        }
         const unitCost = l.variant?.cost ?? l.variant?.product?.cost ?? null;
         if (unitCost !== null) cost = cost.plus(dec(l.quantity).times(dec(unitCost)));
       }
     }
   }
-  const profit = invoiced.minus(cost);
+  const profit = invoiced.minus(delivery).minus(cost);
   const name = selected ? selected.companyName ?? selected.contactName : '';
   const fmt = new Intl.DateTimeFormat('ar-IQ', { dateStyle: 'medium' });
 
