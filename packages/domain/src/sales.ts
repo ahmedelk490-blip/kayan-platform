@@ -210,3 +210,47 @@ export function isQuotationStatus(v: string): v is QuotationStatus {
 export function isOrderStatus(v: string): v is OrderStatus {
   return (ORDER_STATUSES as readonly string[]).includes(v);
 }
+
+/**
+ * ترتيب مقاس الملابس من رمزه — لا من عمودٍ يضبطه أحدٌ بيده.
+ *
+ * كان الترتيب على `Size.sortOrder`، وهو صفرٌ افتراضاً ولا تضبطه شاشةٌ في
+ * النظام. فصار كل المقاسات بصفرٍ واحد، والقاعدة تُرجعها بأي ترتيب: يظهر
+ * 2XL قبل L وXL بعد 3XL في الفاتورة وفي المخزون معاً.
+ *
+ * والترتيب الأبجدي لا يحلّها: «XL» قبل «XS» و«2XL» قبل «3XL» صدفةً لا قاعدة.
+ * فالرمز نفسه هو الترتيب: سُلَّمٌ معروف للأحرف، ورقمٌ للمقاسات الرقمية
+ * (38، 40 …) يُرتَّب بقيمته، وما لا يُعرف يذهب آخراً بترتيب حروفه.
+ */
+const SIZE_SCALE: Record<string, number> = {
+  XXS: 10, '2XS': 10,
+  XS: 20,
+  S: 30,
+  M: 40,
+  L: 50,
+  XL: 60,
+  XXL: 70, '2XL': 70,
+  XXXL: 80, '3XL': 80,
+  '4XL': 90, XXXXL: 90,
+  '5XL': 100,
+  '6XL': 110,
+  '7XL': 120,
+  '8XL': 130,
+};
+
+export function sizeRank(code: string | null | undefined): number {
+  const key = (code ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!key) return 9999;
+  const known = SIZE_SCALE[key];
+  if (known !== undefined) return known;
+  // مقاسٌ رقميّ (38، 40، 42…) — بعد الحرفية، مرتّباً بقيمته.
+  const n = Number(key);
+  if (Number.isFinite(n)) return 1000 + n;
+  return 9000;
+}
+
+/** مقارنة جاهزة للفرز: الرمز ثم حروفه حين يتساوى الترتيب. */
+export function compareSizes(a: string | null | undefined, b: string | null | undefined): number {
+  const d = sizeRank(a) - sizeRank(b);
+  return d !== 0 ? d : (a ?? '').localeCompare(b ?? '');
+}

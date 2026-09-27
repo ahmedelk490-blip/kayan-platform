@@ -8,6 +8,7 @@ import {
   applicableTier,
   dec,
   PRICE_SERVICE_AR,
+  compareSizes,
   PAYMENT_METHODS,
   PAYMENT_METHOD_AR,
   type PriceService,
@@ -134,7 +135,10 @@ function sizesOf(variants: VariantOption[], productId: string, colorId: string):
       !seen.has(v.sizeId)
     )
       seen.set(v.sizeId, v.sizeCode);
-  return [...seen].map(([id, label]) => ({ id, label }));
+  // من الأصغر للأكبر بسُلّم المقاسات لا بترتيب وصول المتغيّرات.
+  return [...seen]
+    .map(([id, label]) => ({ id, label }))
+    .sort((a, b) => compareSizes(a.label, b.label));
 }
 
 /** المتغيّر المطابق للاختيار (منتج/لون/مقاس)، أو null. */

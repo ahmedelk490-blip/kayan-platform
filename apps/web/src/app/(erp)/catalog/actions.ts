@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { sizeRank } from '@erp/domain';
 import { z } from 'zod';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
@@ -53,7 +54,8 @@ export async function createCatalogItem(
         break;
       case 'sizes':
         if (!code) return { fieldErrors: { code: 'رمز المقاس مطلوب.' } };
-        await prisma.size.create({ data: { tenantId, code, nameAr } });
+        // الترتيب يُشتقّ من الرمز فور الإنشاء — لا خانةً ينساها من يضيف مقاساً.
+        await prisma.size.create({ data: { tenantId, code, nameAr, sortOrder: sizeRank(code) } });
         break;
       case 'materials':
         await prisma.material.create({ data: { tenantId, nameAr, nameEn: nameEn || null, spec: extra || null } });
@@ -118,7 +120,10 @@ export async function updateCatalogItem(
         await prisma.color.updateMany({ where, data: { nameAr, nameEn: nameEn || null, ...(extra ? { hex: extra } : {}) } });
         break;
       case 'sizes':
-        await prisma.size.updateMany({ where, data: { nameAr, ...(code ? { code } : {}) } });
+        await prisma.size.updateMany({
+          where,
+          data: { nameAr, ...(code ? { code, sortOrder: sizeRank(code) } : {}) },
+        });
         break;
       case 'materials':
         await prisma.material.updateMany({ where, data: { nameAr, nameEn: nameEn || null, ...(extra ? { spec: extra } : {}) } });

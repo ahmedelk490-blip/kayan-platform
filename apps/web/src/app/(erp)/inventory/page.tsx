@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { available, dec, formatQty, formatMoney,
   stockState,
+  compareSizes,
   needsReorder,
 } from '@erp/domain';
 import { requirePermission, allows } from '@/lib/guard';
@@ -310,7 +311,11 @@ export default async function InventoryPage({
         dozens: Math.floor(pieces / g.perDozen),
         loose: pieces - Math.floor(pieces / g.perDozen) * g.perDozen,
         colors: g.colors
-          .map((c) => ({ ...c, cells: [...c.cells].sort((a, b) => a.sizeOrder - b.sizeOrder) }))
+          .map((c) => ({
+            ...c,
+            // بسُلّم المقاسات لا بـ sortOrder: الأخير صفرٌ لا تضبطه شاشة.
+            cells: [...c.cells].sort((a, b) => compareSizes(a.sizeCode, b.sizeCode)),
+          }))
           .sort((a, b) => (colorOrder.get(a.key) ?? 0) - (colorOrder.get(b.key) ?? 0)),
       };
     })

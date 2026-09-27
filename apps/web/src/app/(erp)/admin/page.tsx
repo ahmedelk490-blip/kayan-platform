@@ -9,6 +9,7 @@ import { listBackups } from '@/lib/backup';
 import { runBackupNow } from './backup-actions';
 import { ResetPanel } from './ResetPanel';
 import { RoleSyncButton } from './RoleSyncButton';
+import { SizeSortButton } from './SizeSortButton';
 import { resetCounts } from './reset-actions';
 
 export const metadata: Metadata = { title: 'الإدارة' };
@@ -116,6 +117,7 @@ export default async function AdminPage() {
         <Panel title="الأدوار والصلاحيات">
           <div className="mb-5 border-b border-line pb-5">
             <RoleSyncButton />
+            <SizeSortButton />
           </div>
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {roles.map((role) => (

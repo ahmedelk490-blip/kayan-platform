@@ -1,5 +1,5 @@
 import { Logo } from '@erp/brand/logo';
-import { formatMoney, formatQty, balance, dec } from '@erp/domain';
+import { formatMoney, formatQty, dec } from '@erp/domain';
 import { isDeliveryDesc } from '@/lib/delivery';
 
 /**
@@ -64,7 +64,6 @@ export function PrintDocument({
   discountAmount,
   taxAmount,
   total,
-  paidAmount,
   returnedAmount,
   notes,
   statusNote,
@@ -80,7 +79,6 @@ export function PrintDocument({
   discountAmount: unknown;
   taxAmount: unknown;
   total: unknown;
-  paidAmount?: unknown;
   /** قيمة ما أُرجع من هذه الفاتورة — تُنقص المتبقي كما على الشاشة. */
   returnedAmount?: unknown;
   notes?: string | null;
@@ -171,34 +169,12 @@ export function PrintDocument({
           <Row label="الخصم" value={formatMoney(discountAmount as never)} />
           <Row label="الضريبة" value={formatMoney(taxAmount as never)} />
           <Row label={`الإجمالي (${company.currency})`} value={formatMoney(total as never)} strong />
-          {paidAmount !== undefined && (
-            <>
-              {returnedAmount !== undefined && !dec(returnedAmount as never).isZero() && (
-                <Row label="المرتجع" value={`− ${formatMoney(returnedAmount as never)}`} />
-              )}
-              {/* الفاتورة تُرسَل للزبون قبل أن يدفع — يستلم الطلب ثم يدفع. فسطرا
-                  «المدفوع» و«المتبقي» حالةُ سدادٍ داخلية تُعرَض علينا وتُطبع على
-                  ورقنا، ويسقطان من الصورة المرسَلة إليه (‏.print-private‏). */}
-              <Row label="المدفوع" value={formatMoney(paidAmount as never)} internal />
-              {/* Through the domain's `balance`, not JS subtraction. Every
-                  other figure in this system is exact decimal; a printed
-                  document that disagrees with the screen by a rounding cent
-                  is the one place the customer will notice.
-
-                  والمرتجع يُنقص المستحق هنا كما يُنقصه على الشاشة تماماً: بدونه
-                  كانت الورقة المسلَّمة للعميل تطالبه بمبلغ بضاعةٍ أعادها. */}
-              <Row
-                label="المتبقي"
-                value={formatMoney(
-                  balance(
-                    dec(total as never).minus(dec((returnedAmount ?? 0) as never)),
-                    paidAmount as never,
-                  ),
-                )}
-                strong
-                internal
-              />
-            </>
+          {/* الفاتورة تصل الزبون قبل أن يدفع — يستلم الطلب ثم يدفع — فسطرا
+              «المدفوع» و«المتبقي» رفعهما المالك: رقمٌ يقول «مدفوع ٠» على ورقة
+              تصل قبل الدفع يولّد خلافاً لا يحلّ شيئاً. وحالة السداد تبقى على صفحة
+              الفاتورة عندنا كاملة. والمرتجع يبقى: هو يُنقص ما عليه، فحقّه أن يراه. */}
+          {returnedAmount !== undefined && !dec(returnedAmount as never).isZero() && (
+            <Row label="المرتجع" value={`− ${formatMoney(returnedAmount as never)}`} />
           )}
         </dl>
       </section>
@@ -232,21 +208,9 @@ export function PrintDocument({
   );
 }
 
-function Row({
-  label,
-  value,
-  strong,
-  internal,
-}: {
-  label: string;
-  value: string;
-  strong?: boolean;
-  /** حالة السداد — تبقى عندنا ولا تدخل الصورة المرسَلة للزبون. */
-  internal?: boolean;
-}) {
-  const className = [strong ? 'strong' : '', internal ? 'print-private' : ''].filter(Boolean).join(' ');
+function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
-    <div className={className || undefined}>
+    <div className={strong ? 'strong' : undefined}>
       <dt>{label}</dt>
       <dd>{value}</dd>
     </div>

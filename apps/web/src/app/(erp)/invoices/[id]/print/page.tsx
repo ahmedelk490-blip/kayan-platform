@@ -108,7 +108,6 @@ export default async function InvoicePrintPage({
         discountAmount={invoice.discountAmount}
         taxAmount={invoice.taxAmount}
         total={invoice.total}
-        paidAmount={invoice.paidAmount}
         returnedAmount={returnAgg._sum.totalAmount ?? 0}
         notes={invoice.notes}
       />
