@@ -54,6 +54,7 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
         issueDate: { gte: yearStart, lte: yearEnd },
       },
       select: {
+        id: true,
         total: true,
         lines: {
           select: {
@@ -67,6 +68,50 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
       },
     }),
   ]);
+
+  // ما أُرجع من فواتيره — بضاعةٌ عادت ليست بيعاً، ولا يُعمَّل عليها.
+  //
+  // كانت العمولة تُحسب من الفواتير وحدها: مندوبٌ باع بمليون وأعاد الزبون
+  // نصفه يقبض عمولة المليون كاملاً. والمرتجع يُطرح من الطرفين معاً — قيمتُه
+  // من الإيراد وتكلفةُ بضاعته من التكلفة — وإلا عوقب المندوب بتكلفةٍ عادت
+  // إلى المخزن.
+  const returns = await prisma.salesReturn.findMany({
+    where: {
+      tenantId: user.tenantId,
+      isDeleted: false,
+      invoiceId: { in: invoices.map((i) => i.id) },
+    },
+    select: { lines: { select: { description: true, quantity: true, lineTotal: true, variantId: true } } },
+  });
+
+  const returnedVariantIds = [
+    ...new Set(
+      returns
+        .flatMap((r) => r.lines)
+        .map((l) => l.variantId)
+        .filter((v): v is string => v !== null),
+    ),
+  ];
+  const returnedVariants = returnedVariantIds.length
+    ? await prisma.productVariant.findMany({
+        where: { id: { in: returnedVariantIds }, product: { tenantId: user.tenantId } },
+        select: { id: true, cost: true, product: { select: { cost: true } } },
+      })
+    : [];
+  const costOfVariant = new Map(
+    returnedVariants.map((v) => [v.id, v.cost ?? v.product?.cost ?? null]),
+  );
+
+  let returnedRevenue = dec(0);
+  let returnedCost = dec(0);
+  for (const r of returns)
+    for (const l of r.lines) {
+      // بند توصيلٍ مردود ليس بضاعة — خارج الطرفين كما هو خارج قاعدة العمولة.
+      if (isDeliveryDesc(l.description)) continue;
+      returnedRevenue = returnedRevenue.plus(dec(l.lineTotal));
+      const unitCost = l.variantId ? costOfVariant.get(l.variantId) ?? null : null;
+      if (unitCost !== null) returnedCost = returnedCost.plus(dec(l.quantity).times(dec(unitCost)));
+    }
 
   // أداء الموظف من فواتيره هذه السنة.
   //
@@ -86,7 +131,7 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
       if (unitCost !== null) cost = cost.plus(dec(l.quantity).times(dec(unitCost)));
     }
   }
-  const profit = revenue.minus(cost);
+  const profit = revenue.minus(returnedRevenue).minus(cost.minus(returnedCost));
   const commissionRate = employee.commissionPercent === null ? dec(0) : dec(employee.commissionPercent);
   const commissionEarned = profit.gt(0) ? profit.times(commissionRate).dividedBy(100) : dec(0);
 
