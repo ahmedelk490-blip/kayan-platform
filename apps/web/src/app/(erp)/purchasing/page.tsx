@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
-import { formatMoney, PURCHASE_STATUSES, PURCHASE_STATUS_AR } from '@erp/domain';
+import { balance, dec, formatMoney, PURCHASE_STATUSES, PURCHASE_STATUS_AR } from '@erp/domain';
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -80,6 +80,20 @@ export default async function PurchasingPage({
     }),
   ]);
 
+  // ما علينا للمورّدين = مجموع (الإجمالي − المدفوع) لكل أمر على حدة،
+  // بقاعٍ عند الصفر: أمرٌ دُفِع زيادةً لا يمحو ديناً على أمرٍ آخر —
+  // كما تُحسب مستحقات العملاء تماماً.
+  const payableRows = await prisma.purchaseOrder.findMany({
+    where: {
+      tenantId: user.tenantId,
+      isDeleted: false,
+      status: { in: ['CONFIRMED', 'PARTIALLY_RECEIVED', 'RECEIVED'] },
+    },
+    select: { total: true, paidAmount: true },
+  });
+  const payable = payableRows.reduce((sum, o) => sum.plus(balance(o.total, o.paidAmount)), dec(0));
+  const payableCount = payableRows.filter((o) => balance(o.total, o.paidAmount).gt(0)).length;
+
   const canWrite = allows(user, 'purchasing.write');
 
   return (
@@ -97,9 +111,18 @@ export default async function PurchasingPage({
       />
 
       {/* أرقام حيّة بأيقونات — بأسلوب لوحة المدير نفسه. */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:gap-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:gap-4">
+        {/* الطرف الغائب من الميزان: ما علينا للمورّدين، إزاء ما لنا عند الزبائن. */}
         <StatCard
           index={0}
+          label="علينا للمورّدين"
+          value={formatMoney(payable)}
+          hint={`من ${payableCount} أمر غير مسدّد`}
+          icon={<IconBell />}
+          tone={payable.gt(0) ? 'warning' : 'success'}
+        />
+        <StatCard
+          index={1}
           label="قيمة الأوامر المفتوحة"
           value={formatMoney(outstanding._sum.total ?? 0)}
           hint={`${outstanding._count._all} أمر مؤكَّد لم يُستلم بالكامل`}
@@ -107,7 +130,7 @@ export default async function PurchasingPage({
           tone={outstanding._count._all > 0 ? 'warning' : 'success'}
         />
         <StatCard
-          index={1}
+          index={2}
           label="أوامر الشراء (الكل)"
           value={totalCount}
           unit="أمر"
@@ -115,7 +138,7 @@ export default async function PurchasingPage({
           tone="primary"
         />
         <StatCard
-          index={2}
+          index={3}
           label="مستلمة بالكامل"
           value={receivedCount}
           unit="أمر"

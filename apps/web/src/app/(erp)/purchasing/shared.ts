@@ -13,20 +13,18 @@ export interface FormState {
 
 /** PO-2026-0001 / GRN-2026-0001, derived from the highest existing number. */
 export async function nextPurchaseNumber(
-  kind: 'PO' | 'GRN',
+  kind: 'PO' | 'GRN' | 'SPY',
   tenantId: string,
 ): Promise<string> {
   const stem = `${kind}-${new Date().getFullYear()}-`;
+  const where = { tenantId, number: { startsWith: stem } };
+  const select = { number: true } as const;
   const rows =
     kind === 'PO'
-      ? await prisma.purchaseOrder.findMany({
-          where: { tenantId, number: { startsWith: stem } },
-          select: { number: true },
-        })
-      : await prisma.goodsReceipt.findMany({
-          where: { tenantId, number: { startsWith: stem } },
-          select: { number: true },
-        });
+      ? await prisma.purchaseOrder.findMany({ where, select })
+      : kind === 'GRN'
+        ? await prisma.goodsReceipt.findMany({ where, select })
+        : await prisma.supplierPayment.findMany({ where, select });
 
   const max = rows.reduce((acc, r) => {
     const n = Number.parseInt(r.number.slice(stem.length), 10);

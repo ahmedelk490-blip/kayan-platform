@@ -2,9 +2,12 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
+  balance,
+  dec,
   formatMoney,
   formatQty,
   outstanding,
+  PAYMENT_METHOD_AR,
   PURCHASE_STATUS_AR,
   PURCHASE_TRANSITIONS,
   isPurchaseStatus,
@@ -17,6 +20,8 @@ import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import type { SearchParams } from '@/lib/query';
 import { ReceiveForm, type ReceivableLine } from '../ReceiveForm';
 import { changePurchaseStatus, deletePurchaseOrder, receiveGoods } from '../actions';
+import { reverseSupplierPayment } from '../payment-actions';
+import { SupplierPaymentForm } from './SupplierPaymentForm';
 
 export const metadata: Metadata = { title: 'أمر الشراء' };
 
@@ -44,6 +49,11 @@ export default async function PurchaseOrderPage({
     include: {
       supplier: true,
       createdBy: { select: { nameAr: true, name: true } },
+      payments: {
+        where: { isDeleted: false },
+        orderBy: { paidAt: 'desc' },
+        include: { reversedBy: { select: { id: true } } },
+      },
       lines: {
         orderBy: { lineNo: 'asc' },
         include: {
@@ -192,7 +202,60 @@ export default async function PurchaseOrderPage({
               <div className="border-t border-line pt-2">
                 <Row label="الإجمالي" value={formatMoney(order.total)} strong />
               </div>
+              {/* الطرف الغائب سابقاً: ما دُفِع للمورّد وما بقي علينا. */}
+              <Row label="المدفوع" value={formatMoney(order.paidAmount)} />
+              <div className="border-t border-line pt-2">
+                <Row
+                  label="المتبقي علينا"
+                  value={formatMoney(balance(order.total, order.paidAmount))}
+                  strong
+                />
+              </div>
             </dl>
+          </section>
+
+          {/* دفعات المورّد — مرآةُ دفعات العميل، باتجاهٍ معاكس. */}
+          <section>
+            <h3 className="mb-3 text-sm font-semibold text-brand">دفعات المورّد</h3>
+            {order.payments.length > 0 && (
+              <Table
+                headers={['الرقم', 'التاريخ', 'المبلغ', 'الطريقة', 'المرجع', '']}
+                empty={false}
+              >
+                {order.payments.map((pay) => (
+                  <tr key={pay.id} className={pay.reversedBy ? 'opacity-55' : undefined}>
+                    <td dir="ltr" className="tnum px-4 py-3 text-start text-txt">{pay.number}</td>
+                    <td className="tnum px-4 py-3 text-txt-3">{pay.paidAt.toLocaleDateString('ar-EG')}</td>
+                    <td className={`tnum px-4 py-3 font-medium ${dec(pay.amount).isNegative() ? 'text-bad' : 'text-ok'}`}>
+                      {formatMoney(pay.amount)}
+                    </td>
+                    <td className="px-4 py-3 text-txt-2">
+                      {(PAYMENT_METHOD_AR as Record<string, string>)[pay.method] ?? pay.method}
+                    </td>
+                    <td className="px-4 py-3 text-txt-3">{pay.reference ?? pay.notes ?? '—'}</td>
+                    <td className="px-4 py-3 text-end">
+                      {canWrite && !pay.reversedBy && !pay.reversesId && (
+                        <form action={reverseSupplierPayment.bind(null, order.id, pay.id)}>
+                          <button type="submit" className="text-xs text-brand hover:underline">عكس</button>
+                        </form>
+                      )}
+                      {pay.reversedBy && <span className="text-[0.7rem] text-txt-4">معكوسة</span>}
+                    </td>
+                  </tr>
+                ))}
+              </Table>
+            )}
+            {canWrite && order.status !== 'DRAFT' && order.status !== 'CANCELLED' && (
+              <div className="erp-card mt-3 p-5">
+                <SupplierPaymentForm
+                  purchaseOrderId={order.id}
+                  remaining={formatMoney(balance(order.total, order.paidAmount))}
+                />
+              </div>
+            )}
+            <p className="mt-2 text-[0.7rem] leading-[1.8] text-txt-4">
+              الدفعة لا تتجاوز المتبقي، والتصحيح بعكسها لا بحذفها — كدفعات العملاء تماماً.
+            </p>
           </section>
 
           <section>

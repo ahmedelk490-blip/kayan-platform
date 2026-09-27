@@ -118,6 +118,7 @@ model Tenant {
   productBundles ProductBundle[]
   webOrders WebOrder[]
   recurringExpenses RecurringExpense[]
+  supplierPayments SupplierPayment[]
 }
 
 model Company {
@@ -231,6 +232,7 @@ model User {
   paymentsRecorded      Payment[]
   employeePayments      EmployeePayment[]   @relation("EmployeePaymentEmployee")
   employeePaymentsMade  EmployeePayment[]   @relation("EmployeePaymentCreator")
+  supplierPayments SupplierPayment[] @relation("SupplierPaymentRecorder")
 
   @@index([tenantId])
   @@index([roleId])
@@ -985,6 +987,7 @@ model Supplier {
   products       SupplierProduct[]
   attachments    Attachment[]
   purchaseOrders PurchaseOrder[]
+  payments       SupplierPayment[]
 
   @@unique([tenantId, code])
   @@index([tenantId, isDeleted])
@@ -1787,6 +1790,12 @@ model PurchaseOrder {
   taxAmount      Decimal @default(0) @db.Decimal(19, 4)
   total          Decimal @default(0) @db.Decimal(19, 4)
 
+  /// المدفوع للمورّد على هذا الأمر — مجموع دفعاته الحيّة.
+  ///
+  /// النظام كان يعرف ما لنا عند الزبائن بدقة ولا يعرف ما علينا
+  /// للمورّدين أبداً: نصف الميزان مفقود.
+  paidAmount     Decimal @default(0) @db.Decimal(19, 4)
+
   confirmedAt DateTime?
   completedAt DateTime?
   cancelledAt DateTime?
@@ -1802,11 +1811,55 @@ model PurchaseOrder {
   createdBy User?               @relation("PurchaseCreator", fields: [createdById], references: [id], onDelete: SetNull)
   lines     PurchaseOrderLine[]
   receipts  GoodsReceipt[]
+  payments  SupplierPayment[]
 
   @@unique([tenantId, number])
   @@index([tenantId, isDeleted])
   @@index([tenantId, status])
   @@index([supplierId])
+}
+
+/// دفعة لمورّد.
+///
+/// ما خرج من الصندوق إلى مورّد، مربوطاً بأمر شراء أو على الحساب.
+/// العكس دفعةٌ سالبة تشير إلى أصلها — كدفعات العملاء تماماً، فالمال
+/// الذي تحرّك ثم رُدّ حقيقةٌ يقيدّها الدفتر ولا يمحوها.
+model SupplierPayment {
+  id         String @id @default(cuid())
+  tenantId   String
+  number     String
+  supplierId String
+
+  /// أمر الشراء إن كانت الدفعة عليه — وإلا فهي على حساب المورّد.
+  purchaseOrderId String?
+
+  amount    Decimal  @db.Decimal(19, 4)
+  /// CASH | TRANSFER | CHEQUE | CARD
+  method    String   @default("CASH")
+  paidAt    DateTime @default(now())
+  reference String?
+  notes     String?
+
+  /// الدفعة التي تعكسها هذه — واحدة لواحدة.
+  reversesId String?          @unique
+  reverses   SupplierPayment? @relation("SupplierPaymentReversal", fields: [reversesId], references: [id], onDelete: SetNull)
+  reversedBy SupplierPayment? @relation("SupplierPaymentReversal")
+
+  recordedById String?
+  isDeleted    Boolean   @default(false)
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier      Supplier       @relation(fields: [supplierId], references: [id])
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  recordedBy    User?          @relation("SupplierPaymentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, number])
+  @@index([tenantId, isDeleted])
+  @@index([supplierId])
+  @@index([purchaseOrderId])
 }
 
 /// بند أمر الشراء.
