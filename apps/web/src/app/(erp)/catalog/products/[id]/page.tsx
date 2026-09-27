@@ -28,6 +28,7 @@ import {
 import { loadProductOptions } from '../options';
 import { VariantForm } from './VariantForm';
 import { AddColorsForm } from './AddColorsForm';
+import { ProductColors } from './ProductColors';
 import { ProductImages } from './ProductImages';
 import { PriceTierForm } from './PriceTierForm';
 import { BundleForm } from './BundleForm';
@@ -328,7 +329,25 @@ export default async function ProductDetailPage({
 
           {canWrite && (
             <section className="erp-card p-6">
-              <h3 className="mb-1 text-sm font-semibold text-brand">إضافة ألوان ومقاسات بسرعة</h3>
+              <h3 className="mb-1 text-sm font-semibold text-brand">ألوان هذا الموديل</h3>
+              <p className="mb-4 text-[0.7rem] leading-[1.9] text-txt-4">
+                ضغطةٌ واحدة تضيف اللون بكل مقاسات الموديل أو ترفعه.
+              </p>
+              <ProductColors
+                productId={product.id}
+                colors={colorSwatches.map((c) => ({
+                  id: c.id,
+                  nameAr: c.nameAr,
+                  hex: c.hex,
+                  variants: product.variants.filter((v) => v.colorId === c.id).length,
+                }))}
+              />
+            </section>
+          )}
+
+          {canWrite && (
+            <section className="erp-card p-6">
+              <h3 className="mb-1 text-sm font-semibold text-brand">إضافة تركيبات محدّدة (لون×مقاس)</h3>
               <p className="mb-4 text-[0.7rem] leading-[1.9] text-txt-4">
                 اختر ألوان ومقاسات هذا المنتج — يُنشأ متغيّر لكل تركيبة دفعة واحدة، ويظهر
                 على المنتج وصفحته وفي المخزون واختيار الأمر والفاتورة.

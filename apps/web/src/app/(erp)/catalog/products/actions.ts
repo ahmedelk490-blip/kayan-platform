@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import sharp from 'sharp';
-import { isPriceService } from '@erp/domain';
+import { isPriceService, dec } from '@erp/domain';
 import { userCan } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
@@ -542,6 +542,145 @@ export async function addColorsToProduct(
       added > 0
         ? `أُضيف ${added} متغيّر. يظهر على المنتج وفي المخزون والفاتورة الآن.`
         : 'كل التركيبات المختارة موجودة سلفاً.',
+  };
+}
+
+/**
+ * لونٌ واحد للمنتج — يُضاف بضغطة أو يُرفع بضغطة.
+ *
+ * المنتج بستّة مقاسات يعني أن إضافة لونٍ واحد ستّة متغيّرات، ورفعَه ستّة
+ * حذفاتٍ واحداً واحداً. والمالك لا يفكّر بـ«متغيّر»: يفكّر بـ«هذا الموديل عندي
+ * بأسود وكحلي». فاللون هنا وحدةٌ واحدة، والمقاسات تتبعه.
+ *
+ * والمقاسات المعتمدة مقاساتُ المنتج نفسه لا كلّ مقاسات النظام: لونٌ يُضاف
+ * لموديلٍ يُباع بـ L–XL لا ينبغي أن يخلق مقاسات لا تُباع.
+ *
+ * والرفع يُرفض ما دام في المخزن منه شيء: إخفاء لونٍ عليه رصيد يترك البضاعة
+ * في الرفّ ولا أحد يراها.
+ */
+export async function toggleProductColor(
+  productId: string,
+  colorId: string,
+  add: boolean,
+): Promise<FormState> {
+  const user = await requirePermission('products.write');
+
+  const product = await prisma.product.findFirst({
+    where: { id: productId, tenantId: user.tenantId, isDeleted: false },
+    select: { sku: true },
+  });
+  if (!product) return { error: 'المنتج غير موجود.' };
+
+  const color = await prisma.color.findFirst({
+    where: { id: colorId, tenantId: user.tenantId, isDeleted: false },
+    select: { id: true, nameAr: true, nameEn: true },
+  });
+  if (!color) return { error: 'اللون غير موجود.' };
+
+  const variants = await prisma.productVariant.findMany({
+    where: { productId, isDeleted: false },
+    select: { id: true, colorId: true, sizeId: true, size: { select: { code: true } } },
+  });
+
+  if (!add) {
+    const ofColor = variants.filter((v) => v.colorId === colorId);
+    if (ofColor.length === 0) return { ok: `«${color.nameAr}» غير مضاف أصلاً.` };
+
+    const held = await prisma.stock.aggregate({
+      where: { variantId: { in: ofColor.map((v) => v.id) } },
+      _sum: { onHand: true },
+    });
+    const onHand = dec(held._sum.onHand ?? 0);
+    if (onHand.gt(0)) {
+      return {
+        error: `لا يُرفع «${color.nameAr}» وفي المخزن منه ${onHand.toString()} قطعة. اصرفها أو سوّ الرصيد أوّلاً.`,
+      };
+    }
+
+    // حذفٌ ليّن: حركات المخزون وبنود الفواتير تشير إلى هذه الصفوف.
+    await prisma.productVariant.updateMany({
+      where: { id: { in: ofColor.map((v) => v.id) }, product: { tenantId: user.tenantId } },
+      data: { isDeleted: true, deletedAt: new Date(), isActive: false },
+    });
+
+    await audit({
+      tenantId: user.tenantId,
+      userId: user.id,
+      action: 'variant.softDelete',
+      entityType: 'Product',
+      entityId: productId,
+      detail: `لون ${color.nameAr} — ${ofColor.length} متغيّر`,
+    });
+
+    revalidatePath(`/catalog/products/${productId}`);
+    return { ok: `رُفِع «${color.nameAr}» (${ofColor.length} مقاس).` };
+  }
+
+  // مقاسات هذا الموديل وحده، بلا تكرار.
+  const sizesOfProduct = [
+    ...new Map(variants.filter((v) => v.sizeId).map((v) => [v.sizeId as string, v.size?.code ?? ''])),
+  ];
+  const warehouse = await prisma.warehouse.findFirst({
+    where: { tenantId: user.tenantId, isDeleted: false },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+
+  const colorSku = (color.nameEn || color.id.slice(-4)).replace(/\s+/g, '-').toUpperCase();
+  const combos: { sizeId: string | null; sku: string }[] = sizesOfProduct.length
+    ? sizesOfProduct.map(([sizeId, code]) => ({ sizeId, sku: `${product.sku}-${colorSku}-${code}` }))
+    : [{ sizeId: null, sku: `${product.sku}-${colorSku}` }];
+
+  let added = 0;
+  for (const combo of combos) {
+    const existing = await prisma.productVariant.findFirst({
+      where: { productId, colorId, sizeId: combo.sizeId },
+      select: { id: true, isDeleted: true },
+    });
+    if (existing) {
+      // لونٌ رُفِع ثم عاد: يُحيَى صفّه بتاريخه بدل أن يُنشأ ثانٍ بكود مختلف.
+      if (existing.isDeleted) {
+        await prisma.productVariant.updateMany({
+          where: { id: existing.id, product: { tenantId: user.tenantId } },
+          data: { isDeleted: false, deletedAt: null, isActive: true },
+        });
+        added += 1;
+      }
+      continue;
+    }
+    let sku = combo.sku;
+    if (await prisma.productVariant.findUnique({ where: { sku } })) {
+      sku = `${sku}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+    }
+    const created = await prisma.productVariant.create({
+      data: { productId, sku, colorId, sizeId: combo.sizeId },
+    });
+    if (warehouse) {
+      await prisma.stock.create({ data: { variantId: created.id, warehouseId: warehouse.id } });
+    }
+    added += 1;
+  }
+
+  if (added > 0) {
+    await prisma.productVariant.updateMany({
+      where: { productId, colorId: null, sizeId: null, isDeleted: false },
+      data: { isActive: false },
+    });
+  }
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'variant.create',
+    entityType: 'Product',
+    entityId: productId,
+    detail: `لون ${color.nameAr} — ${added} متغيّر`,
+  });
+
+  revalidatePath(`/catalog/products/${productId}`);
+  revalidatePath('/');
+  return {
+    ok: added > 0 ? `أُضيف «${color.nameAr}» (${added} مقاس).` : `«${color.nameAr}» موجود سلفاً.`,
   };
 }
 
