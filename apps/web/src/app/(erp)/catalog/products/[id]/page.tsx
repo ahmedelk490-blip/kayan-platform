@@ -331,16 +331,25 @@ export default async function ProductDetailPage({
             <section className="erp-card p-6">
               <h3 className="mb-1 text-sm font-semibold text-brand">ألوان هذا الموديل</h3>
               <p className="mb-4 text-[0.7rem] leading-[1.9] text-txt-4">
-                ضغطةٌ واحدة تضيف اللون بكل مقاسات الموديل أو ترفعه.
+                ألوان هذا الموديل وحده — اكتب لوناً جديداً فيُربط به فوراً.
               </p>
               <ProductColors
                 productId={product.id}
-                colors={colorSwatches.map((c) => ({
-                  id: c.id,
-                  nameAr: c.nameAr,
-                  hex: c.hex,
-                  variants: product.variants.filter((v) => v.colorId === c.id).length,
-                }))}
+                colors={[
+                  ...new Map(
+                    product.variants
+                      .filter((v) => v.color)
+                      .map((v) => [
+                        v.color!.id,
+                        {
+                          id: v.color!.id,
+                          nameAr: v.color!.nameAr,
+                          hex: v.color!.hex,
+                          variants: product.variants.filter((x) => x.colorId === v.color!.id).length,
+                        },
+                      ]),
+                  ).values(),
+                ]}
               />
             </section>
           )}

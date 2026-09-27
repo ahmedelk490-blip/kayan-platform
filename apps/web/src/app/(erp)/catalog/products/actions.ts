@@ -546,6 +546,57 @@ export async function addColorsToProduct(
 }
 
 /**
+ * لونٌ جديد يُكتب في صفحة الموديل نفسه.
+ *
+ * كانت الألوان قائمةً عامّة واحدة: من يضيف لون تيشيرتٍ يراها وقد امتلأت
+ * بألوان اليلك والشماغ، ومن يضيف لوناً يضيفه «للنظام» لا «للموديل». فيكتب
+ * المالك أسماءً متقاربة ثم لا يعرف أيّها لأيّ موديل.
+ *
+ * هنا اللون يُكتب باسمه ولونه في صفحة موديله ويُربط به فوراً. وإن كان
+ * الاسم موجوداً في المستأجر أُعيد استعمال صفّه — قيد التفرّد
+ * `(tenantId, nameAr)` يمنع «أسود» ثانياً — فلا تتضاعف الألوان بينما
+ * يرى كلُّ موديل ألوانه وحدها.
+ */
+export async function addColorToProduct(
+  productId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requirePermission('products.write');
+
+  const nameAr = String(formData.get('nameAr') ?? '').trim();
+  if (nameAr.length < 2) return { fieldErrors: { nameAr: 'اكتب اسم اللون.' } };
+
+  const rawHex = String(formData.get('hex') ?? '').trim();
+  const hex = /^#[0-9a-fA-F]{6}$/.test(rawHex) ? rawHex.toLowerCase() : null;
+
+  const existing = await prisma.color.findFirst({
+    where: { tenantId: user.tenantId, nameAr },
+    select: { id: true, isDeleted: true },
+  });
+
+  let colorId: string;
+  if (existing) {
+    // لونٌ بالاسم نفسه موجود — يُعاد استعماله (وُيحيا إن كان مرفوعاً).
+    colorId = existing.id;
+    if (existing.isDeleted || hex) {
+      await prisma.color.updateMany({
+        where: { id: existing.id, tenantId: user.tenantId },
+        data: { isDeleted: false, deletedAt: null, ...(hex ? { hex } : {}) },
+      });
+    }
+  } else {
+    const created = await prisma.color.create({
+      data: { tenantId: user.tenantId, nameAr, hex },
+      select: { id: true },
+    });
+    colorId = created.id;
+  }
+
+  return toggleProductColor(productId, colorId, true);
+}
+
+/**
  * لونٌ واحد للمنتج — يُضاف بضغطة أو يُرفع بضغطة.
  *
  * المنتج بستّة مقاسات يعني أن إضافة لونٍ واحد ستّة متغيّرات، ورفعَه ستّة

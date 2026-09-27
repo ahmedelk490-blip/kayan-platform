@@ -348,14 +348,16 @@ export default async function InventoryPage({
       {reorderRows.length > 0 && (
         <a
           href="/inventory?tab=reorder"
-          className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-bad bg-bad-soft px-4 py-3 transition-opacity hover:opacity-90"
+          className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-bad bg-bad-soft px-4 py-2.5 transition-opacity hover:opacity-90 lg:mb-5"
         >
-          <span className="text-sm font-semibold text-bad">
+          <span className="text-[0.8125rem] font-semibold leading-snug text-bad sm:text-sm">
             ⚠ {reorderRows.length} صنف ناقص
             {reorderRows.filter((r) => r.empty).length > 0 &&
-              ` — منها ${reorderRows.filter((r) => r.empty).length} نفد تماماً`}
+              ` — منها ${reorderRows.filter((r) => r.empty).length} نفد`}
           </span>
-          <span className="shrink-0 text-xs font-medium text-bad underline">افتح قائمة الطلب ←</span>
+          <span className="shrink-0 text-[0.7rem] font-medium text-bad underline sm:text-xs">
+            قائمة الطلب ←
+          </span>
         </a>
       )}
 
@@ -402,19 +404,24 @@ export default async function InventoryPage({
       {/* The movement form used to sit in a side column here. It is now the
           modal above — the tables get the full width, which matters for a
           ledger the operator actually reads. */}
-      {/* تبويبات داخلية: المخزون كله من فوق بلا تمرير طويل — أرصدة المنتجات،
-          والخامات، وسجل الحركات، كلٌّ بضغطة. */}
+      {/* التبويبات بترتيب ما يُسأل عنه كل يوم لا بترتيب ما كُتب أوّلاً:
+          «شنو عندي؟» ثم «شنو ناقص؟» ثم «منو حرّكه؟»، والجرد المسطّح للتدقيق
+          آخراً — يُفتح مرّةً في الشهر لا كل يوم. وأوّل تبويب هو المفتوح
+          افتراضاً، فمن يفتح المخزون يرى أرصدته بلا ضغطة. */}
       <SegmentedTabs
         defaultKey={initialTab}
         tabs={[
           {
-            key: 'stocktake',
-            label: '📦 الجرد الكامل',
-            content: <StocktakeTable rows={stocktakeRows} totalValue={seeCosts ? formatMoney(stocktakeValue) : null} />,
+            key: 'balances',
+            label: '📋 الأرصدة',
+            badge: lowStock.length + outOfStock.length,
+            content: (
+              <BalancesByProduct groups={balanceGroups} canWrite={canWrite} seeCosts={seeCosts} />
+            ),
           },
           {
             key: 'reorder',
-            label: '⚠️ النواقص وإعادة الطلب',
+            label: '⚠️ النواقص',
             badge: reorderRows.length,
             content: (
               <section>
@@ -461,16 +468,8 @@ export default async function InventoryPage({
             ),
           },
           {
-            key: 'balances',
-            label: '📋 أرصدة المنتجات',
-            badge: lowStock.length + outOfStock.length,
-            content: (
-              <BalancesByProduct groups={balanceGroups} canWrite={canWrite} seeCosts={seeCosts} />
-            ),
-          },
-          {
             key: 'movements',
-            label: '🔄 سجل الحركات',
+            label: '🔄 الحركات',
             content: (
               <section>
             <Table
@@ -529,11 +528,16 @@ export default async function InventoryPage({
               </section>
             ),
           },
+          {
+            key: 'stocktake',
+            label: '📦 الجرد',
+            content: <StocktakeTable rows={stocktakeRows} totalValue={seeCosts ? formatMoney(stocktakeValue) : null} />,
+          },
           ...(seeSupplies
             ? [
                 {
                   key: 'supplies',
-                  label: '🧵 الخامات والمستلزمات',
+                  label: '🧵 الخامات',
                   badge: lowSupplies.length,
                   content: (
                     <>

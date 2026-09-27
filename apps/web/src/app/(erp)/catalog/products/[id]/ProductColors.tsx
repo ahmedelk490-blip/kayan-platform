@@ -1,25 +1,32 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { toggleProductColor } from '../actions';
+import { useActionState, useState, useTransition } from 'react';
+import { addColorToProduct, toggleProductColor } from '../actions';
 
 export interface ColorChoice {
   id: string;
   nameAr: string;
   hex: string | null;
-  /** عدد مقاسات هذا اللون في هذا المنتج — صفر يعني أنه ليس من ألوانه. */
+  /** عدد مقاسات هذا اللون في هذا المنتج. */
   variants: number;
 }
 
+interface State {
+  ok?: string;
+  error?: string;
+  fieldErrors?: Record<string, string>;
+}
+
 /**
- * ألوان هذا الموديل — ضغطةٌ تضيف وضغطةٌ ترفع.
+ * ألوان هذا الموديل — وحدَها.
  *
- * كان اللون يُضاف بنموذجٍ يُختار فيه اللون والمقاسات معاً ويُرسَل، ويُرفع
- * بحذف متغيّراته واحداً واحداً من الجدول: موديلٌ بستّة مقاسات يعني ستّ
- * ضغطات لرفع لونٍ واحد. وهنا اللون وحدةٌ واحدة والمقاسات تتبعه.
+ * كانت الألوان قائمةً عامّة واحدة تُعرَض كاملةً في كل منتج: من يضيف لون
+ * تيشيرتٍ يمرّ على ألوان اليلك والشماغ ليجد لونه، ولا يعرف من الشاشة أيُّ
+ * الألوان لهذا الموديل فعلاً. فهنا لا يُعرض إلا ما هو منه، ويُكتب الجديد
+ * باسمه ولونه في مكانه — فيُربط بالموديل فور كتابته.
  *
- * والألوان المضافة مضيئةٌ بعلامة ✓، وغيرها باهتٌ ينتظر ضغطة. فيُقرأ من
- * الشاشة أيُّ الألوان لهذا الموديل — وهو نفسه ما يظهر في الفاتورة.
+ * والمقاسات تتبع اللون: إضافةٌ واحدة تُنشئه بكل مقاسات الموديل، ورفعةٌ
+ * واحدة ترفعه بها. وهو نفسه ما يظهر في الفاتورة وأمر البيع.
  */
 export function ProductColors({
   productId,
@@ -28,45 +35,36 @@ export function ProductColors({
   productId: string;
   colors: ColorChoice[];
 }) {
+  const [addState, addAction, adding] = useActionState<State, FormData>(
+    addColorToProduct.bind(null, productId),
+    {},
+  );
   const [pending, startTransition] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ ok?: string; error?: string }>({});
+  const [removed, setRemoved] = useState<State>({});
 
-  function toggle(c: ColorChoice) {
+  function remove(c: ColorChoice) {
     setBusyId(c.id);
-    setMessage({});
+    setRemoved({});
     startTransition(async () => {
-      const res = await toggleProductColor(productId, c.id, c.variants === 0);
-      setMessage({ ok: res.ok, error: res.error });
+      const res = await toggleProductColor(productId, c.id, false);
+      setRemoved({ ok: res.ok, error: res.error });
       setBusyId(null);
     });
   }
 
-  if (colors.length === 0) {
-    return (
-      <p className="text-xs text-txt-4">
-        لا ألوان معرَّفة بعد. أضِفها من شاشة «التصنيفات والقوائم».
-      </p>
-    );
-  }
-
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
-        {colors.map((c) => {
-          const on = c.variants > 0;
-          return (
-            <button
+    <div className="space-y-4">
+      {colors.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-line bg-card-2 px-4 py-4 text-center text-xs text-txt-3">
+          لا ألوان لهذا الموديل بعد — اكتب أوّل لون أدناه.
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {colors.map((c) => (
+            <span
               key={c.id}
-              type="button"
-              onClick={() => toggle(c)}
-              disabled={pending}
-              aria-pressed={on}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50 ${
-                on
-                  ? 'border-brand bg-brand-soft text-brand'
-                  : 'border-line text-txt-3 hover:border-brand hover:text-brand'
-              }`}
+              className="flex items-center gap-2 rounded-lg border border-brand bg-brand-soft px-3 py-2 text-sm text-brand"
             >
               <span
                 aria-hidden
@@ -74,32 +72,59 @@ export function ProductColors({
                 className="h-5 w-5 shrink-0 rounded-full border border-line-2"
               />
               <span>{c.nameAr}</span>
-              {busyId === c.id ? (
-                <span className="text-[0.65rem]">…</span>
-              ) : on ? (
-                <span className="text-[0.65rem]">✓ {c.variants}</span>
-              ) : (
-                <span className="text-[0.65rem] text-txt-4">+</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+              <span className="tnum text-[0.65rem] opacity-75">{c.variants} مقاس</span>
+              <button
+                type="button"
+                onClick={() => remove(c)}
+                disabled={pending}
+                aria-label={`ارفع ${c.nameAr}`}
+                className="text-[0.8rem] text-bad transition-opacity hover:opacity-70 disabled:opacity-40"
+              >
+                {busyId === c.id ? '…' : '✕'}
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* اللون الجديد يُكتب هنا لا في قائمةٍ عامّة — فيُربط بالموديل فور كتابته. */}
+      <form action={addAction} className="flex flex-wrap items-end gap-2">
+        <label className="block">
+          <span className="mb-1.5 block text-xs text-txt-2">لون جديد لهذا الموديل</span>
+          <input
+            name="nameAr"
+            placeholder="مثال: كحلي"
+            className="erp-input w-44 py-2.5"
+            required
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-xs text-txt-2">عيّنته</span>
+          <input
+            name="hex"
+            type="color"
+            defaultValue="#1f1418"
+            className="h-[42px] w-14 cursor-pointer rounded-lg border border-line bg-card p-1"
+          />
+        </label>
+        <button type="submit" disabled={adding} className="erp-btn disabled:opacity-50">
+          {adding ? 'جارٍ الإضافة…' : '+ أضف اللون'}
+        </button>
+      </form>
 
       <p className="text-[0.7rem] leading-[1.9] text-txt-4">
-        المضيء ✓ من ألوان هذا الموديل، والرقم عدد مقاساته. ضغطةٌ على الباهت تضيفه بكل
-        مقاسات الموديل، وضغطةٌ على المضيء ترفعه — ولا يُرفع لونٌ في المخزن منه رصيد.
-        وفي الفاتورة لا تظهر إلا ألوان الموديل المختار.
+        اللون يُضاف بكل مقاسات هذا الموديل دفعةً واحدة، و«✕» ترفعه بها — ولا يُرفع لونٌ
+        في المخزن منه رصيد. وفي الفاتورة وأمر البيع لا تظهر إلا ألوان الموديل المختار.
       </p>
 
-      {message.ok && (
+      {(addState.ok || removed.ok) && (
         <p role="status" className="rounded-lg border border-ok bg-ok-soft px-4 py-2.5 text-xs text-ok">
-          {message.ok}
+          {addState.ok ?? removed.ok}
         </p>
       )}
-      {message.error && (
+      {(addState.error || addState.fieldErrors?.nameAr || removed.error) && (
         <p role="alert" className="rounded-lg border border-bad bg-bad-soft px-4 py-2.5 text-xs text-bad">
-          {message.error}
+          {addState.error ?? addState.fieldErrors?.nameAr ?? removed.error}
         </p>
       )}
     </div>
