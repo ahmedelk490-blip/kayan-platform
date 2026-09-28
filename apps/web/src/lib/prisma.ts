@@ -30,9 +30,32 @@ const globalForPrisma = globalThis as unknown as {
   prismaAuth?: PrismaClient;
 };
 
+/**
+ * حدُّ اتصالات القاعدة يُكتب في الكود لا يُترك للافتراضي.
+ *
+ * افتراضيّ Prisma هو (عدد الأنوية × 2 + 1) اتصالاً لكل عملية — وخادم النشر
+ * فيه 64 نواة، أي 129 اتصالاً محتملاً، بينما MySQL المشترك يسمح للمستخدم
+ * بعددٍ أصغر بكثير. لوحة المدير وحدها تطلق نحو اثني عشر استعلاماً متوازياً
+ * عند الدخول، وأثناء النشر تبقى العملية القديمة ممسكةً باتصالاتها — فيُرفض
+ * الاتصال وتسقط أوّل شاشةٍ بعد الدخول بـ«Application error» بينما شاشة
+ * الدخول الخفيفة تعمل. خمسة اتصالات تكفي مصنعاً بمستخدمين قلائل، وما زاد
+ * عنها ينتظر في الطابور بدل أن يُرفض.
+ *
+ * رابطٌ ذكر حدَّه بنفسه يُترك كما هو.
+ */
+function withPoolLimit(url: string | undefined): string | undefined {
+  if (!url || /[?&]connection_limit=/.test(url)) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}connection_limit=5&pool_timeout=20`;
+}
+
+// لا يُمرَّر رابطٌ غير موجود: `next build` يستورد هذا الملف بلا متغيّرات
+// بيئة، وتمرير undefined صراحةً يُسقط البناء بينما تركه يؤجّل القراءة للطلب.
+const mainUrl = withPoolLimit(process.env.DATABASE_URL);
+
 const base =
   globalForPrisma.prismaBase ??
   new PrismaClient({
+    ...(mainUrl ? { datasourceUrl: mainUrl } : {}),
     log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
   });
 
@@ -118,7 +141,7 @@ function createAuthClient(): PrismaClient {
   // DATABASE_URL is a complete configuration rather than a broken one.
   if (!url) return base;
 
-  return new PrismaClient({ datasources: { db: { url } }, log: ['error'] });
+  return new PrismaClient({ datasourceUrl: withPoolLimit(url), log: ['error'] });
 }
 
 let authClient: PrismaClient | undefined;
