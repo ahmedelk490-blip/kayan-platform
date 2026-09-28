@@ -337,7 +337,19 @@ export default async function InventoryPage({
             )}
             {canWrite && (
               <MovementModal
-                variants={variants.map((v) => ({ value: v.id, label: variantLabel(v), perDozen: v.product.piecesPerDozen || 12 }))}
+                variants={variants.map((v) => ({
+                  value: v.id,
+                  label: variantLabel(v),
+                  perDozen: v.product.piecesPerDozen || 12,
+                  // المنتج واللون والمقاس مفصولة: النافذة تسأل عنها بالترتيب
+                  // بدل قائمةٍ واحدة تخلط متغيّرات النظام كلها.
+                  productId: v.productId,
+                  productName: v.product.nameAr,
+                  colorId: v.colorId,
+                  colorName: v.color?.nameAr ?? null,
+                  sizeId: v.sizeId,
+                  sizeCode: v.size?.code ?? null,
+                }))}
               />
             )}
           </div>

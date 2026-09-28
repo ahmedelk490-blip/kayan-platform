@@ -4,6 +4,7 @@ import { useActionState, useState } from 'react';
 import { Field, Select, TextArea, SubmitButton, FormError } from '@/components/crud/Form';
 import { SearchableSelect } from '@/components/crud/SearchableSelect';
 import { useFormSuccess } from '@/components/crud/useFormSuccess';
+import { compareSizes } from '@erp/domain';
 import { postMovement, type FormState } from './actions';
 import { MOVEMENT_OPTIONS } from './types';
 
@@ -12,6 +13,38 @@ export interface VariantChoice {
   label: string;
   /** قطع الدستة لمنتج هذا المتغيّر — لحساب الكمية من الدست. */
   perDozen: number;
+  productId: string;
+  productName: string;
+  colorId: string | null;
+  colorName: string | null;
+  sizeId: string | null;
+  sizeCode: string | null;
+}
+
+/** ألوان منتجٍ بعينه، بلا تكرار. */
+function colorsOf(variants: VariantChoice[], productId: string) {
+  const seen = new Map<string, string>();
+  for (const v of variants)
+    if (v.productId === productId && v.colorId && v.colorName && !seen.has(v.colorId))
+      seen.set(v.colorId, v.colorName);
+  return [...seen].map(([id, label]) => ({ id, label }));
+}
+
+/** مقاسات منتجٍ بلونٍ محدّد، من الأصغر للأكبر. */
+function sizesOf(variants: VariantChoice[], productId: string, colorId: string) {
+  const seen = new Map<string, string>();
+  for (const v of variants)
+    if (
+      v.productId === productId &&
+      (v.colorId ?? '') === colorId &&
+      v.sizeId &&
+      v.sizeCode &&
+      !seen.has(v.sizeId)
+    )
+      seen.set(v.sizeId, v.sizeCode);
+  return [...seen]
+    .map(([id, label]) => ({ id, label }))
+    .sort((a, b) => compareSizes(a.label, b.label));
 }
 
 export function MovementForm({
@@ -25,9 +58,31 @@ export function MovementForm({
   const [state, formAction] = useActionState<FormState, FormData>(postMovement, {});
   useFormSuccess(state.ok, onSuccess);
 
-  const [variantId, setVariantId] = useState('');
+  // منتج ← لون ← مقاس، كفاتورة المبيعات.
+  //
+  // كان حقلاً واحداً يبحث في كل متغيّرات النظام مخلوطة: من يسجّل تيشيرتاً
+  // يمرّ على ألوان اليلك والشماغ ومقاساتها. والمالك يفكّر بالموديل أوّلاً ثم
+  // بلونه ثم بمقاسه — فهذا ترتيب السؤال لا ترتيب الجدول.
+  const [productId, setProductId] = useState('');
+  const [colorId, setColorId] = useState('');
+  const [sizeId, setSizeId] = useState('');
   const [dozens, setDozens] = useState(0);
   const [pieces, setPieces] = useState(0);
+
+  const products = [...new Map(variants.map((v) => [v.productId, v.productName]))].map(
+    ([id, label]) => ({ value: id, label }),
+  );
+  const colors = productId ? colorsOf(variants, productId) : [];
+  const sizes = productId ? sizesOf(variants, productId, colorId) : [];
+
+  // المتغيّر المطابق للاختيار — أو فارغ حتى يكتمل.
+  const variantId =
+    variants.find(
+      (v) =>
+        v.productId === productId &&
+        (v.colorId ?? '') === colorId &&
+        (v.sizeId ?? '') === sizeId,
+    )?.value ?? '';
 
   const perDozen = variants.find((v) => v.value === variantId)?.perDozen ?? 12;
   const totalQty = dozens * perDozen + pieces;
@@ -41,20 +96,75 @@ export function MovementForm({
         </p>
       )}
 
-      {/* المتغيّر — بحثٌ بالكتابة: اكتب «يلك أسود L» بدل التمرير بين مئات
-          المقاسات والألوان. الاختيار يُعلمنا قطع الدستة لحساب الكمية. */}
+      {/* المنتج ببحثٍ بالكتابة، ثم ألوانه ومقاساته وحدها. */}
       <label className="block">
-        <span className="mb-1.5 block text-xs text-txt-2">المتغيّر</span>
+        <span className="mb-1.5 block text-xs text-txt-2">المنتج</span>
         <SearchableSelect
-          name="variantId"
-          options={variants.map((v) => ({ value: v.value, label: v.label }))}
-          placeholder="اكتب اسم الصنف أو اللون أو المقاس…"
-          onSelect={setVariantId}
+          // اسمٌ لا يقرأه الخادم — المتغيّر المحسوب هو ما يُرسَل.
+          name="productPick"
+          options={products}
+          placeholder="اكتب اسم الموديل…"
+          onSelect={(id) => {
+            setProductId(id);
+            const cs = colorsOf(variants, id);
+            setColorId(cs.length === 1 ? cs[0].id : '');
+            setSizeId('');
+          }}
         />
-        {state.fieldErrors?.variantId && (
-          <span className="mt-1 block text-[0.7rem] text-bad">{state.fieldErrors.variantId}</span>
-        )}
       </label>
+
+      {productId && colors.length > 0 && (
+        <div className="block">
+          <span className="mb-1.5 block text-xs text-txt-2">اللون</span>
+          <div className="flex flex-wrap gap-2">
+            {colors.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => {
+                  setColorId(c.id);
+                  setSizeId('');
+                }}
+                className={`rounded-full border px-4 py-2 text-xs font-medium transition-colors ${
+                  colorId === c.id
+                    ? 'border-brand bg-brand-soft text-brand'
+                    : 'border-line-2 text-txt-2 hover:border-brand'
+                }`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {productId && (colors.length === 0 || colorId) && sizes.length > 0 && (
+        <div className="block">
+          <span className="mb-1.5 block text-xs text-txt-2">المقاس</span>
+          <div className="flex flex-wrap gap-2">
+            {sizes.map((z) => (
+              <button
+                key={z.id}
+                type="button"
+                onClick={() => setSizeId(z.id)}
+                className={`rounded-full border px-4 py-2 text-xs font-medium transition-colors ${
+                  sizeId === z.id
+                    ? 'border-brand bg-brand-soft text-brand'
+                    : 'border-line-2 text-txt-2 hover:border-brand'
+                }`}
+              >
+                {z.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ما يصل الخادم كما كان تماماً — العرض هو ما تغيّر لا ما يُرسَل. */}
+      <input type="hidden" name="variantId" value={variantId} />
+      {state.fieldErrors?.variantId && (
+        <span className="block text-[0.7rem] text-bad">{state.fieldErrors.variantId}</span>
+      )}
 
       {/* الكمية بالدست + قطعة زيادة — تُحسب إلى إجمالي قطع. */}
       <div className="rounded-xl border border-brand/25 bg-brand-soft/40 p-3">
