@@ -29,6 +29,7 @@ import { loadProductOptions } from '../options';
 import { VariantForm } from './VariantForm';
 import { AddColorsForm } from './AddColorsForm';
 import { ProductColors } from './ProductColors';
+import { ProductSizes } from './ProductSizes';
 import { ProductImages } from './ProductImages';
 import { PriceTierForm } from './PriceTierForm';
 import { BundleForm } from './BundleForm';
@@ -350,6 +351,23 @@ export default async function ProductDetailPage({
                       ]),
                   ).values(),
                 ]}
+              />
+            </section>
+          )}
+
+          {canWrite && (
+            <section className="erp-card p-6">
+              <h3 className="mb-1 text-sm font-semibold text-brand">مقاسات هذا الموديل</h3>
+              <p className="mb-4 text-[0.7rem] leading-[1.9] text-txt-4">
+                ضغطةٌ واحدة تضيف المقاس لكل ألوان الموديل أو ترفعه.
+              </p>
+              <ProductSizes
+                productId={product.id}
+                sizes={options.sizes.map((z) => ({
+                  id: z.value,
+                  code: z.label,
+                  variants: product.variants.filter((v) => v.sizeId === z.value).length,
+                }))}
               />
             </section>
           )}

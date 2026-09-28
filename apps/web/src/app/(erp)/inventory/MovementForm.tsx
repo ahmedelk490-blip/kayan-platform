@@ -160,6 +160,16 @@ export function MovementForm({
         </div>
       )}
 
+      {/* لونٌ بلا مقاسات ليس خطأً بالضرورة — لكنه غالباً موديلٌ أُضيفت ألوانه
+          قبل مقاساته، فيقف صاحبه أمام خانة كميةٍ واحدة ولا يعرف لماذا اختفت
+          المقاسات. يُقال له السبب والمكان بدل أن يخمّن. */}
+      {productId && colorId && sizes.length === 0 && (
+        <p className="rounded-lg border border-warn bg-warn-soft px-4 py-2.5 text-[0.7rem] leading-[1.9] text-warn">
+          هذا اللون بلا مقاسات — الكمية أدناه تخصّ اللون كلّه. لإضافة مقاساته: صفحة
+          المنتج ← «مقاسات هذا الموديل».
+        </p>
+      )}
+
       {/* ما يصل الخادم كما كان تماماً — العرض هو ما تغيّر لا ما يُرسَل. */}
       <input type="hidden" name="variantId" value={variantId} />
       {state.fieldErrors?.variantId && (

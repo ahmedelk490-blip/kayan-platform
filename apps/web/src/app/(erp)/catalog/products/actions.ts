@@ -597,6 +597,143 @@ export async function addColorToProduct(
 }
 
 /**
+ * مقاسٌ واحد للموديل — يُضاف بضغطة عبر كل ألوانه أو يُرفع بضغطة.
+ *
+ * مرآةُ `toggleProductColor`، وهي لازمةٌ معها لا زينة: من يضيف ألواناً
+ * لموديلٍ لا مقاسات له بعد، تُنشأ ألوانه بلا مقاس — فلا يجد في تسجيل حركة
+ * المخزون مقاساً يختاره، ولا في الفاتورة. المقاس هنا وحدةٌ كاللون تماماً،
+ * تنتشر على ألوان الموديل كلّها.
+ */
+export async function toggleProductSize(
+  productId: string,
+  sizeId: string,
+  add: boolean,
+): Promise<FormState> {
+  const user = await requirePermission('products.write');
+
+  const product = await prisma.product.findFirst({
+    where: { id: productId, tenantId: user.tenantId, isDeleted: false },
+    select: { sku: true },
+  });
+  if (!product) return { error: 'المنتج غير موجود.' };
+
+  const size = await prisma.size.findFirst({
+    where: { id: sizeId, tenantId: user.tenantId, isDeleted: false },
+    select: { id: true, code: true },
+  });
+  if (!size) return { error: 'المقاس غير موجود.' };
+
+  const variants = await prisma.productVariant.findMany({
+    where: { productId, isDeleted: false },
+    select: { id: true, colorId: true, sizeId: true, color: { select: { nameEn: true } } },
+  });
+
+  if (!add) {
+    const ofSize = variants.filter((v) => v.sizeId === sizeId);
+    if (ofSize.length === 0) return { ok: `«${size.code}» غير مضاف أصلاً.` };
+
+    const held = await prisma.stock.aggregate({
+      where: { variantId: { in: ofSize.map((v) => v.id) } },
+      _sum: { onHand: true },
+    });
+    const onHand = dec(held._sum.onHand ?? 0);
+    if (onHand.gt(0)) {
+      return {
+        error: `لا يُرفع «${size.code}» وفي المخزن منه ${onHand.toString()} قطعة. اصرفها أو سوّ الرصيد أوّلاً.`,
+      };
+    }
+
+    await prisma.productVariant.updateMany({
+      where: { id: { in: ofSize.map((v) => v.id) }, product: { tenantId: user.tenantId } },
+      data: { isDeleted: true, deletedAt: new Date(), isActive: false },
+    });
+
+    await audit({
+      tenantId: user.tenantId,
+      userId: user.id,
+      action: 'variant.softDelete',
+      entityType: 'Product',
+      entityId: productId,
+      detail: `مقاس ${size.code} — ${ofSize.length} متغيّر`,
+    });
+
+    revalidatePath(`/catalog/products/${productId}`);
+    return { ok: `رُفِع «${size.code}» (${ofSize.length} لون).` };
+  }
+
+  // ألوان هذا الموديل — أو لا لون، فيُنشأ متغيّرٌ بالمقاس وحده.
+  const colorsOfProduct = [
+    ...new Map(
+      variants.filter((v) => v.colorId).map((v) => [v.colorId as string, v.color?.nameEn ?? null]),
+    ),
+  ];
+  const warehouse = await prisma.warehouse.findFirst({
+    where: { tenantId: user.tenantId, isDeleted: false },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+
+  const combos: { colorId: string | null; sku: string }[] = colorsOfProduct.length
+    ? colorsOfProduct.map(([colorId, nameEn]) => ({
+        colorId,
+        sku: `${product.sku}-${(nameEn || colorId.slice(-4)).replace(/\s+/g, '-').toUpperCase()}-${size.code}`,
+      }))
+    : [{ colorId: null, sku: `${product.sku}-${size.code}` }];
+
+  let added = 0;
+  for (const combo of combos) {
+    const existing = await prisma.productVariant.findFirst({
+      where: { productId, colorId: combo.colorId, sizeId },
+      select: { id: true, isDeleted: true },
+    });
+    if (existing) {
+      if (existing.isDeleted) {
+        await prisma.productVariant.updateMany({
+          where: { id: existing.id, product: { tenantId: user.tenantId } },
+          data: { isDeleted: false, deletedAt: null, isActive: true },
+        });
+        added += 1;
+      }
+      continue;
+    }
+    let sku = combo.sku;
+    if (await prisma.productVariant.findUnique({ where: { sku } })) {
+      sku = `${sku}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+    }
+    const created = await prisma.productVariant.create({
+      data: { productId, sku, colorId: combo.colorId, sizeId },
+    });
+    if (warehouse) {
+      await prisma.stock.create({ data: { variantId: created.id, warehouseId: warehouse.id } });
+    }
+    added += 1;
+  }
+
+  // المتغيّر الأعمّ (لونٌ بلا مقاس) لم يعد يُباع بعد أن صار للّون مقاسات.
+  if (added > 0) {
+    await prisma.productVariant.updateMany({
+      where: { productId, sizeId: null, isDeleted: false },
+      data: { isActive: false },
+    });
+  }
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'variant.create',
+    entityType: 'Product',
+    entityId: productId,
+    detail: `مقاس ${size.code} — ${added} متغيّر`,
+  });
+
+  revalidatePath(`/catalog/products/${productId}`);
+  revalidatePath('/');
+  return {
+    ok: added > 0 ? `أُضيف «${size.code}» (${added} لون).` : `«${size.code}» موجود سلفاً.`,
+  };
+}
+
+/**
  * لونٌ واحد للمنتج — يُضاف بضغطة أو يُرفع بضغطة.
  *
  * المنتج بستّة مقاسات يعني أن إضافة لونٍ واحد ستّة متغيّرات، ورفعَه ستّة
