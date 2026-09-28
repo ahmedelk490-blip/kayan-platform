@@ -7,7 +7,7 @@ import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { dec, formatQty } from '@erp/domain';
 import { audit, fieldErrors } from '@/lib/audit';
-import { num, numeric } from '@/lib/num';
+import { num, numeric, normalizeDigits } from '@/lib/num';
 import { TYPES, type MovementType } from './types';
 import { applyStockDelta } from '@/lib/stock';
 
@@ -45,17 +45,135 @@ async function defaultWarehouseId(tenantId: string): Promise<string | null> {
  * kept alongside it so a list page does not have to sum history. Both are
  * written together or neither is.
  */
+/**
+ * عدّة مقاساتٍ في معاملةٍ واحدة.
+ *
+ * كلُّ مقاسٍ حركةٌ مستقلّة بمتغيّره وكميته، لكنّ الفحص والكتابة معاً: شحنةٌ
+ * نصفها يمرّ ونصفها يُرفض تترك المخزون يقول ما لم يحدث. ورفض مقاسٍ واحد
+ * (رصيدٌ لا يحتمل صرفاً) يُسقط الدفعة كلّها ويُسمّي المقاس.
+ */
+async function postManyMovements(
+  tenantId: string,
+  userId: string,
+  entries: { id: string; qty: string }[],
+  meta: { type: MovementType; reference?: string; reason?: string },
+): Promise<FormState> {
+  const warehouseId = await defaultWarehouseId(tenantId);
+  if (!warehouseId) return { error: 'لا يوجد مخزن معرّف بعد. أضِف مخزناً أولاً.' };
+
+  const kind = TYPES[meta.type];
+  const variants = await prisma.productVariant.findMany({
+    where: { id: { in: entries.map((e) => e.id) }, isDeleted: false, product: { tenantId } },
+    select: { id: true, productId: true, sku: true, size: { select: { code: true } } },
+  });
+  const byId = new Map(variants.map((v) => [v.id, v]));
+  if (variants.length !== entries.length) return { error: 'أحد المقاسات غير صالح.' };
+
+  const planned = entries.map((e) => ({
+    variant: byId.get(e.id)!,
+    qty: Number(normalizeDigits(e.qty)),
+  }));
+
+  // الصرف لا يُنزل رصيداً تحت الصفر — يُفحص قبل الكتابة، ويُسمّى المقاس.
+  if (kind.sign < 0) {
+    const held = await prisma.stock.findMany({
+      where: { variantId: { in: planned.map((p) => p.variant.id) }, warehouseId, locationId: null },
+      select: { variantId: true, onHand: true, reserved: true },
+    });
+    const heldBy = new Map(held.map((h) => [h.variantId, h]));
+    for (const p of planned) {
+      const row = heldBy.get(p.variant.id);
+      const current = dec(row ? (kind.field === 'reserved' ? row.reserved : row.onHand) : 0);
+      if (current.minus(p.qty).isNegative()) {
+        return {
+          error: `رصيد المقاس ${p.variant.size?.code ?? p.variant.sku} هو ${formatQty(current)} ولا يسمح بصرف ${p.qty}.`,
+        };
+      }
+    }
+  }
+
+  await tenantTransaction(async (tx) => {
+    for (const p of planned) {
+      const delta = kind.sign * p.qty;
+      await tx.stockMovement.create({
+        data: {
+          tenantId,
+          productId: p.variant.productId,
+          variantId: p.variant.id,
+          warehouseId,
+          locationId: null,
+          type: meta.type,
+          quantity: delta,
+          reference: meta.reference || null,
+          reason: meta.reason || null,
+          userId,
+        },
+      });
+      await applyStockDelta(
+        tx,
+        { variantId: p.variant.id, warehouseId, locationId: null },
+        kind.field,
+        delta,
+      );
+    }
+  });
+
+  const total = planned.reduce((n, p) => n + p.qty, 0);
+  await audit({
+    tenantId,
+    userId,
+    action: 'stock.movement',
+    entityType: 'ProductVariant',
+    entityId: planned[0].variant.id,
+    detail: `${meta.type} ${total} على ${planned.length} مقاس`,
+  });
+
+  revalidatePath('/inventory');
+  revalidatePath(`/catalog/products/${planned[0].variant.productId}`);
+  return { ok: `تم تسجيل ${kind.labelAr}: ${total} قطعة على ${planned.length} مقاس.` };
+}
+
+/**
+ * تسجيل حركة مخزون — لمقاسٍ واحد أو لمقاسات اللون كلّها دفعةً واحدة.
+ *
+ * كان الإدخال مقاساً بمقاس: تفتح النافذة، تختار الموديل واللون والمقاس،
+ * تكتب الكمية، تحفظ، ثم تعيد الأربعة من أوّلها للمقاس التالي. والشحنة تصل
+ * بستّة مقاسات، فستّ دوراتٍ كاملة لإدخالٍ واحد.
+ *
+ * فصارت الحقول متكرّرة: لكل مقاسٍ خانته، وما كُتب فيه أكبر من صفر يصير
+ * حركةً مستقلّة بمتغيّره — في معاملةٍ واحدة، فإمّا أن تُسجَّل كلّها أو لا
+ * يُسجَّل شيء. والصفر يعني «لم أستلم هذا المقاس» فيُتخطّى بلا حركةٍ فارغة.
+ *
+ * والشكل القديم (خانةٌ واحدة) يبقى صالحاً: حقلٌ واحد هو حالةُ الكثير.
+ */
 export async function postMovement(_prev: FormState, formData: FormData): Promise<FormState> {
   const user = await requirePermission('inventory.write');
 
+  // أزواج (متغيّر، كمية) بالترتيب نفسه — الصفر والفارغ يسقطان.
+  const ids = formData.getAll('variantId').map(String);
+  const qtys = formData.getAll('quantity').map(String);
+  const entries = ids
+    .map((id, i) => ({ id: id.trim(), qty: qtys[i] ?? '' }))
+    .filter((e) => e.id && Number(normalizeDigits(e.qty)) > 0);
+
+  if (entries.length === 0) {
+    return { fieldErrors: { quantity: 'اكتب كميةً لمقاسٍ واحد على الأقل.' } };
+  }
+
+  const first = entries[0];
   const parsed = MovementSchema.safeParse({
-    variantId: String(formData.get('variantId') ?? ''),
+    variantId: first.id,
     type: String(formData.get('type') ?? 'RECEIPT'),
-    quantity: String(formData.get('quantity') ?? ''),
+    quantity: first.qty,
     reference: String(formData.get('reference') ?? ''),
     reason: String(formData.get('reason') ?? ''),
   });
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
+
+  // أكثر من مقاس: تُسجَّل كلّها في معاملةٍ واحدة بمسارٍ مستقلّ.
+  if (entries.length > 1) {
+    return postManyMovements(user.tenantId, user.id, entries, parsed.data);
+  }
 
   const { variantId, type, quantity } = parsed.data;
   // المخزن واحد — يُحسم تلقائياً بلا اختيار، والموقع بلا رفوف (null).
