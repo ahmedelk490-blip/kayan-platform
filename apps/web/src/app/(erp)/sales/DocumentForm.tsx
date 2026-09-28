@@ -630,7 +630,7 @@ export function DocumentForm({
       {/* ١.٤ إضافة بالمقاسات — منتج ولون ثم كمية لكل مقاس، كما في الكاشير:
           التوزيعة كلها (2×L و3×XL…) تدخل دفعة واحدة بدل سطرٍ لكل مقاس. */}
       {products.length > 0 && (
-        <section className="rounded-xl border border-ok/40 bg-ok-soft/40 p-4">
+        <section className="rounded-xl border border-line bg-card p-4 shadow-[inset_0_2px_0_var(--color-brand)]">
           <h3 className="mb-3 text-sm font-semibold text-ok">إضافة بالمقاسات — كمية لكل مقاس</h3>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
@@ -755,8 +755,11 @@ export function DocumentForm({
       {/* ١.٥ السيريه/الطقم — إضافة توزيع مقاسات دفعة واحدة. يظهر فقط حين توجد
           سيريات معرّفة. لا يمنع الإدخال اليدوي؛ يضيف سطوره فوقه. */}
       {seriesProducts.length > 0 && (
-        <section className="rounded-xl border border-brand/30 bg-brand/5 p-4">
-          <h3 className="mb-3 text-sm font-semibold text-brand">إضافة سيريه / طقم</h3>
+        <details className="rounded-xl border border-line bg-card p-4">
+          <summary className="cursor-pointer select-none text-sm font-medium text-txt-2">
+            إضافة سيريه / طقم — توزيع مقاسات جاهز
+          </summary>
+          <div className="mt-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="block">
               <span className="mb-1.5 block text-xs text-txt-2">المنتج</span>
@@ -841,7 +844,8 @@ export function DocumentForm({
             </p>
           )}
           {seriesMsg && <p className="mt-2 text-[0.7rem] font-medium text-brand">{seriesMsg}</p>}
-        </section>
+          </div>
+        </details>
       )}
 
       {/* ٢. البنود — لكل بند: المنتج واللون والمقاس والخدمة والكمية، وحقل
@@ -868,7 +872,7 @@ export function DocumentForm({
               customerId && first.variantId ? lastPrices[`${customerId}:${first.variantId}`] : undefined;
 
             return (
-              <div key={g.key} className="rounded-xl border border-line bg-card-2 p-4">
+              <div key={g.key} className="rounded-xl border border-line bg-card p-4">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-semibold text-txt">{productLabel ?? '—'}</span>
@@ -1005,7 +1009,7 @@ export function DocumentForm({
             const colors = colorsOf(variants, line.productId);
             const sizes = sizesOf(variants, line.productId, line.colorId);
             return (
-              <div key={`p-${index}`} className="rounded-xl border border-dashed border-line bg-card-2 p-4">
+              <div key={`p-${index}`} className="rounded-xl border border-dashed border-line bg-card p-4">
                 <div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-[1.6fr_1fr_0.8fr_auto]">
                   <label className="block">
                     <span className="mb-1.5 block text-xs text-txt-2">المنتج</span>
@@ -1065,19 +1069,21 @@ export function DocumentForm({
           })}
         </div>
 
+        {/* الإدخال اليدويّ صنفاً صنفاً — طريقٌ ثالث لنفس الغرض، لا يُزاحِم
+            «إضافة بالمقاسات» في الوزن البصري، ويبقى موجوداً لمن يحتاجه. */}
         <button
           type="button"
           onClick={() => setLines((p) => [...p, emptyLine()])}
-          className="mt-3 w-full rounded-xl border border-dashed border-line py-3 text-sm font-medium text-txt-2 transition-colors hover:border-brand hover:text-brand"
+          className="mt-3 text-[0.7rem] text-txt-3 transition-colors hover:text-brand"
         >
-          + إضافة صنف آخر
+          + إضافة صنف يدويّاً
         </button>
       </section>
 
       {/* ٢.٥ سعر التوصيل — على الزبون (بند يرفع الإجمالي) أو علينا (مصروف
           شحن وتوصيل يُخصم من الربح، والفاتورة لا تتغيّر). اختياري: صفر = بلا. */}
       {withDelivery && (
-        <section className="rounded-xl border border-line bg-card-2 p-4">
+        <section className="rounded-xl border border-line bg-card p-4">
           <h3 className="mb-3 text-sm font-semibold text-txt">🚚 التوصيل</h3>
 
           {/* الاختيار أولاً، والمبلغ يُملأ بنفسه — لا رقم يُكتب كل مرة. */}
@@ -1147,7 +1153,7 @@ export function DocumentForm({
       )}
 
       {/* ٣. الإجمالي — كبير وواضح. */}
-      <div className="flex items-center justify-between rounded-xl border border-line bg-card-2 px-5 py-4">
+      <div className="flex items-center justify-between rounded-xl border border-brand-line bg-brand-soft px-5 py-4">
         <span className="text-sm text-txt-2">الإجمالي</span>
         <span className="tnum text-2xl font-bold text-brand">{formatMoney(totals.total)}</span>
       </div>
@@ -1170,7 +1176,7 @@ export function DocumentForm({
           الحال يخرج بفاتورة مُصدَرة ومُحصَّلة بضغطة، بلا خطوتَي إصدار وتحصيل
           منفصلتين. الخادم يُخصّص الرقم المتسلسل ويسجّل الدفعة في معاملة واحدة. */}
       {instantIssue && (
-        <section className="rounded-xl border border-line bg-card-2 p-4">
+        <section className="rounded-xl border border-line bg-card p-4">
           <label className="flex cursor-pointer items-center gap-2.5">
             <input
               type="checkbox"
