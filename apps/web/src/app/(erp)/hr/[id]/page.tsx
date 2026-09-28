@@ -6,6 +6,7 @@ import {
   formatMoney,
   paymentSign,
   EMPLOYEE_PAYMENT_KIND_AR,
+  PENALTY_STATUS_AR,
   type EmployeePaymentKind,
 } from '@erp/domain';
 import { requirePermission, allows } from '@/lib/guard';
@@ -43,7 +44,17 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
     }),
     prisma.penalty.findMany({
       where: { tenantId: user.tenantId, employeeId: id, status: { in: ['APPROVED', 'PAID'] } },
-      select: { amount: true, collectedAmount: true },
+      select: {
+        id: true,
+        number: true,
+        amount: true,
+        collectedAmount: true,
+        installments: true,
+        reason: true,
+        status: true,
+        approvedAt: true,
+        createdAt: true,
+      },
     }),
     prisma.invoice.findMany({
       where: {
@@ -217,6 +228,42 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
           داخلٌ في الصافي أعلاه (كصفّ خصم) — والباقي يُستقطع قسطاً قسطاً من شاشة
           «الهالك والجزاءات».
         </p>
+      )}
+
+      {/* الجزاءات في الكشف نفسه — لا في شاشة الهالك وحدها.
+          من يقرأ كشف موظّف يريد أن يرى ما عليه كلّه في مكانٍ واحد: ما قبضه
+          وما خُصِم منه وما بقي عليه من جزاءات وكم قسطاً بقي. */}
+      {penalties.length > 0 && (
+        <section className="mb-6">
+          <h3 className="mb-3 text-sm font-semibold text-brand">الجزاءات</h3>
+          <Table
+            headers={['الرقم', 'السبب', 'المبلغ', 'المستقطَع', 'الباقي', 'الأقساط', 'الحالة']}
+            empty={false}
+          >
+            {penalties.map((pen) => {
+              const left = dec(pen.amount).minus(dec(pen.collectedAmount));
+              return (
+                <tr key={pen.id}>
+                  <td dir="ltr" className="tnum px-4 py-3 text-start text-txt-3">{pen.number}</td>
+                  <td className="px-4 py-3 text-[0.7rem] text-txt-3">{pen.reason}</td>
+                  <td className="tnum px-4 py-3 font-medium text-txt">{formatMoney(pen.amount)}</td>
+                  <td className="tnum px-4 py-3 text-bad">{formatMoney(pen.collectedAmount)}</td>
+                  <td className={`tnum px-4 py-3 font-medium ${left.gt(0) ? 'text-warn' : 'text-ok'}`}>
+                    {formatMoney(left)}
+                  </td>
+                  <td className="tnum px-4 py-3 text-txt-3">{pen.installments}</td>
+                  <td className="px-4 py-3 text-[0.7rem] text-txt-3">
+                    {(PENALTY_STATUS_AR as Record<string, string>)[pen.status] ?? pen.status}
+                  </td>
+                </tr>
+              );
+            })}
+          </Table>
+          <p className="mt-2 text-[0.7rem] leading-[1.8] text-txt-4">
+            المستقطَع وحده داخلٌ في الصافي أعلاه — يظهر صفّ خصمٍ في الجدول أدناه عند
+            كل قسط. والباقي يُستقطع من شاشة «الهالك والجزاءات» قسطاً قسطاً.
+          </p>
+        </section>
       )}
 
       <h3 className="mb-3 text-sm font-semibold text-brand">الدفعات والخصومات</h3>

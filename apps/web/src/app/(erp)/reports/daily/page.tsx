@@ -41,7 +41,7 @@ export default async function DailyPage() {
     return new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), 1) - OFFSET);
   })();
 
-  const [invoices, payments, returns, expenses, monthLines] = await Promise.all([
+  const [invoices, payments, returns, expenses, monthLines, staff, recurring] = await Promise.all([
     prisma.invoice.findMany({
       where: {
         tenantId: user.tenantId,
@@ -90,7 +90,35 @@ export default async function DailyPage() {
       },
       select: { description: true, quantity: true, lineTotal: true },
     }),
+    // الرواتب الشهرية المضبوطة — التزامٌ قائم سواء صُرِف اليوم أم آخر الشهر.
+    prisma.user.findMany({
+      where: { tenantId: user.tenantId, isActive: true, monthlySalary: { not: null } },
+      select: { monthlySalary: true },
+    }),
+    prisma.recurringExpense.findMany({
+      where: { tenantId: user.tenantId, isActive: true },
+      select: { amount: true },
+    }),
   ]);
+
+  // ── الالتزامات الثابتة، مقسومةً على أيام الشهر ─────────────
+  //
+  // الراتب يُصرَف مرّةً في الشهر، فيظهر يومٌ واحد بخسارةٍ فادحة وتسعةٌ
+  // وعشرون بربحٍ لا وجود له. والمالك يسأل كل يوم: هل غطّى هذا اليوم نفسه؟
+  // والجواب يحتاج حصّة اليوم من الرواتب والإيجار والكهرباء لا مصاريف اليوم وحدها.
+  //
+  // والقسمة على أيام الشهر الجاري لا على ثلاثين ثابتة: شباط تسعةٌ وعشرون
+  // يوماً والراتب نفسه، فحصّة يومه أكبر فعلاً.
+  const daysInMonth = (() => {
+    const OFFSET = 3 * 60 * 60 * 1000;
+    const ref = new Date(Date.now() + OFFSET);
+    return new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth() + 1, 0)).getUTCDate();
+  })();
+  const salariesMonthly = staff.reduce((s, e) => s.plus(dec(e.monthlySalary ?? 0)), dec(0));
+  const recurringMonthly = recurring.reduce((s, r) => s.plus(dec(r.amount)), dec(0));
+  const salariesDaily = salariesMonthly.dividedBy(daysInMonth);
+  const recurringDaily = recurringMonthly.dividedBy(daysInMonth);
+  const fixedDaily = salariesDaily.plus(recurringDaily);
 
   const salesTotal = invoices.reduce((s, i) => s.plus(dec(i.total)), dec(0));
 
@@ -142,7 +170,9 @@ export default async function DailyPage() {
   const familyRows = [...families.entries()].sort((a, b) => b[1].month - a[1].month);
   const monthPieces = familyRows.reduce((s, [, f]) => s + f.month, 0);
 
-  const cashNet = (byMethod.get('CASH') ?? dec(0)).minus(approvedExpenses);
+  // مصاريف اليوم كلّها: المتغيّرة المسجّلة اليوم + حصّة اليوم من الثابتة.
+  const obligationsToday = expensesTotal.plus(fixedDaily);
+  const cashNet = (byMethod.get('CASH') ?? dec(0)).minus(approvedExpenses).minus(fixedDaily);
 
   return (
     <AppShell user={user} title="يومية اليوم">
@@ -177,9 +207,13 @@ export default async function DailyPage() {
         </div>
         <div className="erp-card p-4">
           <p className="text-[0.7rem] text-txt-3">مصاريف اليوم</p>
-          <p className="tnum mt-1 text-xl font-bold text-bad">{formatMoney(expensesTotal)}</p>
-          <p className="tnum mt-0.5 text-[0.7rem] text-txt-4">
-            {expenses.length} مصروف{pendingExpenses > 0 ? ` — منها ${pendingExpenses} قيد الموافقة` : ''}
+          <p className="tnum mt-1 text-xl font-bold text-bad">{formatMoney(obligationsToday)}</p>
+          <p className="tnum mt-0.5 text-[0.7rem] leading-[1.7] text-txt-4">
+            متغيّرة {formatMoney(expensesTotal)} ({expenses.length})
+            {pendingExpenses > 0 ? ` — ${pendingExpenses} قيد الموافقة` : ''}
+            <br />
+            ثابتة {formatMoney(fixedDaily)} — رواتب {formatMoney(salariesDaily)} + التزامات{' '}
+            {formatMoney(recurringDaily)}
           </p>
         </div>
       </div>
@@ -188,7 +222,10 @@ export default async function DailyPage() {
       <div className="erp-card mb-6 flex items-center justify-between p-5">
         <div>
           <p className="text-sm font-semibold text-txt">صافي كاش اليوم</p>
-          <p className="mt-0.5 text-[0.7rem] text-txt-4">المقبوض نقداً − مصاريف اليوم</p>
+          <p className="mt-0.5 text-[0.7rem] leading-[1.8] text-txt-4">
+            المقبوض نقداً − مصاريف اليوم − حصّة اليوم من الرواتب والثابت
+            ({formatMoney(fixedDaily)} ÷ {daysInMonth} يوماً)
+          </p>
         </div>
         <p className={`tnum text-2xl font-bold ${cashNet.gte(0) ? 'text-ok' : 'text-bad'}`}>
           {formatMoney(cashNet)}
