@@ -5,6 +5,7 @@ import { balance, dec, formatMoney, PURCHASE_STATUSES, PURCHASE_STATUS_AR } from
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
+import { SchemaGap } from '@/components/SchemaGap';
 import { Toolbar } from '@/components/crud/Toolbar';
 import { ModuleHeader, Table, Pager, Badge } from '@/components/crud/Shell';
 import { StatCard } from '@/components/dashboard/StatCard';
@@ -26,6 +27,53 @@ const TONE: Record<string, 'ok' | 'bad' | 'muted'> = {
   DRAFT: 'muted',
   CANCELLED: 'bad',
 };
+
+/** كل قراءات الشاشة في مكان واحد — لتُحاط بمحاولة واحدة. */
+async function loadPurchasing(
+  tenantId: string,
+  where: Prisma.PurchaseOrderWhereInput,
+  query: ReturnType<typeof parseListQuery>,
+) {
+  const [rows, count, outstanding, totalCount, receivedCount, payableRows] = await Promise.all([
+    prisma.purchaseOrder.findMany({
+      where,
+      orderBy: { [query.sort]: query.dir },
+      ...skipTake(query),
+      include: {
+        supplier: { select: { name: true } },
+        _count: { select: { lines: true, receipts: true } },
+      },
+    }),
+    prisma.purchaseOrder.count({ where }),
+    prisma.purchaseOrder.aggregate({
+      where: { tenantId, isDeleted: false, status: { in: ['CONFIRMED', 'PARTIALLY_RECEIVED'] } },
+      _sum: { total: true },
+      _count: { _all: true },
+    }),
+    prisma.purchaseOrder.count({ where: { tenantId, isDeleted: false } }),
+    prisma.purchaseOrder.count({ where: { tenantId, isDeleted: false, status: 'RECEIVED' } }),
+    // ما علينا للمورّدين — بقاعٍ عند الصفر لكل أمر على حدة، فأمرٌ دُفِع
+    // زيادةً لا يمحو ديناً على أمرٍ آخر.
+    prisma.purchaseOrder.findMany({
+      where: {
+        tenantId,
+        isDeleted: false,
+        status: { in: ['CONFIRMED', 'PARTIALLY_RECEIVED', 'RECEIVED'] },
+      },
+      select: { total: true, paidAmount: true },
+    }),
+  ]);
+
+  return {
+    rows,
+    count,
+    outstanding,
+    totalCount,
+    receivedCount,
+    payable: payableRows.reduce((sum, o) => sum.plus(balance(o.total, o.paidAmount)), dec(0)),
+    payableCount: payableRows.filter((o) => balance(o.total, o.paidAmount).gt(0)).length,
+  };
+}
 
 export default async function PurchasingPage({
   searchParams,
@@ -54,47 +102,23 @@ export default async function PurchasingPage({
       : {}),
   };
 
-  const [rows, count, outstanding, totalCount, receivedCount] = await Promise.all([
-    prisma.purchaseOrder.findMany({
-      where,
-      orderBy: { [query.sort]: query.dir },
-      ...skipTake(query),
-      include: {
-        supplier: { select: { name: true } },
-        _count: { select: { lines: true, receipts: true } },
-      },
-    }),
-    prisma.purchaseOrder.count({ where }),
-    prisma.purchaseOrder.aggregate({
-      where: {
-        tenantId: user.tenantId,
-        isDeleted: false,
-        status: { in: ['CONFIRMED', 'PARTIALLY_RECEIVED'] },
-      },
-      _sum: { total: true },
-      _count: { _all: true },
-    }),
-    prisma.purchaseOrder.count({ where: { tenantId: user.tenantId, isDeleted: false } }),
-    prisma.purchaseOrder.count({
-      where: { tenantId: user.tenantId, isDeleted: false, status: 'RECEIVED' },
-    }),
-  ]);
-
-  // ما علينا للمورّدين = مجموع (الإجمالي − المدفوع) لكل أمر على حدة،
-  // بقاعٍ عند الصفر: أمرٌ دُفِع زيادةً لا يمحو ديناً على أمرٍ آخر —
-  // كما تُحسب مستحقات العملاء تماماً.
-  const payableRows = await prisma.purchaseOrder.findMany({
-    where: {
-      tenantId: user.tenantId,
-      isDeleted: false,
-      status: { in: ['CONFIRMED', 'PARTIALLY_RECEIVED', 'RECEIVED'] },
-    },
-    select: { total: true, paidAmount: true },
-  });
-  const payable = payableRows.reduce((sum, o) => sum.plus(balance(o.total, o.paidAmount)), dec(0));
-  const payableCount = payableRows.filter((o) => balance(o.total, o.paidAmount).gt(0)).length;
+  // أيّ قراءة لأمر شراء تطلب paidAmount الآن، فإن لم يصل العمود بعد سقطت
+  // الوحدة كلّها. تُقال الفجوة بزرّها بدل أن تظهر «Application error».
+  let data: Awaited<ReturnType<typeof loadPurchasing>>;
+  try {
+    data = await loadPurchasing(user.tenantId, where, query);
+  } catch {
+    return (
+      <AppShell user={user} title="أوامر الشراء">
+        <ModuleHeader title="أوامر الشراء" />
+        <SchemaGap what="ذمم المورّدين (المدفوع والمتبقي على أوامر الشراء)" />
+      </AppShell>
+    );
+  }
+  const { rows, count, outstanding, totalCount, receivedCount, payable, payableCount } = data;
 
   const canWrite = allows(user, 'purchasing.write');
+
 
   return (
     <AppShell user={user} title="أوامر الشراء">

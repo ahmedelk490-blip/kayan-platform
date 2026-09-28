@@ -16,6 +16,7 @@ import {
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
+import { SchemaGap } from '@/components/SchemaGap';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import type { SearchParams } from '@/lib/query';
 import { ReceiveForm, type ReceivableLine } from '../ReceiveForm';
@@ -44,7 +45,10 @@ export default async function PurchaseOrderPage({
   const sp = await searchParams;
   const errKey = Array.isArray(sp.err) ? sp.err[0] : sp.err;
 
-  const order = await prisma.purchaseOrder.findFirst({
+  // قراءة الأمر تطلب paidAmount وعلاقة الدفعات، فإن لم تصل البنية بعد تُقال
+  // الفجوة بزرّها بدل أن تسقط الصفحة.
+  const order = await prisma.purchaseOrder
+    .findFirst({
     where: { id, tenantId: user.tenantId, isDeleted: false },
     include: {
       supplier: true,
@@ -76,7 +80,17 @@ export default async function PurchaseOrderPage({
         },
       },
     },
-  });
+    })
+    .catch(() => 'schema-gap' as const);
+
+  if (order === 'schema-gap') {
+    return (
+      <AppShell user={user} title="أمر شراء">
+        <ModuleHeader title="أمر شراء" />
+        <SchemaGap what="ذمم المورّدين (المدفوع ودفعات المورّد)" />
+      </AppShell>
+    );
+  }
   if (!order) notFound();
 
   const warehouses = await prisma.warehouse.findMany({
