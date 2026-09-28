@@ -321,6 +321,32 @@ export async function receiveGoods(
           },
         });
 
+        // ── تكلفة المنتج تتبع ما دُفِع فعلاً ──────────────────
+        //
+        // كانت الخامات وحدها تُسعَّر بالمتوسط المرجّح عند الاستلام، والمنتجات
+        // تبقى على رقمٍ كُتب باليد يوم أُنشئت: تشتري بعشرة ثم باثنتي عشرة
+        // والهامش يُحسب على العشرة إلى الأبد.
+        //
+        // والتحديث هنا وحده — عند استلام شراء — لا في كل مكان: المنتج
+        // المُصنّع لا يمرّ بأمر شراء، فتكلفته المحسوبة من المعادلة لا تُداس.
+        const priced = await tx.productVariant.findUnique({
+          where: { id: line.variantId },
+          select: { cost: true, product: { select: { cost: true } }, stock: { select: { onHand: true } } },
+        });
+        if (priced) {
+          const held = priced.stock.reduce((sum, r) => sum.plus(dec(r.onHand)), dec(0));
+          const avg = movingAverageCost(
+            held,
+            priced.cost ?? priced.product?.cost ?? 0,
+            quantity,
+            line.unitPrice,
+          );
+          await tx.productVariant.update({
+            where: { id: line.variantId },
+            data: { cost: avg.toString() },
+          });
+        }
+
         const stock = await tx.stock.findFirst({
           where: { variantId: line.variantId, warehouseId: warehouse.id, locationId: null },
         });

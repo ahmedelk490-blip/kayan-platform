@@ -8,19 +8,28 @@ import { usePathname } from 'next/navigation';
  * النظام المرجعي) بدل العودة لفهرس التقارير. التبويب النشط مُبرَز، والشريط
  * يتمرّر أفقياً على الشاشات الضيّقة.
  */
+/**
+ * مرتّبة بما يُفتح لا بما كُتب أوّلاً.
+ *
+ * و«يومية اليوم» — وهي أكثرها فتحاً — لم تكن في الشريط أصلاً: موجودة
+ * كصفحة ولا يصلها من هنا أحد. فصارت أوّلها.
+ *
+ * ولا تقرير حُذف: ما يُفتح مرّةً في السنة يبقى، لكن بعد ما يُفتح كل يوم.
+ */
 const TABS: { href: string; label: string }[] = [
+  { href: '/reports/daily', label: 'يومية اليوم' },
   { href: '/reports/financial', label: 'ملخص مالي' },
   { href: '/reports/statement', label: 'البيان المالي' },
+  { href: '/reports/sales', label: 'المبيعات' },
   { href: '/reports/clients', label: 'تحليل العملاء' },
   { href: '/reports/client', label: 'تقرير عميل' },
-  { href: '/reports/profitability', label: 'تحليل المنتجات' },
   { href: '/reports/aging', label: 'تقدّم الديون' },
-  { href: '/reports/comparison', label: 'مقارنة الفترة' },
   { href: '/reports/cashflow', label: 'التدفق النقدي' },
+  { href: '/reports/profitability', label: 'تحليل المنتجات' },
   { href: '/reports/employees', label: 'تحليل الموظفين' },
-  { href: '/reports/sales', label: 'المبيعات' },
   { href: '/reports/inventory', label: 'تقييم المخزون' },
   { href: '/reports/production', label: 'الإنتاجية' },
+  { href: '/reports/comparison', label: 'مقارنة الفترة' },
 ];
 
 export function ReportTabs() {
