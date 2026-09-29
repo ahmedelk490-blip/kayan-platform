@@ -30,6 +30,7 @@ import {
   collectPenaltyInstallment,
 } from '../actions';
 import { PenaltyPlanForm } from '../PenaltyPlanForm';
+import { hasStarted, planStart } from '@/lib/penalty';
 
 export const metadata: Metadata = { title: 'محضر الهالك' };
 
@@ -38,6 +39,8 @@ const ERRORS: Record<string, string> = {
   'self-penalty': 'لا يعتمد الجزاءَ من سجّله.',
   approved: 'لا يمكن حذف محضر معتمد — سبق أن دخل في تكلفة فترة مُعلنة.',
   penalties: 'لا يمكن حذف محضر عليه جزاءات. ألغِ الجزاءات أولاً.',
+  'not-due': 'لم يحلّ شهر بداية الاستقطاع بعد.',
+  'already-month': 'استُقطع قسط هذا الشهر بالفعل — القسط التالي الشهر القادم.',
 };
 
 const PENALTY_TONE: Record<string, 'ok' | 'bad' | 'muted'> = {
@@ -244,8 +247,13 @@ export default async function DamageDetailPage({
                           باقٍ {formatMoney(dec(p.amount).minus(dec(p.collectedAmount)))}
                         </span>
                       )}
-                      {canPenalise && pStatus === 'APPROVED' && (
-                        <form action={collectPenaltyInstallment.bind(null, damage.id, p.id)}>
+                      {canPenalise && pStatus === 'APPROVED' && !hasStarted(planStart(p.events.map((e) => e.note))) && (
+                        <span className="mt-1 block text-[0.65rem] text-warn">
+                          يبدأ {planStart(p.events.map((e) => e.note))!.month}/{planStart(p.events.map((e) => e.note))!.year}
+                        </span>
+                      )}
+                      {canPenalise && pStatus === 'APPROVED' && hasStarted(planStart(p.events.map((e) => e.note))) && (
+                        <form action={collectPenaltyInstallment.bind(null, `/damage/${damage.id}`, p.id)}>
                           <button
                             type="submit"
                             className="mt-1 rounded-md border border-line-2 px-2 py-1 text-[0.65rem] text-txt-3 hover:border-brand hover:text-brand"

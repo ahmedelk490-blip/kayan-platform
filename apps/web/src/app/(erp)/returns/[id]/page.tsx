@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { formatMoney, dec } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
+import { DeductionForm } from '../../damage/DeductionForm';
 import { prisma } from '@/lib/prisma';
 import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
@@ -25,6 +26,24 @@ export default async function ReturnDetailPage({
     include: { lines: true },
   });
   if (!ret) notFound();
+
+  // خصم المرتجع للمدير: الموظّفون (لا حسابات العملاء)، والبائع مختارٌ مسبقاً.
+  const canPenalise = allows(user, 'penalties.approve');
+  const [staffRows, invoice] = canPenalise
+    ? await Promise.all([
+        prisma.user.findMany({
+          where: { tenantId: user.tenantId, isActive: true, role: { key: { not: 'CUSTOMER' } } },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, nameAr: true, name: true },
+        }),
+        prisma.invoice.findFirst({
+          where: { id: ret.invoiceId, tenantId: user.tenantId },
+          select: { createdById: true },
+        }),
+      ])
+    : [[], null];
+  const staff = staffRows.map((s) => ({ value: s.id, label: s.nameAr ?? s.name }));
+  const seller = invoice?.createdById ?? null;
 
   // بند التوصيل 🚚 قد يُرَدّ مبلغه، لكنه ليس قطعة بضاعة راجعة للمخزون.
   const pieces = ret.lines.reduce(
@@ -108,6 +127,24 @@ export default async function ReturnDetailPage({
           </tfoot>
         </table>
       </div>
+
+      {/* خصمٌ على موظّفٍ تسبّب بالمرتجع — مقسّطاً، ولا يتجاوز قيمة المرتجع. */}
+      {canPenalise && (
+        <div className="erp-card mt-6 p-5">
+          <h3 className="mb-1 text-sm font-semibold text-brand">خصم على موظف بسبب هذا المرتجع</h3>
+          <p className="mb-4 text-[0.7rem] leading-[1.8] text-txt-4">
+            اختياري — إن كان المرتجع خطأ موظّف. يُسجَّل برقم المرتجع ويُقسَّط على الأشهر، ويظهر في
+            كشف الموظّف وفي خانة الجزاءات بالرواتب.
+          </p>
+          <DeductionForm
+            employees={staff}
+            defaultEmployeeId={seller ?? undefined}
+            returnId={ret.id}
+            defaultAmount={dec(ret.totalAmount).toNumber()}
+            maxAmount={dec(ret.totalAmount).toNumber()}
+          />
+        </div>
+      )}
     </AppShell>
   );
 }

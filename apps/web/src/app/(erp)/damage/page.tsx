@@ -8,6 +8,8 @@ import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Pager, Badge } from '@/components/crud/Shell';
 import { Note } from '@/components/crud/Note';
 import { Toolbar } from '@/components/crud/Toolbar';
+import { ConfirmButton } from '@/components/crud/ConfirmButton';
+import { deleteDamage } from './actions';
 import { parseListQuery, skipTake, type SearchParams } from '@/lib/query';
 
 export const metadata: Metadata = { title: 'محاضر الهالك' };
@@ -185,9 +187,17 @@ export default async function DamagePage({
               </Badge>
             </td>
             <td className="px-4 py-3 text-end">
-              <Link href={`/damage/${row.id}`} className="text-xs text-brand hover:underline">
-                عرض
-              </Link>
+              {/* الحذف من القائمة (بطلب المالك) — لما يُحذف أصلاً: غير المعتمد وبلا جزاءات. */}
+              <div className="flex items-center justify-end gap-3">
+                <Link href={`/damage/${row.id}`} className="text-xs text-brand hover:underline">
+                  عرض
+                </Link>
+                {canWrite && row.status !== 'APPROVED' && row._count.penalties === 0 && (
+                  <form action={deleteDamage.bind(null, row.id)}>
+                    <ConfirmButton label="حذف" message={`حذف محضر الهالك ${row.number}؟`} />
+                  </form>
+                )}
+              </div>
             </td>
           </tr>
         ))}

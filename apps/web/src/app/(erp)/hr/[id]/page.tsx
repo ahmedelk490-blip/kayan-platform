@@ -17,15 +17,28 @@ import { ModuleHeader, Table } from '@/components/crud/Shell';
 import { Figure } from '../../reports/Shell';
 import { PaymentModal } from '../HRForms';
 import { deleteEmployeePayment } from '../actions';
+import { collectPenaltyInstallment } from '../../damage/actions';
+import { DeductionForm } from '../../damage/DeductionForm';
+import { hasStarted, installmentNote, monthStartInstant, planStart } from '@/lib/penalty';
+import type { SearchParams } from '@/lib/query';
 
 export const metadata: Metadata = { title: 'كشف الموظف' };
 
-export default async function EmployeeStatement({ params }: { params: Promise<{ id: string }> }) {
+export default async function EmployeeStatement({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<SearchParams>;
+}) {
   const user = await requirePermission('hr.manage');
   // الربح والعمولة أرقامٌ للمالك وحده: مَن يصرف الرواتب لا يلزمه أن يعرف
   // ربح المصنع من فواتير كل مندوب (قاعدة المالك: الجملة والربح للمدير فقط).
   const seeProfit = allows(user, 'cost.margin');
   const { id } = await params;
+  const sp = await searchParams;
+  const errKey = Array.isArray(sp.err) ? sp.err[0] : sp.err;
+  const canPenalise = allows(user, 'penalties.approve');
   const year = new Date().getFullYear();
   const yearStart = new Date(year, 0, 1);
   const yearEnd = new Date(year, 11, 31, 23, 59, 59);
@@ -54,6 +67,8 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
         status: true,
         approvedAt: true,
         createdAt: true,
+        // خطّة التقسيط تُقرأ من السجلّ (lib/penalty) — شهر البداية.
+        events: { orderBy: { createdAt: 'asc' }, select: { note: true } },
       },
     }),
     prisma.invoice.findMany({
@@ -79,6 +94,12 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
       },
     }),
   ]);
+
+  // أقساطٌ استُقطعت هذا الشهر — بملاحظة كل قسط، فلا يُعرض زرّ قسطٍ ثانٍ في الشهر.
+  const monthStart = monthStartInstant();
+  const takenThisMonth = new Set(
+    payments.filter((p) => p.kind === 'DEDUCTION' && p.paidAt >= monthStart && p.note).map((p) => p.note!),
+  );
 
   // ما أُرجع من فواتيره — بضاعةٌ عادت ليست بيعاً، ولا يُعمَّل عليها.
   //
@@ -192,6 +213,22 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
         }
       />
 
+      {errKey === 'not-due' || errKey === 'already-month' ? (
+        <p role="alert" className="mb-5 rounded-lg border border-warn bg-warn-soft px-4 py-3 text-xs text-warn">
+          {errKey === 'not-due'
+            ? 'لم يحلّ شهر بداية الاستقطاع بعد.'
+            : 'استُقطع قسط هذا الشهر بالفعل — القسط التالي الشهر القادم.'}
+        </p>
+      ) : null}
+
+      {errKey === 'not-due' || errKey === 'already-month' ? (
+        <p role="alert" className="mb-5 rounded-lg border border-warn bg-warn-soft px-4 py-3 text-xs text-warn">
+          {errKey === 'not-due'
+            ? 'لم يحلّ شهر بداية الاستقطاع بعد.'
+            : 'استُقطع قسط هذا الشهر بالفعل — القسط التالي الشهر القادم.'}
+        </p>
+      ) : null}
+
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Figure label="الراتب الشهري" value={employee.monthlySalary === null ? '—' : formatMoney(employee.monthlySalary)} hint={employee.role.nameAr} />
         {seeProfit ? (
@@ -237,7 +274,7 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
         <section className="mb-6">
           <h3 className="mb-3 text-sm font-semibold text-brand">الجزاءات</h3>
           <Table
-            headers={['الرقم', 'السبب', 'المبلغ', 'المستقطَع', 'الباقي', 'الأقساط', 'الحالة']}
+            headers={['الرقم', 'السبب', 'المبلغ', 'المستقطَع', 'الباقي', 'الأقساط', 'الحالة', 'الاستقطاع']}
             empty={false}
           >
             {penalties.map((pen) => {
@@ -255,14 +292,49 @@ export default async function EmployeeStatement({ params }: { params: Promise<{ 
                   <td className="px-4 py-3 text-[0.7rem] text-txt-3">
                     {(PENALTY_STATUS_AR as Record<string, string>)[pen.status] ?? pen.status}
                   </td>
+                  <td className="px-4 py-3 text-[0.7rem]">
+                    {(() => {
+                      if (pen.status !== 'APPROVED' || left.lte(0)) return <span className="text-txt-4">—</span>;
+                      const start = planStart(pen.events.map((e) => e.note));
+                      if (!hasStarted(start)) {
+                        return <span className="text-warn">يبدأ {start!.month}/{start!.year}</span>;
+                      }
+                      if (takenThisMonth.has(installmentNote(pen.number))) {
+                        return <span className="text-ok">استُقطع هذا الشهر</span>;
+                      }
+                      return canPenalise ? (
+                        <form action={collectPenaltyInstallment.bind(null, `/hr/${id}`, pen.id)}>
+                          <button
+                            type="submit"
+                            className="rounded-md border border-line-2 px-2 py-1 text-[0.65rem] text-txt-2 hover:border-brand hover:text-brand"
+                          >
+                            استقطع قسطاً
+                          </button>
+                        </form>
+                      ) : (
+                        <span className="text-txt-3">مستحق</span>
+                      );
+                    })()}
+                  </td>
                 </tr>
               );
             })}
           </Table>
           <p className="mt-2 text-[0.7rem] leading-[1.8] text-txt-4">
             المستقطَع وحده داخلٌ في الصافي أعلاه — يظهر صفّ خصمٍ في الجدول أدناه عند
-            كل قسط. والباقي يُستقطع من شاشة «الهالك والجزاءات» قسطاً قسطاً.
+            كل قسط، قسطٌ واحد في الشهر ولا يُستقطع قبل شهر بدايته.
           </p>
+        </section>
+      )}
+
+      {/* خصمٌ على الموظّف يقرّره المدير — مقسّطاً، هذا الشهر أو الذي بعده. */}
+      {canPenalise && (
+        <section className="erp-card mb-6 p-5">
+          <h3 className="mb-1 text-sm font-semibold text-brand">خصم على الموظف</h3>
+          <p className="mb-4 text-[0.7rem] leading-[1.8] text-txt-4">
+            لمرتجعٍ أو خطأٍ أو أيّ سبب — يُقسَّط على الأشهر ويظهر في جدول الجزاءات أعلاه.
+          </p>
+          <DeductionForm employeeId={id} />
         </section>
       )}
 

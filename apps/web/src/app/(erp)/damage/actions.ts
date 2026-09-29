@@ -15,6 +15,7 @@ import {
   piecePrice,
   damageCharge,
   dec,
+  formatMoney,
   isOwnerRole,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
@@ -23,6 +24,14 @@ import { audit, fieldErrors } from '@/lib/audit';
 import { nextOpsNumber, type FormState } from '@/lib/ops';
 import { numeric, normalizeDigits } from '@/lib/num';
 import { adjustStock } from '@/lib/stock';
+import {
+  hasStarted,
+  installmentNote,
+  monthStartInstant,
+  planMonth,
+  planNote,
+  planStart,
+} from '@/lib/penalty';
 
 // ── Damage records ──────────────────────────────────────────
 
@@ -427,18 +436,15 @@ export async function setPenaltyPlan(
   await prisma.penalty.update({ where: { id: penaltyId }, data: { installments: count } });
 
   // متى يبدأ الاستقطاع: هذا الشهر أو الذي بعده (بطلب المالك). يُقيَّد في سجلّ
-  // الجزاء لا في عمودٍ جديد: هو قرارٌ يُقرأ مع من اتّخذه ومتى، والاستقطاع نفسه
-  // يبقى بيد المدير قسطاً قسطاً.
-  const nextMonth = String(formData.get('start') ?? '') === 'next';
-  const now = new Date(Date.now() + 3 * 60 * 60 * 1000);
-  const first = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + (nextMonth ? 1 : 0), 1));
-  const startLabel = `${first.getUTCMonth() + 1}/${first.getUTCFullYear()}`;
+  // الجزاء لا في عمودٍ جديد (انظر lib/penalty)، والاستقطاع قبله يُرفَض.
+  const start = planMonth(String(formData.get('start') ?? '') === 'next' ? 'next' : 'this');
+  const startLabel = `${start.month}/${start.year}`;
   await prisma.penaltyEvent.create({
     data: {
       penaltyId,
       fromStatus: penalty.status,
       toStatus: penalty.status,
-      note: `خطّة التقسيط: ${count} قسط — يبدأ الاستقطاع شهر ${startLabel}`,
+      note: planNote(count, start),
       userId: user.id,
     },
   });
@@ -463,77 +469,248 @@ export async function setPenaltyPlan(
  * يظهر في كشفه كبقية الحركات. وآخر قسط يأخذ الباقي كلّه ويغلق الجزاء،
  * فلا يبقى منه كسرٌ معلّق من القسمة.
  */
-export async function collectPenaltyInstallment(
-  damageId: string,
+type Tx = Parameters<Parameters<typeof tenantTransaction>[0]>[0];
+
+type Taken =
+  | { result: 'ok'; employeeId: string; settled: boolean }
+  | { result: 'not-due' | 'already-month' | 'none'; employeeId?: string };
+
+/**
+ * قسطٌ واحد داخل معاملة.
+ *
+ * يرفض ما لم يحلّ شهر بدايته، ويرفض قسطاً ثانياً في الشهر نفسه: ضغطتان على
+ * «استقطع» كانتا تأخذان قسطين من راتب شهرٍ واحد. والقسط من المبلغ مقسوماً
+ * على عدد الأقساط، وآخرها يأخذ الباقي كلّه فلا يبقى كسرٌ معلّق.
+ */
+async function takeInstallment(
+  tx: Tx,
+  user: { tenantId: string; id: string },
   penaltyId: string,
-): Promise<void> {
-  const user = await requirePermission('penalties.approve');
+): Promise<Taken> {
+  const penalty = await tx.penalty.findFirst({
+    where: { id: penaltyId, tenantId: user.tenantId, status: 'APPROVED' },
+    select: {
+      number: true,
+      employeeId: true,
+      amount: true,
+      installments: true,
+      collectedAmount: true,
+      events: { orderBy: { createdAt: 'asc' }, select: { note: true } },
+    },
+  });
+  if (!penalty) return { result: 'none' };
 
-  await tenantTransaction(async (tx) => {
-    const penalty = await tx.penalty.findFirst({
-      where: { id: penaltyId, tenantId: user.tenantId, status: 'APPROVED' },
-      select: {
-        id: true,
-        number: true,
-        employeeId: true,
-        amount: true,
-        installments: true,
-        collectedAmount: true,
-        reason: true,
-      },
+  const total = dec(penalty.amount);
+  const collected = dec(penalty.collectedAmount);
+  const remaining = total.minus(collected);
+  if (remaining.lte(0)) return { result: 'none', employeeId: penalty.employeeId };
+  if (!hasStarted(planStart(penalty.events.map((e) => e.note)))) {
+    return { result: 'not-due', employeeId: penalty.employeeId };
+  }
+
+  const note = installmentNote(penalty.number);
+  const thisMonth = await tx.employeePayment.count({
+    where: {
+      tenantId: user.tenantId,
+      employeeId: penalty.employeeId,
+      isDeleted: false,
+      note,
+      paidAt: { gte: monthStartInstant() },
+    },
+  });
+  if (thisMonth > 0) return { result: 'already-month', employeeId: penalty.employeeId };
+
+  const per = total.dividedBy(Math.max(1, penalty.installments));
+  const take = per.gte(remaining) ? remaining : per;
+
+  await tx.employeePayment.create({
+    data: {
+      tenantId: user.tenantId,
+      // نفس بادئة دفعات الموظّفين فلا يتصادم رقمان من مولّدين.
+      number: await nextOpsNumber('employeePayment', 'EP', user.tenantId, tx),
+      employeeId: penalty.employeeId,
+      kind: 'DEDUCTION',
+      amount: take.toString(),
+      paidAt: new Date(),
+      note,
+      createdById: user.id,
+    },
+  });
+
+  const after = collected.plus(take);
+  const settled = after.gte(total);
+  await tx.penalty.update({
+    where: { id: penaltyId },
+    data: {
+      collectedAmount: after.toString(),
+      ...(settled ? { status: 'PAID', paidAt: new Date() } : {}),
+    },
+  });
+  if (settled) {
+    await tx.penaltyEvent.create({
+      data: { penaltyId, fromStatus: 'APPROVED', toStatus: 'PAID', userId: user.id },
     });
-    if (!penalty) return;
+  }
+  return { result: 'ok', employeeId: penalty.employeeId, settled };
+}
 
-    const total = dec(penalty.amount);
-    const collected = dec(penalty.collectedAmount);
-    const remaining = total.minus(collected);
-    if (remaining.lte(0)) return;
+/** مسار الرجوع مقبولٌ داخل النظام وحده — لا رابطاً خارجياً مُمرَّراً. */
+function safeBack(back: string): string {
+  return back.startsWith('/') && !back.startsWith('//') ? back : '/hr';
+}
 
-    const per = total.dividedBy(Math.max(1, penalty.installments));
-    // آخر قسط يبتلع كسر القسمة فلا يبقى دينارٌ معلّق.
-    const take = per.gte(remaining) ? remaining : per;
+/** زرّ «استقطع قسطاً» — من شاشة الهالك أو من كشف الموظّف. */
+export async function collectPenaltyInstallment(back: string, penaltyId: string): Promise<void> {
+  const user = await requirePermission('penalties.approve');
+  const target = safeBack(back);
 
-    await tx.employeePayment.create({
+  const taken = await tenantTransaction((tx) => takeInstallment(tx, user, penaltyId));
+
+  if (taken.result === 'ok') {
+    await audit({
+      tenantId: user.tenantId,
+      userId: user.id,
+      action: 'penalty.installment',
+      entityType: 'Penalty',
+      entityId: penaltyId,
+      detail: taken.settled ? 'قسط مستقطَع — استُوفي الجزاء' : 'قسط مستقطَع',
+    });
+  }
+
+  revalidatePath(target);
+  revalidatePath('/hr');
+  if (taken.employeeId) revalidatePath(`/hr/${taken.employeeId}`);
+  if (taken.result === 'not-due' || taken.result === 'already-month') {
+    redirect(`${target.split('?')[0]}?err=${taken.result}`);
+  }
+}
+
+const DeductionSchema = z.object({
+  employeeId: z.string().min(1, 'اختر الموظف.'),
+  amount: numeric(
+    z.coerce
+      .number()
+      .positive('المبلغ يجب أن يكون أكبر من صفر.')
+      .max(10_000_000_000, 'المبلغ غير منطقي — تأكد أنك لم تلصق رقماً خاطئاً.'),
+  ),
+  installments: numeric(
+    z.coerce.number().int('عدد صحيح.').min(1, 'قسط واحد على الأقل.').max(36, 'الحدّ ٣٦ قسطاً.'),
+  ),
+  start: z.enum(['this', 'next']).catch('this'),
+  reason: z.string().trim().max(500).optional().or(z.literal('')),
+  returnId: z.string().optional().or(z.literal('')),
+});
+
+/**
+ * خصمٌ على موظّف يقرّره المدير — مقسّطاً، يبدأ هذا الشهر أو الذي بعده.
+ *
+ * الخصم كان دفعةً واحدة من شاشة الرواتب، والتقسيط للهالك وحده. والمالك يريد
+ * الشيء نفسه للمرتجع ولأيّ خطأٍ آخر: مبلغٌ يقرّره، يُقسَّط على أشهر، ويبدأ
+ * متى شاء. فهو جزاءٌ بلا محضر هالك، يعيش بالآلية نفسها: خطّةٌ في سجلّه،
+ * وقسطٌ يُستقطع بصفّ خصمٍ في كشف الموظّف.
+ *
+ * ويولد معتمَداً: من قرّره هو صاحب الاعتماد. وإن بدأ هذا الشهر استُقطع أوّل
+ * قسطٍ فوراً — «من هذا الشهر» تعني أن راتب هذا الشهر يحمله.
+ *
+ * وخصم المرتجع لا يتجاوز قيمة المرتجع، ويُكتب رقمه في سببه.
+ */
+export async function createDeduction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const user = await requirePermission('penalties.approve');
+  const parsed = DeductionSchema.safeParse({
+    employeeId: String(formData.get('employeeId') ?? ''),
+    amount: String(formData.get('amount') ?? ''),
+    installments: String(formData.get('installments') ?? '1'),
+    start: String(formData.get('start') ?? 'this'),
+    reason: String(formData.get('reason') ?? ''),
+    returnId: String(formData.get('returnId') ?? ''),
+  });
+  if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
+  const d = parsed.data;
+
+  const employee = await prisma.user.findFirst({
+    where: { id: d.employeeId, tenantId: user.tenantId },
+    select: { id: true },
+  });
+  if (!employee) return { fieldErrors: { employeeId: 'الموظف غير موجود.' } };
+
+  let reason = d.reason ?? '';
+  let returnPath: string | null = null;
+  if (d.returnId) {
+    const ret = await prisma.salesReturn.findFirst({
+      where: { id: d.returnId, tenantId: user.tenantId, isDeleted: false },
+      select: { id: true, number: true, totalAmount: true },
+    });
+    if (!ret) return { error: 'المرتجع غير موجود.' };
+    if (dec(d.amount).gt(dec(ret.totalAmount))) {
+      return {
+        fieldErrors: { amount: `الخصم لا يتجاوز قيمة المرتجع (${formatMoney(ret.totalAmount)}).` },
+      };
+    }
+    reason = `مرتجع ${ret.number}${reason ? ` — ${reason}` : ''}`;
+    returnPath = `/returns/${ret.id}`;
+  }
+  if (reason.length < 3) return { fieldErrors: { reason: 'اكتب سبب الخصم.' } };
+
+  const start = planMonth(d.start);
+  const created = await tenantTransaction(async (tx) => {
+    const number = await nextOpsNumber('penalty', 'PEN', user.tenantId, tx);
+    const penalty = await tx.penalty.create({
       data: {
         tenantId: user.tenantId,
-        // نفس بادئة دفعات الموظّفين فلا يتصادم رقمان من مولّدين.
-        number: await nextOpsNumber('employeePayment', 'EP', user.tenantId, tx),
-        employeeId: penalty.employeeId,
-        kind: 'DEDUCTION',
-        amount: take.toString(),
-        paidAt: new Date(),
-        note: `قسط من الجزاء ${penalty.number}`,
+        number,
+        employeeId: d.employeeId,
+        amount: d.amount,
+        reason,
+        installments: d.installments,
+        status: 'APPROVED',
+        approvedById: user.id,
+        approvedAt: new Date(),
         createdById: user.id,
       },
     });
-
-    const after = collected.plus(take);
-    const settled = after.gte(total);
-    await tx.penalty.update({
-      where: { id: penaltyId },
+    await tx.penaltyEvent.create({
       data: {
-        collectedAmount: after.toString(),
-        ...(settled ? { status: 'PAID', paidAt: new Date() } : {}),
+        penaltyId: penalty.id,
+        toStatus: 'APPROVED',
+        note: 'خصمٌ قرّره المدير مباشرة',
+        userId: user.id,
       },
     });
-    if (settled) {
-      await tx.penaltyEvent.create({
-        data: { penaltyId, fromStatus: 'APPROVED', toStatus: 'PAID', userId: user.id },
-      });
-    }
+    await tx.penaltyEvent.create({
+      data: {
+        penaltyId: penalty.id,
+        fromStatus: 'APPROVED',
+        toStatus: 'APPROVED',
+        note: planNote(d.installments, start),
+        userId: user.id,
+      },
+    });
+    const first = d.start === 'this' ? await takeInstallment(tx, user, penalty.id) : null;
+    return { id: penalty.id, number, firstTaken: first?.result === 'ok' };
   });
 
   await audit({
     tenantId: user.tenantId,
     userId: user.id,
-    action: 'penalty.installment',
+    action: 'penalty.deduction',
     entityType: 'Penalty',
-    entityId: penaltyId,
-    detail: 'قسط مستقطَع',
+    entityId: created.id,
+    detail: `${created.number} — ${formatMoney(d.amount)} على ${d.installments} قسط — ${reason}`,
   });
 
-  revalidatePath(`/damage/${damageId}`);
   revalidatePath('/hr');
+  revalidatePath(`/hr/${d.employeeId}`);
+  if (returnPath) revalidatePath(returnPath);
+
+  const per = dec(d.amount).dividedBy(d.installments);
+  return {
+    ok: [
+      `سُجّل الخصم ${created.number}: ${d.installments} قسط، القسط ${formatMoney(per)}.`,
+      created.firstTaken
+        ? 'استُقطع قسط هذا الشهر.'
+        : `يبدأ الاستقطاع شهر ${start.month}/${start.year}.`,
+    ].join(' '),
+  };
 }
 
 export async function setPenaltyStatus(
