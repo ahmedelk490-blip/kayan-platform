@@ -333,6 +333,17 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
   CUSTOMER: ['portal.view'],
 };
 
+/**
+ * صاحب القرار: المدير ومدير النظام.
+ *
+ * فصلُ التسجيل عن الاعتماد يحمي من موظفٍ يعتمد مطالبته بنفسه. لكنّ المالك
+ * يسجّل ويعتمد معاً ولا أحد فوقه يعتمد له — فكان جزاءٌ سجّله يبقى معلّقاً
+ * حتى يلغيه. القاعدة تبقى على الموظفين، ولا تُقيّد من يملك القرار.
+ */
+export function isOwnerRole(role: string | null | undefined): boolean {
+  return role === 'ADMIN' || role === 'MANAGER';
+}
+
 /** Deny by default. */
 export function can(role: RoleKey | undefined, permission: PermissionKey): boolean {
   if (!role) return false;

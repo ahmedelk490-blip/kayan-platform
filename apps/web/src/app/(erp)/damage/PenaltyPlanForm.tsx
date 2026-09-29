@@ -40,6 +40,11 @@ export function PenaltyPlanForm({
           defaultValue={installments}
           className="erp-input w-14 py-1 text-center text-xs"
         />
+        {/* متى يبدأ الاستقطاع — هذا الشهر أو الذي بعده. */}
+        <select name="start" defaultValue="this" className="erp-input w-auto py-1 text-[0.65rem]">
+          <option value="this">من هذا الشهر</option>
+          <option value="next">من الشهر القادم</option>
+        </select>
         <button
           type="submit"
           disabled={pending}

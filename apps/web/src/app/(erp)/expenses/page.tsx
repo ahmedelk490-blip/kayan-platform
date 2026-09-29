@@ -27,6 +27,7 @@ import { Toolbar } from '@/components/crud/Toolbar';
 import { parseListQuery, skipTake, type SearchParams } from '@/lib/query';
 import { monthRange, dateInput } from '@/lib/ops';
 import { deliveryInvoiceSuffix } from '@/lib/delivery';
+import { isOwnerRole } from '@erp/domain';
 import { ExpenseForm } from './ExpenseForm';
 import { RecurringForm } from './RecurringForm';
 import { createExpense, setExpenseStatus, deleteExpense, deleteRecurring, postRecurring, addRecurring } from './actions';
@@ -42,6 +43,7 @@ const SORTS = [
 const ERRORS: Record<string, string> = {
   self: 'لا يعتمد المصروفَ من سجّله. الفصل بين التسجيل والاعتماد هو الغرض من الخطوة.',
   approved: 'لا يمكن حذف مصروف معتمد — سبق أن دخل في صافي ربح فترة مُعلنة.',
+  manager: 'حذف المصروف للمدير وحده. اطلب منه حذفه.',
 };
 
 export default async function ExpensesPage({
@@ -196,6 +198,7 @@ export default async function ExpensesPage({
 
   const canWrite = allows(user, 'expenses.write');
   const canApprove = allows(user, 'expenses.approve');
+  const owner = isOwnerRole(user.role);
 
   // مصاريف توصيلٍ زالت فواتيرها — تُحذف وإن كانت معتمدة (انظر lib/delivery).
   // تُفحص لصفوف هذه الصفحة وحدها: وسمٌ لكل مرآة، واستعلامٌ واحد عن فواتيرها.
@@ -534,15 +537,21 @@ export default async function ExpensesPage({
                     </form>
                   </>
                 )}
-                {canWrite && row.status !== 'APPROVED' && (
+                {/* الحذف للمدير وحده. المعتمد يحذفه صاحب القرار، ومرآةُ توصيلٍ
+                    زالت فاتورتها يحذفها أيّ معتمِد. */}
+                {canApprove && (row.status !== 'APPROVED' || owner) && (
                   <form action={deleteExpense.bind(null, row.id)}>
                     <ConfirmButton
                       label="حذف"
-                      message={`حذف المصروف ${row.number}؟ لا يُحذف المصروف المعتمد لأنه دخل ربحاً مُعلَناً.`}
+                      message={
+                        row.status === 'APPROVED'
+                          ? `حذف المصروف المعتمد ${row.number}؟ يخرج من أرباح فترته.`
+                          : `حذف المصروف ${row.number}؟`
+                      }
                     />
                   </form>
                 )}
-                {canWrite && row.status === 'APPROVED' && orphanDelivery(row.id) && (
+                {canApprove && row.status === 'APPROVED' && !owner && orphanDelivery(row.id) && (
                   <form action={deleteExpense.bind(null, row.id)}>
                     <ConfirmButton
                       label="حذف — فاتورته محذوفة"

@@ -10,11 +10,14 @@ import {
   dueDate,
   isInvoiceStatus,
   isPaymentMethod,
-  INVOICE_TRANSITIONS,
+  isOrderStatus,
+  canTransition,
+  ORDER_TRANSITIONS,
   calcLine,
   calcDocument,
   dec,
   formatMoney,
+  formatQty,
   isOrderSource,
   PRICE_SERVICE_AR,
   type PriceService,
@@ -27,6 +30,7 @@ import { numeric } from '@/lib/num';
 import { DELIVERY_DESCRIPTION, isDeliveryDesc } from '@/lib/delivery';
 import { adjustStock } from '@/lib/stock';
 import { returnedValueInTx, returnedValueOf } from '@/lib/receivables';
+import { releaseForOrder } from '@/app/(erp)/sales/reservations';
 import {
   allocateInvoiceNumber,
   lockPaymentSequence,
@@ -832,13 +836,28 @@ const VoidSchema = z.object({
 });
 
 /**
- * Void an invoice.
+ * إلغاء الطلب — فعلٌ واحد يُرجع كل شيءٍ إلى مكانه.
  *
- * Never deleted, and the number is never reused: it has already been
- * reported. A void invoice stays in the sequence as evidence that nothing was
- * skipped — which is the entire point of gapless numbering.
+ * ── لماذا هذا لازم ────────────────────────────────────────
+ *
+ * زبونٌ يلغي طلبه بعد أن صدرت فاتورته. كان الإلغاء يرفض فاتورةً عليها مبلغ
+ * حتى تُعكَس دفعاتها واحدةً واحدة، ويرفض المدفوعة بالكامل أصلاً — فمن قبض
+ * عربوناً ثم أُلغي الطلب وجد أمامه ثلاث شاشات لعملٍ واحد.
+ *
+ * فصار الإلغاء داخل معاملةٍ واحدة:
+ *   • المدفوع يُردّ للزبون بدفعةٍ سالبة بتاريخ اليوم، فيظهر خروجه من الصندوق
+ *     في يومه لا في يوم القبض.
+ *   • البضاعة تعود للمخزن بما لم يَعُد بعد: ما سبق إرجاعه بمرتجعٍ عاد يومها،
+ *     وكان الإلغاء يُرجعه ثانيةً فيزيد الرصيد عن الحقيقة.
+ *   • مرتجعات الفاتورة تخرج من الدفاتر معها: فاتورةٌ ملغاة لا إيراد لها، فلا
+ *     مرتجع يُطرَح منه.
+ *   • أمر البيع يُلغى ويُفكّ حجزه إن كان قابلاً للإلغاء، ومصروف التوصيل يزول.
+ *
+ * والفاتورة لا تُحذف ورقمها لا يُعاد استخدامه: تبقى «ملغاة» في التسلسل دليلاً
+ * على أن لا رقم قُفز. والتقارير تستثني الملغاة من المبيعات والتكلفة والعمولة،
+ * فيزول ربحها من يوم إصدارها.
  */
-export async function voidInvoice(
+export async function cancelInvoice(
   id: string,
   _prev: FormState,
   formData: FormData,
@@ -850,20 +869,20 @@ export async function voidInvoice(
   const invoice = await prisma.invoice.findFirst({
     where: { id, tenantId: user.tenantId, isDeleted: false },
     include: {
-      // الدفعات الحيّة فقط: أصلٌ عُكس لم يعد مالاً محتجزاً — بدون هذا الشرط
-      // كانت فاتورةٌ عُكست كل دفعاتها تستحيل على الإلغاء للأبد.
-      payments: { where: { reversesId: null, reversedBy: { is: null } } },
-      lines: { select: { productId: true, variantId: true, quantity: true } },
+      lines: { select: { id: true, productId: true, variantId: true, quantity: true } },
+      // طريقة آخر قبض: الردّ يخرج من حيث دخل المال.
+      payments: {
+        where: { amount: { gt: 0 } },
+        orderBy: { paidAt: 'desc' },
+        take: 1,
+        select: { method: true },
+      },
     },
   });
   if (!invoice || !isInvoiceStatus(invoice.status)) return { error: 'الفاتورة غير موجودة.' };
-  if (!INVOICE_TRANSITIONS[invoice.status].includes('VOID')) {
-    return { error: 'لا يمكن إلغاء فاتورة مدفوعة بالكامل.' };
-  }
-  // Voiding an invoice that has taken money would leave the payment pointing
-  // at nothing collectable.
-  if (invoice.payments.length > 0) {
-    return { error: 'اعكس الدفعات أولاً — لا تُلغى فاتورة استلمت مبالغ.' };
+  if (invoice.status === 'VOID') return { error: 'الفاتورة ملغاة بالفعل.' };
+  if (dec(invoice.paidAmount).gt(0) && !allows(user, 'payments.record')) {
+    return { error: 'على الفاتورة مبلغٌ مدفوع، وردّه للزبون يحتاج صلاحية تسجيل الدفعات.' };
   }
 
   // فاتورة مباشرة صُرفت بضاعتها عند الإصدار — إلغاؤها يعيدها للمخزون. المسوّدة
@@ -871,20 +890,92 @@ export async function voidInvoice(
   const restockWh =
     invoice.status !== 'DRAFT' && !invoice.salesOrderId ? await defaultWarehouseId(user.tenantId) : null;
 
-  await tenantTransaction(async (tx) => {
+  const order = invoice.salesOrderId
+    ? await prisma.salesOrder.findFirst({
+        where: { id: invoice.salesOrderId, tenantId: user.tenantId, isDeleted: false },
+        include: { lines: true },
+      })
+    : null;
+  const orderOpen = !!order && isOrderStatus(order.status) && order.status !== 'CANCELLED';
+  const cancelOrder =
+    orderOpen &&
+    allows(user, 'sales.confirm') &&
+    canTransition(ORDER_TRANSITIONS, order.status as never, 'CANCELLED');
+
+  const result = await tenantTransaction(async (tx) => {
+    // خلف قفل الدفعات: تحصيلٌ يقع في اللحظة نفسها يتسلسل، فلا يُردّ مبلغٌ
+    // قُرئ قبله ولا يتكرّر رقم دفعة.
+    await lockPaymentSequence(tx, user.tenantId);
+    const fresh = await tx.invoice.findFirst({
+      where: { id, tenantId: user.tenantId, isDeleted: false },
+      select: { paidAmount: true, status: true },
+    });
+    if (!fresh || fresh.status === 'VOID') return null;
+
+    const refunded = dec(fresh.paidAmount);
+    if (refunded.gt(0)) {
+      await tx.payment.create({
+        data: {
+          tenantId: user.tenantId,
+          number: await nextPaymentNumber(user.tenantId, tx),
+          invoiceId: id,
+          amount: refunded.negated().toString(),
+          method: invoice.payments[0]?.method ?? 'CASH',
+          paidAt: new Date(),
+          notes: `ردّ المدفوع — إلغاء الفاتورة ${invoice.number ?? ''}`.trim(),
+          recordedById: user.id,
+        },
+      });
+    }
+
+    const returned = await tx.salesReturnLine.groupBy({
+      by: ['invoiceLineId'],
+      where: { salesReturn: { tenantId: user.tenantId, invoiceId: id, isDeleted: false } },
+      _sum: { quantity: true },
+    });
+    const back = new Map(returned.map((r) => [r.invoiceLineId, dec(r._sum.quantity ?? 0)]));
+    const remaining = invoice.lines.map((l) => {
+      const left = dec(l.quantity).minus(back.get(l.id) ?? dec(0));
+      return { productId: l.productId, variantId: l.variantId, quantity: left.gt(0) ? left : dec(0) };
+    });
+
+    let pieces = dec(0);
+    if (restockWh) {
+      await restockIn(tx, user.tenantId, user.id, restockWh, invoice.number ?? null, remaining);
+      pieces = remaining
+        .filter((l) => l.productId && l.variantId)
+        .reduce((sum, l) => sum.plus(l.quantity), dec(0));
+    }
+
+    await tx.salesReturn.updateMany({
+      where: { tenantId: user.tenantId, invoiceId: id, isDeleted: false },
+      data: { isDeleted: true, deletedAt: new Date() },
+    });
+
+    if (cancelOrder && order) {
+      await releaseForOrder(tx, order, user.id);
+      await tx.salesOrder.update({
+        where: { id: order.id },
+        data: { status: 'CANCELLED', cancelledAt: new Date() },
+      });
+    }
+
     await tx.invoice.update({
       where: { id },
-      data: { status: 'VOID', voidReason: parsed.data.reason, voidedAt: new Date() },
+      data: {
+        status: 'VOID',
+        paidAmount: '0',
+        voidReason: parsed.data.reason,
+        voidedAt: new Date(),
+      },
     });
-    if (restockWh) {
-      await restockIn(tx, user.tenantId, user.id, restockWh, invoice.number ?? null, invoice.lines);
-    }
+    return { refunded, pieces };
   });
+  if (!result) return { error: 'الفاتورة ملغاة بالفعل.' };
 
   // أجرة توصيل فاتورةٍ أُلغيت لم تُدفع: الطلب لم يُوصَّل. وكان المصروف
   // يبقى بعد الإلغاء فيخصم من الربح إلى الأبد — وإيراده المقابل ذهب مع الفاتورة.
   await recordDeliveryExpense(user, 0, { id, number: invoice.number });
-  revalidatePath('/expenses');
 
   await audit({
     tenantId: user.tenantId,
@@ -892,12 +983,36 @@ export async function voidInvoice(
     action: 'invoice.void',
     entityType: 'Invoice',
     entityId: id,
-    detail: `${invoice.number ?? 'draft'} — ${parsed.data.reason}`,
+    detail: `${invoice.number ?? 'draft'} — ${parsed.data.reason} · refund ${result.refunded.toString()} · restock ${result.pieces.toString()}`,
   });
 
-  revalidatePath('/invoices');
-  revalidatePath(`/invoices/${id}`);
-  return { ok: 'تم إلغاء الفاتورة.' };
+  for (const path of [
+    '/invoices',
+    `/invoices/${id}`,
+    '/inventory',
+    '/expenses',
+    '/returns',
+    '/dashboard',
+    '/reports/daily',
+    '/sales/orders',
+  ]) {
+    revalidatePath(path);
+  }
+  if (order) revalidatePath(`/sales/orders/${order.id}`);
+
+  return {
+    ok: [
+      'تم إلغاء الطلب.',
+      result.refunded.gt(0) ? `رُدّ ${formatMoney(result.refunded)} للزبون.` : null,
+      result.pieces.gt(0) ? `عادت ${formatQty(result.pieces)} قطعة للمخزون.` : null,
+      cancelOrder && order ? `أُلغي أمر البيع ${order.number} وفُكّ حجزه.` : null,
+      orderOpen && !cancelOrder && order
+        ? `أمر البيع ${order.number} لم يُلغَ — ألغِه من شاشته.`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' '),
+  };
 }
 
 // ── Payments ────────────────────────────────────────────────

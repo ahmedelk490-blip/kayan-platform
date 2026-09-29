@@ -296,11 +296,16 @@ export default async function DamageDetailPage({
                         <span dir="ltr" className="tnum text-txt-2">
                           {p.number}
                         </span>
+                        {/* قرارٌ بلا تغيير حالة (خطّة التقسيط) يُعرَض بنصّه لا
+                            بـ«معتمد ← معتمد». */}
                         <span>
-                          {e.fromStatus
-                            ? `${(PENALTY_STATUS_AR as Record<string, string>)[e.fromStatus] ?? e.fromStatus} ← `
-                            : ''}
-                          {(PENALTY_STATUS_AR as Record<string, string>)[e.toStatus] ?? e.toStatus}
+                          {e.note && e.fromStatus === e.toStatus
+                            ? e.note
+                            : `${
+                                e.fromStatus
+                                  ? `${(PENALTY_STATUS_AR as Record<string, string>)[e.fromStatus] ?? e.fromStatus} ← `
+                                  : ''
+                              }${(PENALTY_STATUS_AR as Record<string, string>)[e.toStatus] ?? e.toStatus}`}
                         </span>
                         <span className="text-txt-4">
                           {e.user ? (e.user.nameAr ?? e.user.name) : 'النظام'} ·{' '}

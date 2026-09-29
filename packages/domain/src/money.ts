@@ -56,17 +56,23 @@ export function display(value: Numeric | null | undefined): Decimal {
 }
 
 /**
- * Format money for the UI: thousand separators, and no forced decimals — a
- * whole amount prints "16,000", not "16000.00". A real fraction still shows
- * (trailing zeros trimmed): "8,333.33", "12,000.5". Western digits so numeric
- * columns stay aligned. Built on the Decimal string to keep precision.
+ * Format money for the UI: whole dinars with thousand separators — "16,000".
+ * Western digits so numeric columns stay aligned.
+ *
+ * ── بلا كسور (بطلب المالك) ──────────────────────────────────
+ *
+ * الدينار لا فلوس له في التعامل: لا أحد يدفع ولا يقبض 0.67. والكسور كانت
+ * تظهر من القسمة وحدها — حصّة اليوم من راتبٍ شهريّ، وسعر القطعة من سعر
+ * الدستة — فتُقرأ «168,666.67» في شاشةٍ كل ما فيها أرقامٌ صحيحة.
+ *
+ * التقريب هنا للعرض وحده، لأقرب دينار. المخزَّن والحساب يبقيان بدقّتهما، فلا
+ * يتراكم فرق التقريب في مجموعٍ أو ضريبة.
  */
 export function formatMoney(value: Numeric | null | undefined): string {
-  const d = display(value);
-  const [intPart, fracRaw = ''] = d.abs().toFixed(DISPLAY_SCALE).split('.');
-  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  const frac = fracRaw.replace(/0+$/, '');
-  return (d.isNegative() ? '-' : '') + grouped + (frac ? `.${frac}` : '');
+  const d = dec(value).toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
+  const grouped = d.abs().toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  // «-0» ليست رقماً يُقرأ: ما قُرِّب إلى الصفر يُكتب صفراً.
+  return (d.isNegative() && !d.isZero() ? '-' : '') + grouped;
 }
 
 /** Quantities print without forced decimals — "25", not "25.00". */

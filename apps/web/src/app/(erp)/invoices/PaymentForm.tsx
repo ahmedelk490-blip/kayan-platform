@@ -81,11 +81,18 @@ export function PaymentForm({
   );
 }
 
-/** إلغاء فاتورة — سبب إلزامي. */
+/**
+ * إلغاء الطلب — سببٌ إلزامي، وقائمةٌ بما سيحدث قبل الضغط.
+ *
+ * الإلغاء يردّ مالاً ويحرّك مخزوناً ويُخرج الفاتورة من الأرباح، فيُقال ذلك
+ * بأرقامه قبل التأكيد لا بعده: من يضغط يعرف كم سيُردّ وكم قطعةً ستعود.
+ */
 export function VoidForm({
   action,
+  effects = [],
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
+  effects?: string[];
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const [reason, setReason] = useState('');
@@ -93,6 +100,13 @@ export function VoidForm({
   return (
     <form action={formAction} className="space-y-3">
       <FormError message={state.error} />
+      {effects.length > 0 && (
+        <ul className="space-y-1 rounded-lg border border-line bg-card-2 px-4 py-3 text-[0.7rem] leading-[1.9] text-txt-2">
+          {effects.map((line) => (
+            <li key={line}>• {line}</li>
+          ))}
+        </ul>
+      )}
       <TextArea
         name="reason"
         label="سبب الإلغاء (إلزامي)"
@@ -104,15 +118,15 @@ export function VoidForm({
       <button
         type="submit"
         onClick={(e) => {
-          if (!window.confirm('إلغاء الفاتورة نهائياً؟ الرقم يبقى محجوزاً ولا يُتراجع عن الإلغاء.')) e.preventDefault();
+          if (!window.confirm('إلغاء الطلب نهائياً؟ الرقم يبقى محجوزاً ولا يُتراجع عن الإلغاء.')) e.preventDefault();
         }}
         className="rounded-lg border border-bad px-4 py-2 text-xs text-bad hover:bg-bad-soft"
       >
-        إلغاء الفاتورة
+        إلغاء الطلب
       </button>
       <p className="text-[0.7rem] text-txt-4">
-        الرقم لا يُعاد استخدامه أبداً. الفاتورة الملغاة تبقى في التسلسل كدليل على أن
-        لا رقم قُفز — وهذا هو الغرض من الترقيم المتصل.
+        للطلب الذي أُلغي قبل التسليم. إن كانت البضاعة عند الزبون فسجّل «مرتجعاً» بدل
+        الإلغاء. والرقم لا يُعاد استخدامه: الفاتورة الملغاة تبقى في التسلسل.
       </p>
       {state.ok && <span className="text-xs text-ok">{state.ok}</span>}
     </form>

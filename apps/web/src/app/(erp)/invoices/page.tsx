@@ -154,6 +154,7 @@ export default async function InvoicesPage({
   );
 
   const canWrite = allows(user, 'invoices.write');
+  const canCancel = allows(user, 'invoices.issue');
 
   // الأقسام المبسّطة أسفل الفواتير — عروض الأسعار وأوامر البيع وطلبات الموقع
   // لم تعد تبويبات مستقلة، بل لمحة سريعة هنا مع رابط لكل شاشة كاملة.
@@ -325,9 +326,29 @@ export default async function InvoicesPage({
                 </Badge>
               </td>
               <td className="px-4 py-3 text-end">
-                <Link href={`/invoices/${row.id}`} className="text-xs text-brand hover:underline">
-                  عرض
-                </Link>
+                {/* التعديل والإلغاء من القائمة نفسها (بطلب المالك): كانا خلف
+                    «عرض» ثم أسفل الصفحة، فلا يُهتدى إليهما. */}
+                <div className="flex flex-wrap items-center justify-end gap-3">
+                  <Link href={`/invoices/${row.id}`} className="text-xs text-brand hover:underline">
+                    عرض
+                  </Link>
+                  {canWrite && row.status !== 'VOID' && (
+                    <Link
+                      href={`/invoices/${row.id}/edit`}
+                      className="text-xs text-txt-2 hover:text-brand hover:underline"
+                    >
+                      تعديل
+                    </Link>
+                  )}
+                  {canCancel && row.status !== 'VOID' && (
+                    <Link
+                      href={`/invoices/${row.id}#cancel`}
+                      className="text-xs text-bad hover:underline"
+                    >
+                      إلغاء
+                    </Link>
+                  )}
+                </div>
               </td>
             </tr>
           );

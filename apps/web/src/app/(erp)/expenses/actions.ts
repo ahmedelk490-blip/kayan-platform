@@ -3,7 +3,12 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { isExpenseCategory, APPROVAL_TRANSITIONS, isApprovalStatus } from '@erp/domain';
+import {
+  isExpenseCategory,
+  APPROVAL_TRANSITIONS,
+  isApprovalStatus,
+  isOwnerRole,
+} from '@erp/domain';
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
@@ -81,7 +86,7 @@ export async function setExpenseStatus(id: string, next: string): Promise<void> 
   if (!APPROVAL_TRANSITIONS[expense.status].includes(next)) return;
 
   // A person approving their own claim defeats the separation entirely.
-  if (next === 'APPROVED' && expense.createdById === user.id) {
+  if (next === 'APPROVED' && expense.createdById === user.id && !isOwnerRole(user.role)) {
     redirect('/expenses?err=self');
   }
 
@@ -132,7 +137,14 @@ export async function deleteExpense(id: string): Promise<void> {
   //
   // إلا مرآةَ توصيلٍ زالت فاتورتها: لم يقدّمها أحدٌ ولم يعتمدها أحد، وُلدت مع
   // فاتورةٍ لم تعد موجودة — وبقاؤها هو ما يُفسد الربح لا حذفها.
-  if (expense.status === 'APPROVED' && !(await isOrphanDelivery(user.tenantId, expense))) {
+  // الحذف قرارُ المدير (بطلب المالك): الموظف يسجّل ولا يحذف، والمدير يحذف
+  // حتى المعتمد — هو من اعتمده وهو من يملك التراجع عنه.
+  if (!allows(user, 'expenses.approve')) redirect('/expenses?err=manager');
+  if (
+    expense.status === 'APPROVED' &&
+    !isOwnerRole(user.role) &&
+    !(await isOrphanDelivery(user.tenantId, expense))
+  ) {
     redirect('/expenses?err=approved');
   }
 

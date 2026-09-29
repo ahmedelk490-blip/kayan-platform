@@ -11,7 +11,6 @@ import {
   isInvoiceStatus,
   overpayment,
   INVOICE_STATUS_AR,
-  INVOICE_TRANSITIONS,
   PAYMENT_METHOD_AR,
   type InvoiceStatus,
 } from '@erp/domain';
@@ -27,7 +26,7 @@ import { dateInput } from '@/lib/ops';
 import type { SearchParams } from '@/lib/query';
 import { waLink } from '@/lib/wa';
 import { PaymentForm, VoidForm } from '../PaymentForm';
-import { issueInvoice, voidInvoice, recordPayment, reversePayment, duplicateInvoice } from '../actions';
+import { issueInvoice, cancelInvoice, recordPayment, reversePayment, duplicateInvoice } from '../actions';
 
 export const metadata: Metadata = { title: 'الفاتورة' };
 
@@ -91,6 +90,26 @@ export default async function InvoicePage({
   const credit = overpayment(netOwed, invoice.paidAmount);
   const late = daysOverdue(invoice.dueDate, left);
 
+  // ما سيفعله «إلغاء الطلب» بهذه الفاتورة — بأرقامها، ليُقرأ قبل الضغط.
+  const pieces = invoice.lines
+    .filter((l) => l.variantId && !isDeliveryDesc(l.description))
+    .reduce((sum, l) => sum.plus(dec(l.quantity)), dec(0));
+  const cancelEffects = [
+    dec(invoice.paidAmount).gt(0)
+      ? `يُردّ للزبون ${formatMoney(invoice.paidAmount)} د.ع (المدفوع كلّه).`
+      : null,
+    status !== 'DRAFT' && !invoice.salesOrderId && pieces.gt(0)
+      ? `تعود ${formatQty(pieces)} قطعة إلى المخزون — كل صنفٍ إلى لونه ومقاسه.`
+      : null,
+    invoice.salesOrder
+      ? `يُلغى أمر البيع ${invoice.salesOrder.number} ويُفكّ حجزه.`
+      : null,
+    invoice.lines.some((l) => isDeliveryDesc(l.description)) || status !== 'DRAFT'
+      ? 'يُحذف مصروف التوصيل إن وُجد.'
+      : null,
+    'تخرج الفاتورة من المبيعات والأرباح والعمولة في كل التقارير.',
+  ].filter((line): line is string => line !== null);
+
   // رابط واتساب بنص الفاتورة جاهزاً — لا يُرسل شيئاً بنفسه.
   const waUrl = waLink(
     invoice.customer.whatsapp ?? invoice.customer.phone,
@@ -139,6 +158,14 @@ export default async function InvoicePage({
                   كرر الطلب
                 </button>
               </form>
+            )}
+            {canIssue && status !== 'VOID' && (
+              <a
+                href="#cancel"
+                className="rounded-lg border border-bad px-3 py-2 text-xs text-bad hover:bg-bad-soft"
+              >
+                إلغاء الطلب
+              </a>
             )}
             {canIssue && status === 'DRAFT' && (
               <form action={issueInvoice.bind(null, invoice.id)}>
@@ -341,10 +368,12 @@ export default async function InvoicePage({
             )}
           </section>
 
-          {canIssue && INVOICE_TRANSITIONS[status].includes('VOID') && (
-            <section className="erp-card p-5">
-              <h3 className="mb-3 text-sm font-semibold text-brand">إلغاء</h3>
-              <VoidForm action={voidInvoice.bind(null, invoice.id)} />
+          {/* لكل فاتورةٍ قائمة، مدفوعةً كانت أو عليها عربون: الإلغاء يردّ المدفوع
+              بنفسه، فلا تُعكَس الدفعات واحدةً واحدة قبله. */}
+          {canIssue && status !== 'VOID' && (
+            <section id="cancel" className="erp-card scroll-mt-20 p-5">
+              <h3 className="mb-3 text-sm font-semibold text-brand">إلغاء الطلب</h3>
+              <VoidForm action={cancelInvoice.bind(null, invoice.id)} effects={cancelEffects} />
             </section>
           )}
         </aside>

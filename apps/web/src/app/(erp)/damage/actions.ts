@@ -15,6 +15,7 @@ import {
   piecePrice,
   damageCharge,
   dec,
+  isOwnerRole,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
@@ -425,6 +426,23 @@ export async function setPenaltyPlan(
 
   await prisma.penalty.update({ where: { id: penaltyId }, data: { installments: count } });
 
+  // متى يبدأ الاستقطاع: هذا الشهر أو الذي بعده (بطلب المالك). يُقيَّد في سجلّ
+  // الجزاء لا في عمودٍ جديد: هو قرارٌ يُقرأ مع من اتّخذه ومتى، والاستقطاع نفسه
+  // يبقى بيد المدير قسطاً قسطاً.
+  const nextMonth = String(formData.get('start') ?? '') === 'next';
+  const now = new Date(Date.now() + 3 * 60 * 60 * 1000);
+  const first = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + (nextMonth ? 1 : 0), 1));
+  const startLabel = `${first.getUTCMonth() + 1}/${first.getUTCFullYear()}`;
+  await prisma.penaltyEvent.create({
+    data: {
+      penaltyId,
+      fromStatus: penalty.status,
+      toStatus: penalty.status,
+      note: `خطّة التقسيط: ${count} قسط — يبدأ الاستقطاع شهر ${startLabel}`,
+      userId: user.id,
+    },
+  });
+
   await audit({
     tenantId: user.tenantId,
     userId: user.id,
@@ -435,7 +453,7 @@ export async function setPenaltyPlan(
   });
 
   revalidatePath(`/damage/${damageId}`);
-  return { ok: `الخطّة الآن ${count} قسطاً.` };
+  return { ok: `${count} قسط — يبدأ شهر ${startLabel}.` };
 }
 
 /**
@@ -532,7 +550,8 @@ export async function setPenaltyStatus(
   if (!penalty || !isPenaltyStatus(penalty.status)) return;
   if (!PENALTY_TRANSITIONS[penalty.status].includes(next)) return;
 
-  if (next === 'APPROVED' && penalty.createdById === user.id) {
+  // صاحب القرار يعتمد ما سجّله: لا أحد فوقه يعتمد له (انظر isOwnerRole).
+  if (next === 'APPROVED' && penalty.createdById === user.id && !isOwnerRole(user.role)) {
     redirect(`/damage/${damageId}?err=self-penalty`);
   }
 
