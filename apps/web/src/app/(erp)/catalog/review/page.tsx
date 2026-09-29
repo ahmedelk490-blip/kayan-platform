@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
-import { dec, PRICE_SERVICE_AR, type PriceService } from '@erp/domain';
+import { dec, formatMoney, PRICE_SERVICE_AR, type PriceService } from '@erp/domain';
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -120,7 +120,7 @@ export default async function ReviewPage() {
                 ) : (
                   <div className="text-xs text-txt-2">
                     <span className="tnum font-medium text-txt">
-                      {min.eq(max!) ? Number(min).toLocaleString('ar-IQ') : `${Number(min).toLocaleString('ar-IQ')} – ${Number(max).toLocaleString('ar-IQ')}`} {currency}
+                      {min.eq(max!) ? formatMoney(min) : `${formatMoney(min)} – ${formatMoney(max)}`} {currency}
                     </span>
                     <div className="text-[0.7rem] text-txt-4">
                       {services.map((s) => PRICE_SERVICE_AR[s as PriceService] ?? s).join(' · ')}

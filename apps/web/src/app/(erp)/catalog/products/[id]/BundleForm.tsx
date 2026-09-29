@@ -1,5 +1,6 @@
 'use client';
 
+import { formatMoney } from '@erp/domain';
 import { useActionState, useState } from 'react';
 import { SubmitButton, FormError } from '@/components/crud/Form';
 import type { FormState } from '../actions';
@@ -148,8 +149,8 @@ export function BundlePricing({
         </label>
       </div>
       <p className="mt-2 text-[0.7rem] leading-[1.9] text-txt-4">
-        تكلفة القطعة: <span className="tnum text-txt-2">{pieceCost ? pieceCost.toFixed(2) : '—'}</span>
-        {' · '}سعر القطعة: <span className="tnum text-txt-2">{piecePrice ? piecePrice.toFixed(2) : '—'}</span>
+        تكلفة القطعة: <span className="tnum text-txt-2">{pieceCost ? formatMoney(pieceCost) : '—'}</span>
+        {' · '}سعر القطعة: <span className="tnum text-txt-2">{piecePrice ? formatMoney(piecePrice) : '—'}</span>
         {' '}(بالقسمة على {per} قطعة)
       </p>
     </div>

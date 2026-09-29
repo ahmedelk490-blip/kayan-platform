@@ -231,7 +231,7 @@ export default async function DamageDetailPage({
                           penaltyId={p.id}
                           installments={p.installments}
                           perInstallment={formatMoney(
-                            dec(p.amount).dividedBy(Math.max(1, p.installments)),
+                            dec(p.amount).dividedBy(Math.max(1, p.installments)).floor(),
                           )}
                         />
                       ) : (

@@ -205,10 +205,11 @@ export function reconcileDozen(
 ): { piece: number | null; dozen: number | null } {
   const per = piecesPerDozen > 0 ? piecesPerDozen : 12;
   const positive = (n: number | null | undefined) => (n != null && n > 0 ? n : null);
-  // المخزَّن مقرَّب لأربع خانات والمكتوب قد لا يكون — الفرق دون الفلس ليس تعديلاً.
+  // المشتقّ بالدينار الكامل (لا كسور — بطلب المالك): ٢٠٠٬٠٠٠ للدستة = ١٦٬٦٦٧ للقطعة،
+  // لا ١٦٬٦٦٦٫٦٧ تظهر في الفاتورة والدفع. والفرق دون الدينار ليس تعديلاً.
   const same = (a: number | null, b: number | null) =>
-    a === null || b === null ? a === b : Math.abs(a - b) < 0.005;
-  const round = (n: number) => Math.round(n * 10000) / 10000;
+    a === null || b === null ? a === b : Math.abs(a - b) < 0.5;
+  const round = (n: number) => Math.round(n);
 
   const piece = positive(typed.piece);
   const dozen = positive(typed.dozen);

@@ -520,8 +520,14 @@ async function takeInstallment(
   });
   if (thisMonth > 0) return { result: 'already-month', employeeId: penalty.employeeId };
 
-  const per = total.dividedBy(Math.max(1, penalty.installments));
-  const take = per.gte(remaining) ? remaining : per;
+  // القسط بالدينار الكامل (لا كسور — بطلب المالك)، وآخر قسطٍ في الخطّة يأخذ
+  // الباقي كلّه: ١٠٬٠٠٠ على ثلاثة = ٣٬٣٣٣ و٣٬٣٣٣ و٣٬٣٣٤، لا قسطاً رابعاً بدينار.
+  const per = total.dividedBy(Math.max(1, penalty.installments)).floor();
+  const takenBefore = await tx.employeePayment.count({
+    where: { tenantId: user.tenantId, employeeId: penalty.employeeId, isDeleted: false, note },
+  });
+  const last = takenBefore + 1 >= penalty.installments;
+  const take = last || per.lte(0) || per.gte(remaining) ? remaining : per;
 
   await tx.employeePayment.create({
     data: {
@@ -702,7 +708,7 @@ export async function createDeduction(_prev: FormState, formData: FormData): Pro
   revalidatePath(`/hr/${d.employeeId}`);
   if (returnPath) revalidatePath(returnPath);
 
-  const per = dec(d.amount).dividedBy(d.installments);
+  const per = dec(d.amount).dividedBy(d.installments).floor();
   return {
     ok: [
       `سُجّل الخصم ${created.number}: ${d.installments} قسط، القسط ${formatMoney(per)}.`,

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { compareVariants, dec, formatQty, PRICE_SERVICE_AR, coverageGaps } from '@erp/domain';
+import { compareVariants, dec, formatMoney, formatQty, PRICE_SERVICE_AR, coverageGaps } from '@erp/domain';
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -475,7 +475,7 @@ export default async function ProductDetailPage({
                     {t.maxQty === null ? `${t.minQty} فأكثر` : `${t.minQty} – ${t.maxQty}`}
                   </td>
                   <td className="tnum px-4 py-2.5 font-medium text-txt">
-                    {Number(t.price).toLocaleString('ar-IQ')} {t.currency}
+                    {formatMoney(t.price)} {t.currency}
                   </td>
                   <td className="px-4 py-2.5 text-[0.7rem] text-txt-4">
                     {t.variantId

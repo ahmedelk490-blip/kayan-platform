@@ -1,5 +1,6 @@
 'use client';
 
+import { formatMoney } from '@erp/domain';
 import { useActionState, useState } from 'react';
 import { SubmitButton, FormError } from '@/components/crud/Form';
 import type { FormState } from '@/lib/ops';
@@ -58,7 +59,7 @@ export function ReturnForm({
                   <td className={`tnum px-3 py-2 ${remaining === 0 ? 'text-txt-4' : 'text-txt-2'}`}>
                     {remaining}{l.returned > 0 && <span className="text-[0.7rem] text-txt-4"> (رُجِّع {l.returned})</span>}
                   </td>
-                  <td className="tnum px-3 py-2 text-txt-3">{l.unitPrice.toLocaleString('ar-IQ')}</td>
+                  <td className="tnum px-3 py-2 text-txt-3">{formatMoney(l.unitPrice)}</td>
                   <td className="px-3 py-2">
                     {remaining === 0 ? (
                       <span className="text-[0.7rem] text-txt-4">مُرجَع بالكامل</span>
@@ -82,7 +83,7 @@ export function ReturnForm({
                     )}
                   </td>
                   <td className="tnum px-3 py-2 font-medium text-brand">
-                    {q > 0 ? (q * l.unitPrice).toLocaleString('ar-IQ') : '—'}
+                    {q > 0 ? formatMoney(q * l.unitPrice) : '—'}
                   </td>
                 </tr>
               );
@@ -117,7 +118,7 @@ export function ReturnForm({
 
       <div className="flex items-center justify-between gap-3 border-t border-line pt-4">
         <span className="text-sm text-txt-2">
-          إجمالي المرتجع: <span className="tnum font-bold text-brand">{total.toLocaleString('ar-IQ')} د.ع</span>
+          إجمالي المرتجع: <span className="tnum font-bold text-brand">{formatMoney(total)} د.ع</span>
         </span>
         <SubmitButton label="تسجيل المرتجع" />
       </div>

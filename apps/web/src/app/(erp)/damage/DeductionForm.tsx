@@ -33,7 +33,8 @@ export function DeductionForm({
   const [count, setCount] = useState('1');
 
   const n = Math.max(1, Math.min(36, Math.round(Number(count) || 1)));
-  const per = (Number(amount) || 0) / n;
+  // بالدينار الكامل كما يُستقطع فعلاً — وآخر قسطٍ يأخذ الفرق.
+  const per = Math.floor((Number(amount) || 0) / n);
   const err = state.fieldErrors ?? {};
 
   return (
