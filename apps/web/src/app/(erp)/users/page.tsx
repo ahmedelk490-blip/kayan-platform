@@ -13,7 +13,8 @@ import { authDb } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import { CreateUserForm, ResetPasswordForm, PermissionsModal } from './UserForms';
-import { createUser, resetPassword, setUserActive, grantableRoles } from './actions';
+import { createUser, resetPassword, setUserActive, grantableRoles, deleteEmployee } from './actions';
+import { ConfirmButton } from '@/components/crud/ConfirmButton';
 
 export const metadata: Metadata = { title: 'حسابات الفريق' };
 
@@ -125,6 +126,11 @@ export default async function UsersPage() {
                           >
                             {u.isActive ? 'تعطيل' : 'تفعيل'}
                           </button>
+                        </form>
+                      )}
+                      {!isAdmin && !isSelf && (
+                        <form action={deleteEmployee.bind(null, u.id, '/users')}>
+                          <ConfirmButton label="حذف" message={`حذف ${u.nameAr ?? u.name} من النظام نهائياً؟ تُحذف دفعات راتبه وجزاءاته ومصروفاته، وتبقى الفواتير والحركات التي سجّلها بلا اسمه. لا يمكن التراجع.`} />
                         </form>
                       )}
                       {isSelf && <span className="text-[0.7rem] text-txt-4">أنت</span>}

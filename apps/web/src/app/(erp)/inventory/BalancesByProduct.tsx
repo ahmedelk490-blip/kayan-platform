@@ -125,6 +125,9 @@ export function BalancesByProduct({
 
   const totalOut = groups.reduce((n, g) => n + g.out, 0);
   const totalLow = groups.reduce((n, g) => n + g.low, 0);
+  // المجموع لكل المنتجات (بطلب المالك) — القطع والدست معاً.
+  const totalPieces = groups.reduce((n, g) => n + g.pieces, 0);
+  const totalDozens = groups.reduce((n, g) => n + g.dozens, 0);
 
   return (
     <section>
@@ -153,8 +156,16 @@ export function BalancesByProduct({
         </div>
       </div>
 
+      <div className="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 rounded-xl border border-brand/30 bg-brand-soft px-4 py-3">
+        <span className="text-xs text-txt-2">المجموع لكل المنتجات</span>
+        <span className="tnum text-lg font-bold text-brand">{totalPieces.toLocaleString('en-US')} قطعة</span>
+        <span className="tnum text-xs text-txt-3">
+          {totalDozens.toLocaleString('en-US')} دست · {groups.length} موديل
+        </span>
+      </div>
+
       <p className="mb-4 text-[0.7rem] leading-[1.8] text-txt-4">
-        {groups.length} موديل · {totalOut > 0 && <span className="text-bad">{totalOut} صنف نافذ</span>}
+        {totalOut > 0 && <span className="text-bad">{totalOut} صنف نافذ</span>}
         {totalOut > 0 && totalLow > 0 && ' · '}
         {totalLow > 0 && <span className="text-warn">{totalLow} قارب على النفاد</span>}
         {totalOut === 0 && totalLow === 0 && <span className="text-ok">كل الأصناف فوق حدّها</span>}
@@ -215,7 +226,8 @@ export function BalancesByProduct({
                     <div className="space-y-2.5">
                       {g.colors.map((c) => (
                         <div key={c.key} className="flex flex-wrap items-center gap-2">
-                          <span className="flex w-28 shrink-0 items-center gap-1.5">
+                          {/* اسم اللون كاملاً (بطلب المالك): كان يُقصّ عند 7rem فيُقرأ «اسود ياخه بر…». */}
+                          <span className="flex min-w-[7rem] max-w-full items-center gap-1.5 sm:max-w-[16rem]">
                             {c.hex && (
                               <span
                                 aria-hidden
@@ -223,7 +235,7 @@ export function BalancesByProduct({
                                 className="h-3 w-3 shrink-0 rounded-full border border-line-2"
                               />
                             )}
-                            <span className="truncate text-xs font-medium text-txt-2">{c.name}</span>
+                            <span className="text-xs font-medium leading-snug text-txt-2">{c.name}</span>
                           </span>
                           <span className="flex flex-wrap gap-1.5">
                             {c.cells.map((x) => (
@@ -239,6 +251,13 @@ export function BalancesByProduct({
                                 </span>
                               </span>
                             ))}
+                            {/* مجموع اللون — كل مقاساته معاً. */}
+                            <span className="flex min-w-[3.25rem] flex-col items-center rounded-lg border border-brand/40 bg-brand-soft px-2 py-1 text-brand">
+                              <span className="text-[0.6rem] leading-tight opacity-80">المجموع</span>
+                              <span dir="ltr" className="tnum text-sm font-bold leading-tight">
+                                {c.cells.reduce((n, x) => n + x.onHand, 0)}
+                              </span>
+                            </span>
                           </span>
                         </div>
                       ))}

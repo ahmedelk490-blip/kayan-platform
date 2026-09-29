@@ -14,7 +14,8 @@ import {
   type PermissionKey,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
-import { authDb } from '@/lib/prisma';
+import { redirect } from 'next/navigation';
+import { authDb, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 
 export interface FormState {
@@ -205,6 +206,61 @@ export async function setUserActive(userId: string, active: boolean) {
   });
 
   revalidatePath('/users');
+}
+
+/**
+ * حذف موظفٍ من النظام كلّه — بطلب المالك.
+ *
+ * الإيقاف كان البديل الوحيد، فبقي كل موظفٍ جُرِّب أو غادر في قوائم الرواتب
+ * والمصروفات إلى الأبد. والحذف هنا حذفٌ فعلي لما يخصّه وحده: دفعات راتبه
+ * وخصوماته، وجزاءاته، والمصروفات المسجّلة باسمه.
+ *
+ * وما سجّله للشركة يبقى: فواتيره ودفعات الزبائن وحركات المخزون مالٌ وبضاعة
+ * حقيقيان، فتبقى بلا اسمه (القاعدة تُفرغ الحقل) ولا تُمسّ أرقامها.
+ *
+ * لا يحذف المرء نفسه، ولا يُحذف مدير النظام إلا بيد مدير نظامٍ آخر.
+ */
+export async function deleteEmployee(userId: string, back: string): Promise<void> {
+  const actor = await requirePermission('users.manage');
+  const target = await authDb.user.findFirst({
+    where: { id: userId, tenantId: actor.tenantId },
+    include: { role: true },
+  });
+  if (!target || target.id === actor.id) redirect(back);
+  if (target.role.key === 'ADMIN') {
+    const admins = await authDb.user.count({
+      where: { tenantId: actor.tenantId, role: { key: 'ADMIN' } },
+    });
+    if (actor.role !== 'ADMIN' || admins <= 1) redirect(back);
+  }
+
+  const removed = await tenantTransaction(async (tx) => {
+    const payments = await tx.employeePayment.deleteMany({
+      where: { tenantId: actor.tenantId, employeeId: userId },
+    });
+    // سجلّ كل جزاءٍ يُحذف معه (Cascade).
+    const penalties = await tx.penalty.deleteMany({
+      where: { tenantId: actor.tenantId, employeeId: userId },
+    });
+    const expenses = await tx.secondaryExpense.updateMany({
+      where: { tenantId: actor.tenantId, employeeId: userId, isDeleted: false },
+      data: { isDeleted: true, deletedAt: new Date() },
+    });
+    await tx.user.deleteMany({ where: { id: userId, tenantId: actor.tenantId } });
+    return { payments: payments.count, penalties: penalties.count, expenses: expenses.count };
+  });
+
+  await audit({
+    tenantId: actor.tenantId,
+    userId: actor.id,
+    action: 'user.delete',
+    entityType: 'User',
+    entityId: userId,
+    detail: `${target.nameAr ?? target.name} (${target.email}) · دفعات ${removed.payments} · جزاءات ${removed.penalties} · مصروفات ${removed.expenses}`,
+  });
+
+  for (const path of ['/users', '/hr', '/expenses', '/damage', '/reports/employees']) revalidatePath(path);
+  redirect(back);
 }
 
 /** الأدوار المتاحة للمنح، بأسمائها العربية. */
