@@ -130,13 +130,13 @@ export default async function DailyPage() {
   const collected = payments.reduce((s, p) => s.plus(dec(p.amount)), dec(0));
 
   const returnsTotal = returns.reduce((s, r) => s.plus(dec(r.totalAmount)), dec(0));
-  const expensesTotal = expenses.reduce((s, e) => s.plus(dec(e.amount)), dec(0));
-  const pendingExpenses = expenses.filter((e) => e.status === 'PENDING').length;
+  const pending = expenses.filter((e) => e.status === 'PENDING');
+  const pendingExpenses = pending.length;
+  const pendingAmount = pending.reduce((s, e) => s.plus(dec(e.amount)), dec(0));
   // صافي النقد يخصم المعتمد وحده — كبقية التقارير. خصمُ مطالبةٍ لم تُعتمد
   // (وقد تُرفض) كان يُظهر الصندوق ناقصاً بمبلغ لم يخرج.
-  const approvedExpenses = expenses
-    .filter((e) => e.status === 'APPROVED')
-    .reduce((s, e) => s.plus(dec(e.amount)), dec(0));
+  const approved = expenses.filter((e) => e.status === 'APPROVED');
+  const approvedExpenses = approved.reduce((s, e) => s.plus(dec(e.amount)), dec(0));
 
   // أفضل الأصناف اليوم — بعدد القطع من بنود فواتير اليوم. بند التوصيل 🚚
   // ليس صنفاً فلا يدخل الترتيب ولا العدّ.
@@ -170,8 +170,10 @@ export default async function DailyPage() {
   const familyRows = [...families.entries()].sort((a, b) => b[1].month - a[1].month);
   const monthPieces = familyRows.reduce((s, [, f]) => s + f.month, 0);
 
-  // مصاريف اليوم كلّها: المتغيّرة المسجّلة اليوم + حصّة اليوم من الثابتة.
-  const obligationsToday = expensesTotal.plus(fixedDaily);
+  // مصاريف اليوم = ما يُخصَم من صافيه فعلاً: المعتمد من المتغيّرة + حصّة اليوم
+  // من الثابتة. كان الرقم يجمع غير المعتمد أيضاً والصافي تحته لا يخصمه —
+  // فمن طرح الخانة من المقبوض بيده وصل إلى رقمٍ غير المكتوب.
+  const obligationsToday = approvedExpenses.plus(fixedDaily);
   const cashNet = (byMethod.get('CASH') ?? dec(0)).minus(approvedExpenses).minus(fixedDaily);
 
   return (
@@ -209,8 +211,10 @@ export default async function DailyPage() {
           <p className="text-[0.7rem] text-txt-3">مصاريف اليوم</p>
           <p className="tnum mt-1 text-xl font-bold text-bad">{formatMoney(obligationsToday)}</p>
           <p className="tnum mt-0.5 text-[0.7rem] leading-[1.7] text-txt-4">
-            متغيّرة {formatMoney(expensesTotal)} ({expenses.length})
-            {pendingExpenses > 0 ? ` — ${pendingExpenses} قيد الموافقة` : ''}
+            متغيّرة {formatMoney(approvedExpenses)} ({approved.length})
+            {pendingExpenses > 0
+              ? ` — قيد الموافقة ${formatMoney(pendingAmount)} (${pendingExpenses}) لا تُخصَم قبل اعتمادها`
+              : ''}
             <br />
             ثابتة {formatMoney(fixedDaily)} — رواتب {formatMoney(salariesDaily)} + التزامات{' '}
             {formatMoney(recurringDaily)}
@@ -223,8 +227,9 @@ export default async function DailyPage() {
         <div>
           <p className="text-sm font-semibold text-txt">صافي كاش اليوم</p>
           <p className="mt-0.5 text-[0.7rem] leading-[1.8] text-txt-4">
-            المقبوض نقداً − مصاريف اليوم − حصّة اليوم من الرواتب والثابت
-            ({formatMoney(fixedDaily)} ÷ {daysInMonth} يوماً)
+            المقبوض نقداً − المصاريف المعتمدة − حصّة اليوم من الرواتب والثابت
+            ({formatMoney(salariesMonthly.plus(recurringMonthly))} ÷ {daysInMonth} يوماً ={' '}
+            {formatMoney(fixedDaily)})
           </p>
         </div>
         <p className={`tnum text-2xl font-bold ${cashNet.gte(0) ? 'text-ok' : 'text-bad'}`}>

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { balance, dec, exceedsBalance, PAYMENT_METHODS } from '@erp/domain';
+import { balance, dec, exceedsBalance, formatMoney, PAYMENT_METHODS } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
@@ -69,7 +69,7 @@ export async function recordSupplierPayment(
   if (exceedsBalance(parsed.data.amount, order.total, order.paidAmount)) {
     return {
       fieldErrors: {
-        amount: `المبلغ يتجاوز المتبقي (${balance(order.total, order.paidAmount).toString()}).`,
+        amount: `المبلغ يتجاوز المتبقي (${formatMoney(balance(order.total, order.paidAmount))}).`,
       },
     };
   }
@@ -87,11 +87,11 @@ export async function recordSupplierPayment(
     if (!fresh) return { error: 'أمر الشراء غير موجود.' } as const;
     if (exceedsBalance(parsed.data.amount, fresh.total, fresh.paidAmount)) {
       return {
-        error: `المبلغ يتجاوز المتبقي (${balance(fresh.total, fresh.paidAmount).toString()}).`,
+        error: `المبلغ يتجاوز المتبقي (${formatMoney(balance(fresh.total, fresh.paidAmount))}).`,
       } as const;
     }
 
-    const number = await nextPurchaseNumber('SPY', user.tenantId);
+    const number = await nextPurchaseNumber('SPY', user.tenantId, tx);
     await tx.supplierPayment.create({
       data: {
         tenantId: user.tenantId,
@@ -154,7 +154,7 @@ export async function reverseSupplierPayment(
     // المعكوسة لا تُعكس، والعكس نفسه لا يُعكس.
     if (!payment || payment.reversedBy || payment.reversesId) return null;
 
-    const number = await nextPurchaseNumber('SPY', user.tenantId);
+    const number = await nextPurchaseNumber('SPY', user.tenantId, tx);
     await tx.supplierPayment.create({
       data: {
         tenantId: user.tenantId,

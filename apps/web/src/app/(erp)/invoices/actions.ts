@@ -14,6 +14,7 @@ import {
   calcLine,
   calcDocument,
   dec,
+  formatMoney,
   isOrderSource,
   PRICE_SERVICE_AR,
   type PriceService,
@@ -946,7 +947,7 @@ export async function recordPayment(
   if (exceedsBalance(parsed.data.amount, netTotal, invoice.paidAmount)) {
     return {
       fieldErrors: {
-        amount: `المبلغ يتجاوز المتبقي (${balance(netTotal, invoice.paidAmount).toString()}).`,
+        amount: `المبلغ يتجاوز المتبقي (${formatMoney(balance(netTotal, invoice.paidAmount))}).`,
       },
     };
   }
@@ -971,7 +972,7 @@ export async function recordPayment(
     );
     if (exceedsBalance(parsed.data.amount, freshNet, fresh.paidAmount)) {
       return {
-        error: `المبلغ يتجاوز المتبقي (${balance(freshNet, fresh.paidAmount).toString()}).`,
+        error: `المبلغ يتجاوز المتبقي (${formatMoney(balance(freshNet, fresh.paidAmount))}).`,
       } as const;
     }
 

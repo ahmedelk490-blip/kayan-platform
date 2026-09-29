@@ -4,12 +4,16 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import sharp from 'sharp';
-import { isPriceService, dec } from '@erp/domain';
+import { isPriceService, dec, reconcileDozen } from '@erp/domain';
 import { userCan } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 import { normalizeDigits } from '@/lib/num';
+
+// libvips يفتح خيطاً لكل نواة عند معالجة الصورة — 64 على خادم النشر، والحساب
+// مشترك يتقاسم سقف الخيوط. رفعُ صورة منتجٍ لا يحتاج أكثر من خيطين.
+sharp.concurrency(2);
 
 export interface FormState {
   error?: string;
@@ -60,6 +64,10 @@ function read(formData: FormData) {
 /**
  * حقول الدستة المحسوبة: قطع الدستة وتكلفتها وسعرها، وتكلفة/سعر القطعة مشتقّان
  * بالقسمة (إن أُدخلت الدستة)، وإلا تُستعمل التكلفة/السعر المباشران كما هما.
+ *
+ * «أُدخلت» تعني أكبر من صفر: خانة الدستة تُرسَل «0» حين لا تُستعمل، وكان
+ * الصفر يُعدّ دستةً فيُحفَظ سعر القطعة المكتوب صفراً. القاعدة كلّها في
+ * `reconcileDozen`.
  */
 function dozenFields(
   d: {
@@ -69,25 +77,43 @@ function dozenFields(
     cost?: string;
     sellingPrice?: string;
   },
-  /**
-   * التكلفة الحالية حين لا يملك المرسِل صلاحية رؤيتها.
-   *
-   * حقول التكلفة لا تُرسَل أصلاً لمن لا يراها (فلا تظهر في الصفحة ولو مخفيّة)،
-   * فلو أُهملت هنا لمُحيت بمجرّد تعديل الاسم. تُحفَظ كما هي بدلاً من ذلك.
-   */
-  keepCost?: { dozenCost: number | null; cost: number | null },
+  options: {
+    /** المخزَّن قبل التعديل — ليُعرَف أيّ الخانتين غيّرها المستخدم. */
+    stored?: {
+      sellingPrice: number | null;
+      dozenPrice: number | null;
+      cost: number | null;
+      dozenCost: number | null;
+    };
+    /**
+     * التكلفة الحالية حين لا يملك المرسِل صلاحية رؤيتها.
+     *
+     * حقول التكلفة لا تُرسَل أصلاً لمن لا يراها (فلا تظهر في الصفحة ولو
+     * مخفيّة)، فلو أُهملت هنا لمُحيت بمجرّد تعديل الاسم. تُحفَظ كما هي.
+     */
+    keepCost?: { dozenCost: number | null; cost: number | null };
+  } = {},
 ) {
+  const { stored, keepCost } = options;
   const pieces = Math.max(1, Math.round(Number(d.piecesPerDozen) || 12));
-  const dc = num(d.dozenCost);
-  const dp = num(d.dozenPrice);
-  const costFields = keepCost
-    ? { dozenCost: keepCost.dozenCost, cost: keepCost.cost }
-    : { dozenCost: dc, cost: dc !== null ? dc / pieces : num(d.cost) };
+  const price = reconcileDozen(
+    pieces,
+    { piece: num(d.sellingPrice), dozen: num(d.dozenPrice) },
+    stored && { piece: stored.sellingPrice, dozen: stored.dozenPrice },
+  );
+  const cost = keepCost
+    ? { piece: keepCost.cost, dozen: keepCost.dozenCost }
+    : reconcileDozen(
+        pieces,
+        { piece: num(d.cost), dozen: num(d.dozenCost) },
+        stored && { piece: stored.cost, dozen: stored.dozenCost },
+      );
   return {
     piecesPerDozen: pieces,
-    ...costFields,
-    dozenPrice: dp,
-    sellingPrice: dp !== null ? dp / pieces : num(d.sellingPrice),
+    dozenCost: cost.dozen,
+    cost: cost.piece,
+    dozenPrice: price.dozen,
+    sellingPrice: price.piece,
   };
 }
 
@@ -275,15 +301,20 @@ export async function updateProduct(
       barcode: parsed.data.barcode || null,
       descriptionAr: parsed.data.descriptionAr || null,
       // من لا يملك صلاحية التكلفة لا يُرسلها ولا يمسّها: تبقى كما هي.
-      ...dozenFields(
-        parsed.data,
-        userCan(user.role, user.overrides, 'cost.view')
+      ...dozenFields(parsed.data, {
+        stored: {
+          sellingPrice: current.sellingPrice === null ? null : Number(current.sellingPrice),
+          dozenPrice: current.dozenPrice === null ? null : Number(current.dozenPrice),
+          cost: current.cost === null ? null : Number(current.cost),
+          dozenCost: current.dozenCost === null ? null : Number(current.dozenCost),
+        },
+        keepCost: userCan(user.role, user.overrides, 'cost.view')
           ? undefined
           : {
               dozenCost: current.dozenCost === null ? null : Number(current.dozenCost),
               cost: current.cost === null ? null : Number(current.cost),
             },
-      ),
+      }),
       status: parsed.data.status,
     },
   });

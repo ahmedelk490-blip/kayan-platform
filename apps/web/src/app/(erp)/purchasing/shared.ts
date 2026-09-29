@@ -15,16 +15,19 @@ export interface FormState {
 export async function nextPurchaseNumber(
   kind: 'PO' | 'GRN' | 'SPY',
   tenantId: string,
+  // The caller's transaction when it has one, so the read does not take a
+  // second pooled connection while the first is held.
+  db: Pick<typeof prisma, 'purchaseOrder' | 'goodsReceipt' | 'supplierPayment'> = prisma,
 ): Promise<string> {
   const stem = `${kind}-${new Date().getFullYear()}-`;
   const where = { tenantId, number: { startsWith: stem } };
   const select = { number: true } as const;
   const rows =
     kind === 'PO'
-      ? await prisma.purchaseOrder.findMany({ where, select })
+      ? await db.purchaseOrder.findMany({ where, select })
       : kind === 'GRN'
-        ? await prisma.goodsReceipt.findMany({ where, select })
-        : await prisma.supplierPayment.findMany({ where, select });
+        ? await db.goodsReceipt.findMany({ where, select })
+        : await db.supplierPayment.findMany({ where, select });
 
   const max = rows.reduce((acc, r) => {
     const n = Number.parseInt(r.number.slice(stem.length), 10);

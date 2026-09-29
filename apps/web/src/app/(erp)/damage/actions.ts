@@ -479,7 +479,7 @@ export async function collectPenaltyInstallment(
       data: {
         tenantId: user.tenantId,
         // نفس بادئة دفعات الموظّفين فلا يتصادم رقمان من مولّدين.
-        number: await nextOpsNumber('employeePayment', 'EP', user.tenantId),
+        number: await nextOpsNumber('employeePayment', 'EP', user.tenantId, tx),
         employeeId: penalty.employeeId,
         kind: 'DEDUCTION',
         amount: take.toString(),

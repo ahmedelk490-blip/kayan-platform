@@ -77,6 +77,19 @@ export function ProductForm({
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   useFormSuccess(state.ok, onSuccess);
 
+  // خانات السعر والتكلفة تُعاد من المخزَّن بعد كل حفظ.
+  //
+  // القطعة والدستة يُشتقّ أحدهما من الآخر عند الحفظ، فيتغيّر المخزَّن في خانةٍ
+  // لم يلمسها المستخدم. والخانة تحتفظ بما كان فيها، فحفظٌ ثانٍ بلا تحديثٍ
+  // للصفحة كان يُرسل الرقم القديم — فيبدو تعديلاً ويُلغي ما حُفظ للتوّ.
+  const priced = [
+    values?.sellingPrice,
+    values?.dozenPrice,
+    values?.cost,
+    values?.dozenCost,
+    values?.piecesPerDozen,
+  ].join('|');
+
   return (
     <form action={formAction} className="space-y-5" noValidate>
       <FormError message={state.error} />
@@ -95,6 +108,7 @@ export function ProductForm({
           defaultValue={values?.categoryId}
         />
         <Field
+          key={`price-${priced}`}
           name="sellingPrice"
           label="سعر البيع"
           type="number"
@@ -106,7 +120,7 @@ export function ProductForm({
 
       {/* نظام الدستة — قطع الدستة (متغيّر) وتكلفتها وسعرها، وتكلفة/سعر القطعة
           يُحسبان تلقائياً. */}
-      <DozenSection values={values} seeCosts={seeCosts} />
+      <DozenSection key={`dozen-${priced}`} values={values} seeCosts={seeCosts} />
 
       {/* الألوان والمقاسات — تُنشئ المتغيّرات وتظهر في المخزون. عند الإنشاء فقط. */}
       {showVariants && (colors.length > 0 || sizes.length > 0) && (
@@ -132,6 +146,7 @@ export function ProductForm({
                 مخفيّة. والخادم يُبقي المخزَّن كما هو حين تغيب. */}
             {seeCosts ? (
               <Field
+                key={`cost-${priced}`}
                 name="cost"
                 label="التكلفة"
                 type="number"
@@ -225,7 +240,15 @@ function DozenSection({ values, seeCosts }: { values?: ProductValues; seeCosts: 
             <input name="dozenCost" type="number" min="0" step="0.01" dir="ltr" value={dozenCost}
               onChange={(e) => setDozenCost(Math.max(0, Number(e.target.value) || 0))}
               className="erp-input py-2.5 text-start" />
-            <span className="mt-1 block text-[0.7rem] text-txt-4">تكلفة القطعة: <span className="tnum font-semibold text-brand">{formatMoney(pieceCost)}</span></span>
+            {/* صفرٌ هنا يعني «لا أسعّر بالدستة» لا «التكلفة صفر» — فلا يُعرَض
+                «تكلفة القطعة: 0» فوق تكلفةٍ كُتبت في خانتها. */}
+            <span className="mt-1 block text-[0.7rem] text-txt-4">
+              {dozenCost > 0 ? (
+                <>تكلفة القطعة: <span className="tnum font-semibold text-brand">{formatMoney(pieceCost)}</span></>
+              ) : (
+                'اتركها صفراً إن كتبت تكلفة القطعة'
+              )}
+            </span>
           </label>
         ) : null}
         <label className="block">
@@ -233,7 +256,13 @@ function DozenSection({ values, seeCosts }: { values?: ProductValues; seeCosts: 
           <input name="dozenPrice" type="number" min="0" step="0.01" dir="ltr" value={dozenPrice}
             onChange={(e) => setDozenPrice(Math.max(0, Number(e.target.value) || 0))}
             className="erp-input py-2.5 text-start" />
-          <span className="mt-1 block text-[0.7rem] text-txt-4">سعر القطعة: <span className="tnum font-semibold text-brand">{formatMoney(piecePrice)}</span></span>
+          <span className="mt-1 block text-[0.7rem] text-txt-4">
+            {dozenPrice > 0 ? (
+              <>سعر القطعة: <span className="tnum font-semibold text-brand">{formatMoney(piecePrice)}</span></>
+            ) : (
+              'اتركها صفراً إن كتبت «سعر البيع» للقطعة'
+            )}
+          </span>
         </label>
       </div>
 

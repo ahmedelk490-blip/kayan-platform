@@ -183,6 +183,44 @@ export function piecePrice(product: {
 }
 
 /**
+ * سعر القطعة وسعر الدستة وجهان لرقمٍ واحد — يُحفَظان متّسقين، ويفوز ما كتبه
+ * المستخدم. والقاعدة نفسها للتكلفة.
+ *
+ * ── لماذا هذا لازم ────────────────────────────────────────
+ *
+ * خانة الدستة حقلٌ يبدأ من صفر، فتُرسَل «0» حين لا تُستعمل. وكان الصفر يُعدّ
+ * «دستةً أُدخلت» فيُقسَم على قطعها ويُحفَظ سعر القطعة صفراً — مهما كتب صاحبه
+ * في خانة «سعر البيع». ومنتجٌ بسعرٍ وتكلفةٍ صفر يُفسد قيمة الهالك وسقف الجزاء
+ * وربح كل فاتورة.
+ *
+ * فالدستة المُدخلة (أكبر من صفر) تحكم وتُشتقّ القطعة منها، وإن لم تُدخل
+ * حُفظت القطعة كما كُتبت. وعند التعديل يفوز ما تغيّر: من عدّل سعر القطعة
+ * وترك الدستة كما هي أراد القطعة، فتُشتقّ الدستة منها — لا أن يُهمَل تعديله
+ * بصمت لأن الدستة القديمة ما زالت في خانتها.
+ */
+export function reconcileDozen(
+  piecesPerDozen: number,
+  typed: { piece: number | null; dozen: number | null },
+  stored?: { piece: number | null; dozen: number | null },
+): { piece: number | null; dozen: number | null } {
+  const per = piecesPerDozen > 0 ? piecesPerDozen : 12;
+  const positive = (n: number | null | undefined) => (n != null && n > 0 ? n : null);
+  // المخزَّن مقرَّب لأربع خانات والمكتوب قد لا يكون — الفرق دون الفلس ليس تعديلاً.
+  const same = (a: number | null, b: number | null) =>
+    a === null || b === null ? a === b : Math.abs(a - b) < 0.005;
+  const round = (n: number) => Math.round(n * 10000) / 10000;
+
+  const piece = positive(typed.piece);
+  const dozen = positive(typed.dozen);
+  if (dozen === null) return { piece: typed.piece, dozen: null };
+
+  const pieceEdited = stored !== undefined && piece !== null && !same(piece, positive(stored.piece));
+  const dozenEdited = stored === undefined || !same(dozen, positive(stored.dozen));
+  if (pieceEdited && !dozenEdited) return { piece, dozen: round(piece * per) };
+  return { piece: round(dozen / per), dozen };
+}
+
+/**
  * ما يُحمَّل على الموظف مقابل هالكٍ أتلفه — **بسعر البيع لا بسعر الجملة**
  * (بطلب المالك): القطعة التالفة لم تُكلّف الشركة ثمن شرائها فحسب، بل حرمتها
  * من بيعها. وحين لا سعر بيع معروفاً يعود الأساس إلى التكلفة المسجَّلة، فلا

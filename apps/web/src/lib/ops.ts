@@ -18,6 +18,14 @@ export interface FormState {
 type Numbered = 'secondaryExpense' | 'damageRecord' | 'penalty' | 'employeePayment';
 
 /**
+ * Where the numbers are read from: the pooled client, or the transaction the
+ * caller is already inside. Inside a transaction the pooled client takes a
+ * second connection while the first is held, and with a pool of five that is
+ * how a burst of writes turns into a wait.
+ */
+type NumberSource = Pick<typeof prisma, Numbered>;
+
+/**
  * Next document number, scoped to tenant and year: EXP-2026-0001.
  *
  * Derived from the highest existing number rather than a counter table, so
@@ -28,6 +36,7 @@ export async function nextOpsNumber(
   model: Numbered,
   prefix: string,
   tenantId: string,
+  db: NumberSource = prisma,
 ): Promise<string> {
   const stem = `${prefix}-${new Date().getFullYear()}-`;
   const where = { tenantId, number: { startsWith: stem } };
@@ -35,12 +44,12 @@ export async function nextOpsNumber(
 
   const rows =
     model === 'secondaryExpense'
-      ? await prisma.secondaryExpense.findMany({ where, select })
+      ? await db.secondaryExpense.findMany({ where, select })
       : model === 'damageRecord'
-        ? await prisma.damageRecord.findMany({ where, select })
+        ? await db.damageRecord.findMany({ where, select })
         : model === 'penalty'
-          ? await prisma.penalty.findMany({ where, select })
-          : await prisma.employeePayment.findMany({ where, select });
+          ? await db.penalty.findMany({ where, select })
+          : await db.employeePayment.findMany({ where, select });
 
   const max = rows.reduce((acc, r) => {
     const n = Number.parseInt(r.number.slice(stem.length), 10);

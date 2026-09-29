@@ -11,6 +11,7 @@ import {
   PRICE_SERVICE_AR,
   MANUAL_ORDER_SOURCES,
   ORDER_SOURCE_AR,
+  compareSizes,
   dec,
 } from '@erp/domain';
 import { FormError } from '@/components/crud/Form';
@@ -577,9 +578,11 @@ function VariantPicker({
   const [color, setColor] = useState(colors.length === 1 ? colors[0].id : colors.length === 0 ? '__none' : '');
   const colorChosen = color !== '';
 
+  // بسُلّم المقاسات (L ثم XL ثم 2XL…) لا بترتيب الحروف: كانت 2XL تسبق L هنا
+  // وحدها بينما الفاتورة والمخزن يعرضانها من الأصغر للأكبر.
   const sizes: Choice[] = dedupe(
     variants.filter((v) => (v.colorId ?? '') === (color === '__none' ? '' : color) && v.sizeId).map((v) => ({ id: v.sizeId!, label: v.sizeCode! })),
-  );
+  ).sort((a, b) => compareSizes(a.label, b.label));
   // الخدمة (طباعة/تطريز…) — تحدّد الشريحة والسعر.
   const services = servicesOf(variants);
   const [service, setService] = useState(services[0] ?? '');
