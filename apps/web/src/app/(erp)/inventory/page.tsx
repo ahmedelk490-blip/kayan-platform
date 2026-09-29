@@ -7,6 +7,7 @@ import { available, dec, formatQty, formatMoney,
 } from '@erp/domain';
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { STOCK_ON_SHELF, STOCK_TO_WATCH, isLiveVariant } from '@/lib/stock';
 import { AppShell } from '@/components/AppShell';
 import { SegmentedTabs } from '@/components/SegmentedTabs';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
@@ -101,6 +102,7 @@ export default async function InventoryPage({
       where: {
         variant: { product: { tenantId: user.tenantId } },
         OR: [{ minStock: { gt: 0 } }, { onHand: { lte: 0 } }],
+        AND: [STOCK_TO_WATCH],
       },
       include: {
         variant: { include: { product: true, color: true, size: true } },
@@ -110,7 +112,7 @@ export default async function InventoryPage({
 
     // الجرد الكامل: كل رصيد بلا استثناء — بالدست والقطعة، والتكلفة والقيمة.
     prisma.stock.findMany({
-      where: { variant: { product: { tenantId: user.tenantId } } },
+      where: { variant: { product: { tenantId: user.tenantId } }, AND: [STOCK_ON_SHELF] },
       include: {
         variant: { include: { product: true, color: true, size: true } },
         warehouse: { select: { nameAr: true } },
@@ -147,9 +149,11 @@ export default async function InventoryPage({
 
   // النافذ = رصيد ≤ 0 (دائماً، ولو بلا حدّ أدنى). القارب = له حدّ وما زال فوق الصفر لكن عنده أو تحته.
   // من الجرد الكامل لا قائمة الأرصدة المحدودة بـ100، فالعدّ يشمل كل الأصناف.
-  const outOfStock = fullStock.filter((s) => stockState(s.onHand, s.minStock) === 'out');
+  const outOfStock = fullStock.filter(
+    (s) => isLiveVariant(s.variant) && stockState(s.onHand, s.minStock) === 'out',
+  );
   const lowStock = fullStock.filter(
-    (s) => stockState(s.onHand, s.minStock) === 'low',
+    (s) => isLiveVariant(s.variant) && stockState(s.onHand, s.minStock) === 'low',
   );
 
   // جدول إعادة الطلب: كل منتج وخامة تحت الحدّ الأدنى، مع مقدار النقص
@@ -245,7 +249,9 @@ export default async function InventoryPage({
     if (!g) {
       g = {
         id: prod.id,
-        name: prod.nameAr,
+        // محذوفٌ ما زال على الرفّ منه شيء: يُعرَض باسمه موسوماً، فيُعرَف لماذا
+        // بقي هنا وقد غاب عن إدارة المنتجات.
+        name: prod.isDeleted ? `${prod.nameAr} (محذوف)` : prod.nameAr,
         sku: prod.sku,
         colors: [],
         pieces: 0,
@@ -261,7 +267,8 @@ export default async function InventoryPage({
       groupMap.set(prod.id, g);
     }
 
-    const state = stockState(st.onHand, st.minStock);
+    // ما حُذف أو عُطّل لا يُعدّ نقصاً ولا يُلوَّن نافذاً: لا أحد يعيد طلبه.
+    const state = isLiveVariant(st.variant) ? stockState(st.onHand, st.minStock) : 'ok';
     const atp = available(st.onHand, st.reserved);
     const unitCost = st.variant.cost ?? prod.cost ?? null;
     const colorKey = st.variant.colorId ?? 'none';

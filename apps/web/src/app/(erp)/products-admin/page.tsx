@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { dec, formatMoney, userCan, stockState } from '@erp/domain';
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { STOCK_ON_SHELF, isLiveVariant } from '@/lib/stock';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader } from '@/components/crud/Shell';
 import { StatCard } from '@/components/dashboard/StatCard';
@@ -28,11 +29,20 @@ export default async function ProductsAdminPage() {
       select: { status: true, category: { select: { nameAr: true } } },
     }),
     prisma.stock.findMany({
-      where: { variant: { product: { tenantId: user.tenantId } } },
+      where: { variant: { product: { tenantId: user.tenantId } }, AND: [STOCK_ON_SHELF] },
       select: {
         onHand: true,
         minStock: true,
-        variant: { select: { cost: true, product: { select: { cost: true, category: { select: { nameAr: true } } } } } },
+        variant: {
+          select: {
+            cost: true,
+            isDeleted: true,
+            isActive: true,
+            product: {
+              select: { cost: true, isDeleted: true, category: { select: { nameAr: true } } },
+            },
+          },
+        },
       },
     }),
     prisma.productVariant.count({ where: { isDeleted: false, product: { tenantId: user.tenantId, isDeleted: false } } }),
@@ -63,7 +73,7 @@ export default async function ProductsAdminPage() {
     }
     // نفس تعريف شاشة المخزون التي يفتحها هذا الكارت — كان يعدّ النافذ ضمن
     // «تحت الحدّ» فيعرض رقماً أكبر مما تعرضه الشاشة عند فتحها.
-    if (stockState(s.onHand, s.minStock) === 'low') lowStock += 1;
+    if (isLiveVariant(s.variant) && stockState(s.onHand, s.minStock) === 'low') lowStock += 1;
   }
 
   const donutPoints = [...countByCat.entries()]

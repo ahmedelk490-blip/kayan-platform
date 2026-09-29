@@ -1,6 +1,7 @@
 import { available, dec } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { withTenant } from '@/lib/prisma';
+import { STOCK_ON_SHELF } from '@/lib/stock';
 import { csvResponse, stampedName } from '../../csv';
 
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,7 @@ export async function GET() {
 
   const stock = await withTenant(user.tenantId, (tx) =>
     tx.stock.findMany({
-      where: { warehouse: { tenantId: user.tenantId, isDeleted: false } },
+      where: { warehouse: { tenantId: user.tenantId, isDeleted: false }, ...STOCK_ON_SHELF },
       include: {
         warehouse: { select: { nameAr: true } },
         variant: {

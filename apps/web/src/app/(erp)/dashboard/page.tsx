@@ -9,6 +9,7 @@ import {
 } from '@erp/domain';
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { STOCK_ON_SHELF, isLiveVariant } from '@/lib/stock';
 import { returnsByInvoice, netOwed } from '@/lib/receivables';
 import { AppShell } from '@/components/AppShell';
 import { WelcomeHeader } from '@/components/dashboard/WelcomeHeader';
@@ -57,8 +58,15 @@ export default async function ManagerDashboard() {
         : [],
       seeInventory
         ? prisma.stock.findMany({
-            where: { warehouse: { tenantId, isDeleted: false } },
-            select: { onHand: true, reserved: true, minStock: true },
+            where: { warehouse: { tenantId, isDeleted: false }, ...STOCK_ON_SHELF },
+            select: {
+              onHand: true,
+              reserved: true,
+              minStock: true,
+              variant: {
+                select: { isDeleted: true, isActive: true, product: { select: { isDeleted: true } } },
+              },
+            },
           })
         : [],
       seeCustomers ? prisma.customer.count({ where: { tenantId, isDeleted: false } }) : 0,
@@ -111,9 +119,11 @@ export default async function ManagerDashboard() {
   );
   const lowStock = stockRows.filter(
     // نفس تعريف بقية الشاشات: الرصيد لا المتاح، وعند الحدّ لا تحته فقط.
-    (r) => stockState(r.onHand, r.minStock) === 'low',
+    (r) => isLiveVariant(r.variant) && stockState(r.onHand, r.minStock) === 'low',
   ).length;
-  const outOfStock = stockRows.filter((r) => stockState(r.onHand, r.minStock) === 'out').length;
+  const outOfStock = stockRows.filter(
+    (r) => isLiveVariant(r.variant) && stockState(r.onHand, r.minStock) === 'out',
+  ).length;
 
   // ── الأوامر ───────────────────────────────────────────────
   const orderTotal = orderRows.reduce((s, r) => s + r._count._all, 0);

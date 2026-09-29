@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { formatMoney, formatQty, valuation, available, dec } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { STOCK_ON_SHELF } from '@/lib/stock';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import { Figure, Empty } from '../Shell';
@@ -23,7 +24,7 @@ export default async function InventoryReport() {
 
   const [stock, supplies] = await Promise.all([
     prisma.stock.findMany({
-      where: { warehouse: { tenantId: user.tenantId, isDeleted: false } },
+      where: { warehouse: { tenantId: user.tenantId, isDeleted: false }, ...STOCK_ON_SHELF },
       include: {
         warehouse: { select: { nameAr: true } },
         variant: {

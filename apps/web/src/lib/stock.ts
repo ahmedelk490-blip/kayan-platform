@@ -1,7 +1,55 @@
 import type Decimal from 'decimal.js';
+import type { Prisma } from '@prisma/client';
 import { tenantTransaction } from './prisma';
 
 type Tx = Parameters<Parameters<typeof tenantTransaction>[0]>[0];
+
+/**
+ * أيُّ أرصدةٍ تُعرَض، وأيّها يُنبَّه عليه — تعريفٌ واحد لكل الشاشات.
+ *
+ * ── لماذا هذا لازم ────────────────────────────────────────
+ *
+ * حذفُ المنتج حذفٌ ناعم: يُعلَّم المنتج محذوفاً وتبقى متغيّراته وصفوف رصيدها
+ * كما هي، ليعود كاملاً إن استُرجع. وشاشات المخزن كانت تقرأ صفوف الرصيد بلا
+ * نظرٍ إلى منتجها — فمن حذف منتجاته ليبدأ كتالوجاً جديداً وجدها كلّها ما
+ * زالت في المخزن «نافذة»، وجرسُ التنبيهات يطالبه بشراء ما حذفه.
+ *
+ * والمتغيّر المعطَّل مثله: المتغيّر الأعمّ يُعطَّل حين تُضاف للموديل ألوانه
+ * ومقاساته، وصفُّ رصيده الصفريّ كان يُعدّ «نافذاً» فيضخّم العدّ.
+ *
+ * ── ولماذا لا يُخفى المحذوف دائماً ─────────────────────────
+ *
+ * منتجٌ حُذف وعلى الرفّ منه عشرون قطعة: القطع موجودة وقيمتها في الميزان.
+ * إخفاؤها يجعل بضاعةً حقيقية لا يراها أحد. فالمحذوف يختفي حين يكون رصيده
+ * صفراً، ويبقى ظاهراً موسوماً «محذوف» ما دام منه شيء — حتى يُصرَف أو يُسوّى.
+ */
+const LIVE_VARIANT = {
+  isDeleted: false,
+  isActive: true,
+  product: { isDeleted: false },
+} satisfies Prisma.ProductVariantWhereInput;
+
+/** ما يظهر في شاشات الأرصدة والجرد: الحيّ، ومعه ما بقي منه شيء على الرفّ. */
+export const STOCK_ON_SHELF = {
+  OR: [
+    { variant: LIVE_VARIANT },
+    { onHand: { not: 0 } },
+    { reserved: { not: 0 } },
+    { damaged: { not: 0 } },
+  ],
+} satisfies Prisma.StockWhereInput;
+
+/** ما يُنبَّه عليه ويُطلَب شراؤه: الحيّ وحده — لا أحد يعيد طلب ما حذفه. */
+export const STOCK_TO_WATCH = { variant: LIVE_VARIANT } satisfies Prisma.StockWhereInput;
+
+/** الحكم نفسه على صفٍّ مقروء — لعدّ النافذ والقارب من قائمةٍ جُلبت بالأوسع. */
+export function isLiveVariant(v: {
+  isDeleted: boolean;
+  isActive: boolean;
+  product: { isDeleted: boolean };
+}): boolean {
+  return !v.isDeleted && v.isActive && !v.product.isDeleted;
+}
 
 /**
  * تعديل رصيد المخزون — بجمعٍ داخل قاعدة البيانات لا بقراءةٍ ثم كتابة.

@@ -2,6 +2,7 @@ import { Logo } from '@erp/brand/logo';
 import {  userCan, dec, type PermissionKey, needsReorder } from '@erp/domain';
 import type { SessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { STOCK_TO_WATCH } from '@/lib/stock';
 import { logoutAction } from '@/app/(erp)/login/actions';
 import { HeaderMenu } from '@/components/HeaderMenu';
 import { AreaTabs } from '@/components/AreaTabs';
@@ -168,7 +169,11 @@ export async function AppShell({
   if (seeInventory) {
     const [lowStock, lowSupplies] = await Promise.all([
       prisma.stock.findMany({
-        where: { minStock: { gt: 0 }, warehouse: { tenantId: user.tenantId, isDeleted: false } },
+        where: {
+          minStock: { gt: 0 },
+          warehouse: { tenantId: user.tenantId, isDeleted: false },
+          ...STOCK_TO_WATCH,
+        },
         include: {
           variant: {
             include: {
@@ -205,7 +210,11 @@ export async function AppShell({
 
     // تنبيه مُجمّع واحد للأصناف النافذة (رصيد ≤ 0) بلا إغراق الجرس بمئات السطور.
     const outCount = await prisma.stock.count({
-      where: { onHand: { lte: 0 }, warehouse: { tenantId: user.tenantId, isDeleted: false } },
+      where: {
+        onHand: { lte: 0 },
+        warehouse: { tenantId: user.tenantId, isDeleted: false },
+        ...STOCK_TO_WATCH,
+      },
     });
     const outAlert: Alert[] = outCount > 0
       ? [{ id: 'stock-out', label: `${outCount} صنف نافذ من المخزون`, detail: 'رصيدها صفر — اضغط لفتح قائمة النواقص وما يجب طلبه', href: '/inventory?tab=reorder' }]
