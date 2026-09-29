@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { dec, formatQty, PRICE_SERVICE_AR, coverageGaps } from '@erp/domain';
+import { compareVariants, dec, formatQty, PRICE_SERVICE_AR, coverageGaps } from '@erp/domain';
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -73,6 +73,12 @@ export default async function ProductDetailPage({
   });
 
   if (!product) notFound();
+  product.variants.sort((a, b) =>
+    compareVariants(
+      { product: '', color: a.color?.nameAr, size: a.size?.code },
+      { product: '', color: b.color?.nameAr, size: b.size?.code },
+    ),
+  );
 
   const options = await loadProductOptions(user.tenantId);
 
@@ -198,6 +204,7 @@ export default async function ProductDetailPage({
           <h3 className="mb-5 text-sm font-semibold text-brand">البيانات</h3>
           <ProductForm
             seeCosts={seeCosts}
+            readOnly={!canWrite}
             action={update}
             // Decimal does not cross into a client component; the form is an
             // input surface and the server recalculates on submit.

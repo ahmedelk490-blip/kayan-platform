@@ -141,7 +141,11 @@ export function TransactionForm({
           required
           dir="ltr"
           defaultValue="0"
-          hint={type === 'PURCHASE' ? 'تُحدِّث آخر سعر معروف' : 'تكلفة الاستهلاك المحمَّلة'}
+          hint={
+            type === 'PURCHASE'
+              ? 'تُحدِّث آخر سعر معروف'
+              : 'اتركها صفراً لتُحسب بمتوسّط تكلفة المستلزم'
+          }
           errors={state.fieldErrors}
         />
         {type === 'CONSUMPTION' && (

@@ -254,3 +254,21 @@ export function compareSizes(a: string | null | undefined, b: string | null | un
   const d = sizeRank(a) - sizeRank(b);
   return d !== 0 ? d : (a ?? '').localeCompare(b ?? '');
 }
+
+/**
+ * ترتيب المتغيّرات في القوائم: الموديل، ثم لونه، ثم مقاسه بسُلّم المقاسات.
+ *
+ * القوائم كانت تُرتَّب بالكود (sku)، والكود حروف: فيأتي 2XL و3XL و4XL قبل L
+ * في قائمة أمر الشراء وأمر الإنتاج وجدول متغيّرات المنتج — بينما الفاتورة
+ * والمخزن يعرضانها من الأصغر للأكبر. قائمةٌ واحدة بترتيبين تُقرأ مرّتين.
+ */
+export function compareVariants(
+  a: { product: string; color?: string | null; size?: string | null },
+  b: { product: string; color?: string | null; size?: string | null },
+): number {
+  return (
+    a.product.localeCompare(b.product, 'ar') ||
+    (a.color ?? '').localeCompare(b.color ?? '', 'ar') ||
+    compareSizes(a.size, b.size)
+  );
+}

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { dec } from '@erp/domain';
+import { compareVariants, dec } from '@erp/domain';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -39,7 +39,15 @@ export async function loadManufacturingOptions(tenantId: string) {
   ]);
 
   return {
-    variants: variants.map((v) => {
+    variants: [...variants]
+      .sort(
+        (a, b) =>
+          compareVariants(
+            { product: a.product.nameAr, color: a.color?.nameAr, size: a.size?.code },
+            { product: b.product.nameAr, color: b.color?.nameAr, size: b.size?.code },
+          ),
+      )
+      .map((v) => {
       const parts = [v.product.nameAr];
       if (v.color) parts.push(v.color.nameAr);
       if (v.size) parts.push(v.size.code);

@@ -201,7 +201,19 @@ export async function recordSupplyTransaction(
   }
 
   const quantity = dec(parsed.data.quantity);
-  const unitCost = dec(parsed.data.unitCost);
+  // استهلاكٌ بلا تكلفةٍ مكتوبة يُقيَّم بمتوسّط تكلفة المستلزم لا بصفر.
+  //
+  // من يسجّل استهلاك ثلاث علب حبرٍ يعرف العدد ولا يحفظ سعر العلبة، فيترك
+  // الخانة على صفرها — فكان الاستهلاك يُقيَّد بلا قيمة، و«استهلاك محمَّل»
+  // يبقى صفراً مهما احترق في الإنتاج. والمتوسّط المرجّح هو ما دُفع فعلاً في
+  // ما على الرفّ؛ وإن لم يُحسب بعد فآخر سعر شراء.
+  const typedCost = dec(parsed.data.unitCost);
+  const unitCost =
+    parsed.data.type === 'CONSUMPTION' && typedCost.lte(0)
+      ? dec(supply.avgCost).gt(0)
+        ? dec(supply.avgCost)
+        : dec(supply.lastUnitCost ?? 0)
+      : typedCost;
   const totalCost = quantity.times(unitCost);
   const delta = supplyDelta(parsed.data.type as 'PURCHASE' | 'CONSUMPTION', quantity);
 

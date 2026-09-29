@@ -326,7 +326,11 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'returns.write',
   ],
 
-  CUSTOMER: ['portal.view', 'products.read'],
+  // العميل يرى بوّابته وحدها. كانت معه products.read فتفتح له شاشات إدارة
+  // المنتجات الداخلية: القائمة، وبطاقة المنتج بتسعيرها ونموذج تعديلها — وبطاقة
+  // المنتج بيد المالك وحده (قاعدته). والبوّابة تعرض المنتجات بصلاحيتها هي
+  // (portal.view) فلا تحتاج تلك.
+  CUSTOMER: ['portal.view'],
 };
 
 /** Deny by default. */

@@ -53,6 +53,7 @@ export function ProductForm({
   submitLabel,
   onSuccess,
   seeCosts = true,
+  readOnly = false,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   values?: ProductValues;
@@ -73,6 +74,11 @@ export function ProductForm({
   onSuccess?: () => void;
   /** تُعرض التكلفة وسعر الجملة؟ تُغلق عن أمين المخزن — يعدّ ويسعّر ولا يعرف الشراء. */
   seeCosts?: boolean;
+  /**
+   * للعرض فقط: من يقرأ المنتجات ولا يعدّلها. كان يرى النموذج بزرّ «حفظ» يعمل
+   * ظاهراً، فيضغطه فيُردّ إلى لوحته بلا كلمة — زرٌّ لا يفعل ما يَعِد به.
+   */
+  readOnly?: boolean;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   useFormSuccess(state.ok, onSuccess);
@@ -91,8 +97,10 @@ export function ProductForm({
   ].join('|');
 
   return (
-    <form action={formAction} className="space-y-5" noValidate>
+    <form action={readOnly ? undefined : formAction} className="space-y-5" noValidate>
       <FormError message={state.error} />
+
+      <fieldset disabled={readOnly} className="m-0 min-w-0 space-y-5 border-0 p-0">
 
       {/* الأساسي: الاسم، الكود، التصنيف، السعر — أربع خانات تكفي لإنشاء منتج. */}
       <div className="grid gap-4 sm:grid-cols-2">
@@ -184,11 +192,18 @@ export function ProductForm({
           </div>
         </div>
       </details>
+      </fieldset>
 
-      <div className="flex items-center gap-3">
-        <SubmitButton label={submitLabel} />
-        {state.ok && !onSuccess && <span className="text-xs text-ok">{state.ok}</span>}
-      </div>
+      {readOnly ? (
+        <p className="text-xs text-txt-4">
+          للعرض فقط — تعديل المنتج لمن يملك صلاحية إدارة المنتجات.
+        </p>
+      ) : (
+        <div className="flex items-center gap-3">
+          <SubmitButton label={submitLabel} />
+          {state.ok && !onSuccess && <span className="text-xs text-ok">{state.ok}</span>}
+        </div>
+      )}
     </form>
   );
 }
