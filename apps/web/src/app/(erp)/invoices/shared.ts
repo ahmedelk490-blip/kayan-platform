@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { iraqYear, dec } from '@erp/domain';
 import { prisma } from '@/lib/prisma';
 import { nextOpsNumber } from '@/lib/ops';
+import { DELIVERY_EXPENSE_NOTE } from '@/lib/delivery';
 
 export interface FormState {
   error?: string;
@@ -149,7 +150,7 @@ export async function recordDeliveryExpense(
   invoice: { id: string; number: string | null; date?: Date | null },
 ): Promise<void> {
   const tag = deliveryExpenseTag(invoice.id);
-  const notes = `أجور توصيل الفاتورة ${invoice.number ?? 'مسودة'} ${tag}`;
+  const notes = `${DELIVERY_EXPENSE_NOTE} ${invoice.number ?? 'مسودة'} ${tag}`;
   const expenseDate = invoice.date ?? new Date();
 
   const existing = await prisma.secondaryExpense.findFirst({

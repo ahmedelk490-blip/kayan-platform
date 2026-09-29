@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 import { nextOpsNumber, parseDateOr, type FormState } from '@/lib/ops';
 import { numeric } from '@/lib/num';
+import { deliveryInvoiceSuffix } from '@/lib/delivery';
 
 const Schema = z.object({
   expenseDate: z.string().optional(),
@@ -105,6 +106,20 @@ export async function setExpenseStatus(id: string, next: string): Promise<void> 
   revalidatePath('/expenses');
 }
 
+/** مصروف توصيلٍ لا فاتورةَ حيّةً وراءه: حُذفت، أو أُلغيت، أو مُسحت. */
+async function isOrphanDelivery(
+  tenantId: string,
+  expense: { category: string; notes: string | null },
+): Promise<boolean> {
+  const suffix = deliveryInvoiceSuffix(expense);
+  if (!suffix) return false;
+  const live = await prisma.invoice.findFirst({
+    where: { tenantId, isDeleted: false, status: { not: 'VOID' }, id: { endsWith: suffix } },
+    select: { id: true },
+  });
+  return !live;
+}
+
 export async function deleteExpense(id: string): Promise<void> {
   const user = await requirePermission('expenses.write');
   const expense = await prisma.secondaryExpense.findFirst({
@@ -114,7 +129,12 @@ export async function deleteExpense(id: string): Promise<void> {
 
   // An approved expense has already counted against a reported profit.
   // Removing it would rewrite that period silently.
-  if (expense.status === 'APPROVED') redirect('/expenses?err=approved');
+  //
+  // إلا مرآةَ توصيلٍ زالت فاتورتها: لم يقدّمها أحدٌ ولم يعتمدها أحد، وُلدت مع
+  // فاتورةٍ لم تعد موجودة — وبقاؤها هو ما يُفسد الربح لا حذفها.
+  if (expense.status === 'APPROVED' && !(await isOrphanDelivery(user.tenantId, expense))) {
+    redirect('/expenses?err=approved');
+  }
 
   await prisma.secondaryExpense.update({
     where: { id },

@@ -20,3 +20,27 @@ export function isDeliveryDesc(description: string | null | undefined): boolean 
  * التوصيل وتبقى قابلة للتعديل: الرقم الشائع لا قاعدة مقفلة.
  */
 export const DELIVERY_DEFAULT_FEE = 5000;
+
+/**
+ * مصروف التوصيل مرآةُ خانةٍ في الفاتورة — وهذه عبارته في الملاحظات.
+ *
+ * يُنشأ معتمَداً مع الفاتورة ويتغيّر بتغيّرها ويزول بإلغائها. والمعتمد لا
+ * يُحذف من شاشة المصروفات، وهذا صحيحٌ لمصروفٍ قدّمه صاحبه — لكن المرآة التي
+ * زالت فاتورتها (مسحٌ شامل، أو حذفٌ قديم) تبقى تخصم من الربح أجرةَ طلبٍ لم
+ * يعد موجوداً ولا سبيل لإزالتها. فتُعرَف المرآة بعبارتها ووسمها، ويُسمَح
+ * بحذف ما صار يتيماً منها.
+ */
+export const DELIVERY_EXPENSE_NOTE = 'أجور توصيل الفاتورة';
+
+/**
+ * آخر ستّة من معرّف الفاتورة التي يتبعها مصروف التوصيل — أو null إن لم يكن
+ * المصروف مرآةَ فاتورة (مصروف شحنٍ سجّله صاحبه بيده مثلاً).
+ */
+export function deliveryInvoiceSuffix(expense: {
+  category: string;
+  notes: string | null;
+}): string | null {
+  if (expense.category !== 'SHIPPING') return null;
+  if (!expense.notes?.startsWith(DELIVERY_EXPENSE_NOTE)) return null;
+  return expense.notes.match(/#([a-z0-9]{6})\s*$/i)?.[1] ?? null;
+}

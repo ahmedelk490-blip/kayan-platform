@@ -26,6 +26,7 @@ import { DonutChartInteractive } from '@/components/dashboard/DonutChartInteract
 import { Toolbar } from '@/components/crud/Toolbar';
 import { parseListQuery, skipTake, type SearchParams } from '@/lib/query';
 import { monthRange, dateInput } from '@/lib/ops';
+import { deliveryInvoiceSuffix } from '@/lib/delivery';
 import { ExpenseForm } from './ExpenseForm';
 import { RecurringForm } from './RecurringForm';
 import { createExpense, setExpenseStatus, deleteExpense, deleteRecurring, postRecurring, addRecurring } from './actions';
@@ -195,6 +196,31 @@ export default async function ExpensesPage({
 
   const canWrite = allows(user, 'expenses.write');
   const canApprove = allows(user, 'expenses.approve');
+
+  // مصاريف توصيلٍ زالت فواتيرها — تُحذف وإن كانت معتمدة (انظر lib/delivery).
+  // تُفحص لصفوف هذه الصفحة وحدها: وسمٌ لكل مرآة، واستعلامٌ واحد عن فواتيرها.
+  const mirrorSuffix = new Map<string, string>();
+  for (const row of rows) {
+    const suffix = deliveryInvoiceSuffix(row);
+    if (suffix) mirrorSuffix.set(row.id, suffix);
+  }
+  const liveSuffixes = new Set(
+    mirrorSuffix.size === 0
+      ? []
+      : (
+          await prisma.invoice.findMany({
+            where: {
+              tenantId: user.tenantId,
+              isDeleted: false,
+              status: { not: 'VOID' },
+              OR: [...new Set(mirrorSuffix.values())].map((s) => ({ id: { endsWith: s } })),
+            },
+            select: { id: true },
+          })
+        ).map((i) => i.id.slice(-6)),
+  );
+  const orphanDelivery = (id: string) =>
+    mirrorSuffix.has(id) && !liveSuffixes.has(mirrorSuffix.get(id)!);
 
   // مصروفات بمبالغ غير منطقية (فوق مليار) — تُفسد كل التقارير حتى تُحذف.
   const suspicious = await prisma.secondaryExpense.findMany({
@@ -513,6 +539,14 @@ export default async function ExpensesPage({
                     <ConfirmButton
                       label="حذف"
                       message={`حذف المصروف ${row.number}؟ لا يُحذف المصروف المعتمد لأنه دخل ربحاً مُعلَناً.`}
+                    />
+                  </form>
+                )}
+                {canWrite && row.status === 'APPROVED' && orphanDelivery(row.id) && (
+                  <form action={deleteExpense.bind(null, row.id)}>
+                    <ConfirmButton
+                      label="حذف — فاتورته محذوفة"
+                      message={`حذف مصروف التوصيل ${row.number}؟ الفاتورة التي سُجّل لها لم تعد موجودة.`}
                     />
                   </form>
                 )}

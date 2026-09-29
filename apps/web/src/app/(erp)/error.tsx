@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
+import { unstable_isUnrecognizedActionError } from 'next/navigation';
 import { applyPendingSchema, type SchemaState } from './admin/schema-actions';
 
 /**
@@ -33,6 +34,35 @@ export default function ErpError({
     {},
   );
 
+  // ── نزل تحديثٌ والصفحة مفتوحة ────────────────────────────────
+  //
+  // من كان يسجّل حركة مخزونٍ لحظةَ نزول نسخةٍ جديدة يضغط «حفظ» بصفحةٍ من
+  // النسخة السابقة، فلا يعرف الخادم الجديد ما طُلب منه. وهذا ليس عطلاً في
+  // الشاشة ولا في البيانات — و«إعادة المحاولة» و«طبّق البنية» لا ينفعان فيه
+  // لأنهما يُرسَلان من الصفحة القديمة نفسها فيُرفَضان مثلها. علاجه الوحيد
+  // تحديث الصفحة، فيُقال ذلك بعينه ويُعرَض زرّه وحده.
+  // يُفحَص كـunknown: الفاحص يضيّق النوع، وخطؤه وخطؤنا متطابقان بنيةً فيصير
+  // ما بعد الشرط never ويضيع منه digest.
+  const staleDeployment: boolean = unstable_isUnrecognizedActionError(error as unknown);
+  if (staleDeployment) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-6 py-10">
+        <div className="erp-card border-warn p-6">
+          <h1 className="mb-2 text-base font-semibold text-warn">نزل تحديثٌ جديد للنظام</h1>
+          <p className="text-xs leading-[1.9] text-txt-2">
+            الصفحة المفتوحة عندك من النسخة السابقة، فلم يُحفَظ آخر ما أدخلته. حدّث الصفحة ثم
+            أعد إدخاله — وما حفظته قبل ذلك سليمٌ كما هو.
+          </p>
+          <div className="mt-4">
+            <button type="button" onClick={() => window.location.reload()} className="erp-btn">
+              تحديث الصفحة
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-6 py-10">
       <div className="erp-card border-bad p-6">
@@ -51,6 +81,13 @@ export default function ErpError({
               {pending ? 'جارٍ التطبيق…' : '🗄 طبّق البنية'}
             </button>
           </form>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="erp-btn-ghost"
+          >
+            تحديث الصفحة
+          </button>
           <a href="/dashboard" className="erp-btn-ghost">
             لوحة المدير
           </a>

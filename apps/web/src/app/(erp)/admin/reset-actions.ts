@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import { runBackup } from '@/lib/backup';
+import { DELIVERY_EXPENSE_NOTE } from '@/lib/delivery';
 import { RESET_GROUPS, type ResetCounts, type ResetState } from './reset-groups';
 
 /**
@@ -132,6 +133,11 @@ export async function resetData(_prev: ResetState, formData: FormData): Promise<
         await tx.invoice.deleteMany({ where: byTenant });
         await tx.webOrderLine.deleteMany({ where: { webOrder: { tenantId } } });
         await tx.webOrder.deleteMany({ where: byTenant });
+        // مصاريف التوصيل مرآةُ الفواتير فتزول معها. كانت تبقى بعد المسح تخصم
+        // من الربح أجرةَ طلباتٍ لم تعد موجودة — ومعتمدةً فلا تُحذف من شاشتها.
+        await tx.secondaryExpense.deleteMany({
+          where: { tenantId, category: 'SHIPPING', notes: { startsWith: DELIVERY_EXPENSE_NOTE } },
+        });
         done.push('المبيعات');
       }
 
