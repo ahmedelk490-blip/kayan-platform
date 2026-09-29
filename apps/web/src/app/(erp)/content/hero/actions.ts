@@ -7,6 +7,10 @@ import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 
+// libvips يفتح خيطاً لكل نواة عند معالجة الصورة — 64 على خادم النشر، والحساب
+// مشترك يتقاسم سقف الخيوط. صورة الواجهة لا تحتاج أكثر من خيطين.
+sharp.concurrency(2);
+
 export interface FormState {
   error?: string;
   ok?: string;

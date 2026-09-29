@@ -44,6 +44,16 @@ const nextConfig: NextConfig = {
    * it cannot find. That failure looks like a hosting problem and is not one.
    */
   outputFileTracingRoot: fileURLToPath(new URL('../..', import.meta.url)),
+
+  /**
+   * البناء بأربعة عمّال لا بعدد الأنوية.
+   *
+   * Next يفتح عاملاً لكل نواة إلا واحدة، وخادم النشر فيه 64 — فالبناء يفتح
+   * 63 عاملاً على حسابٍ مشترك يتقاسم سقف الخيوط مع التطبيق الشغّال نفسه ومع
+   * مواقع أخرى. فكان كل نشرٍ يُسقط ما هو شغّال. أربعة تكفي مشروعاً بهذا
+   * الحجم، والفرق في زمن البناء ثوانٍ.
+   */
+  experimental: { cpus: 4 },
 };
 
 export default nextConfig;
