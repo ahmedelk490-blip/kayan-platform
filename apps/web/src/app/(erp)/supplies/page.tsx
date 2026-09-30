@@ -16,7 +16,8 @@ import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import type { SearchParams } from '@/lib/query';
 import { monthRange, dateInput } from '@/lib/ops';
 import { SupplyForm, TransactionForm } from './SupplyForms';
-import { createSupply, recordSupplyTransaction, updateSupply, deleteSupply } from './actions';
+import { unpostedSupplyPurchases } from '@/lib/supplies';
+import { createSupply, recordSupplyTransaction, updateSupply, deleteSupply, postPastSupplyPurchases } from './actions';
 import { SupplyEditModal } from './SupplyEditModal';
 
 export const metadata: Metadata = { title: 'المستلزمات' };
@@ -70,6 +71,11 @@ export default async function SuppliesPage({
 
   const canWrite = allows(user, 'supplies.write');
 
+  // مشتريات سابقة لم تُحسب في المصروفات — تُعرض على المالك وحده ليقرّر.
+  const unposted =
+    seeCosts && allows(user, 'expenses.approve') ? await unpostedSupplyPurchases(user.tenantId) : [];
+  const unpostedTotal = unposted.reduce((s, t) => s.plus(dec(t.totalCost)), dec(0));
+
   const purchases = dec(monthSpend.find((g) => g.type === 'PURCHASE')?._sum.totalCost ?? 0);
   const consumption = dec(monthSpend.find((g) => g.type === 'CONSUMPTION')?._sum.totalCost ?? 0);
 
@@ -104,10 +110,26 @@ export default async function SuppliesPage({
           )}
         </div>
         <p className="mt-3 text-[0.7rem] text-txt-4">
-          «مشتريات» هو ما خرج من الخزينة هذا الشهر. «استهلاك» هو ما احترق في الإنتاج —
-          الرقمان مختلفان عمداً، ودمجهما يُخفي المخزون الراكد.
+          «مشتريات» هو ما خرج من الخزينة هذا الشهر، ويُقيَّد كل شراءٍ تلقائياً في المصروفات
+          («مستلزمات ولوازم») فيُخصم من الربح. «استهلاك» هو ما احترق في الإنتاج — الرقمان
+          مختلفان عمداً، ودمجهما يُخفي المخزون الراكد.
         </p>
       </section>
+
+      {unposted.length > 0 && (
+        <form
+          action={postPastSupplyPurchases}
+          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warn bg-warn-soft px-4 py-3"
+        >
+          <p className="text-xs leading-[1.9] text-warn">
+            {unposted.length} شراء مستلزمات سابق بمبلغ {formatMoney(unpostedTotal)} لم يُحسب في
+            المصروفات. إن كنت سجّلته بيدك في المصروفات فلا تضغط — يتكرّر.
+          </p>
+          <button type="submit" className="erp-btn">
+            احسبها في المصروفات
+          </button>
+        </form>
+      )}
 
       <div className="mb-4 flex flex-wrap gap-2">
         <Link

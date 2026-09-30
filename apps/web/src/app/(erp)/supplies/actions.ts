@@ -7,7 +7,8 @@ import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 import { numeric } from '@/lib/num';
-import { parseDateOr, type FormState } from '@/lib/ops';
+import { parseDateOr, nextOpsNumber, type FormState } from '@/lib/ops';
+import { supplyExpenseData, unpostedSupplyPurchases } from '@/lib/supplies';
 
 const SupplySchema = z
   .object({
@@ -207,13 +208,24 @@ export async function recordSupplyTransaction(
   // الخانة على صفرها — فكان الاستهلاك يُقيَّد بلا قيمة، و«استهلاك محمَّل»
   // يبقى صفراً مهما احترق في الإنتاج. والمتوسّط المرجّح هو ما دُفع فعلاً في
   // ما على الرفّ؛ وإن لم يُحسب بعد فآخر سعر شراء.
+  //
+  // والشراء بلا سعرٍ مكتوب يُحسب بآخر سعر شراء: أمين المخزن يعدّ ولا يُسأل عن
+  // الأسعار (قاعدة المالك)، ومبلغ الشراء لا بد أن يُقيَّد في المصروفات. وأول
+  // شراءٍ لمستلزمٍ لم يُعرف سعره بعد يُطلب سعره — مالٌ خرج لا يُقيَّد بصفر.
   const typedCost = dec(parsed.data.unitCost);
-  const unitCost =
-    parsed.data.type === 'CONSUMPTION' && typedCost.lte(0)
-      ? dec(supply.avgCost).gt(0)
-        ? dec(supply.avgCost)
-        : dec(supply.lastUnitCost ?? 0)
-      : typedCost;
+  const avg = dec(supply.avgCost);
+  const last = dec(supply.lastUnitCost ?? 0);
+  const unitCost = typedCost.gt(0)
+    ? typedCost
+    : parsed.data.type === 'CONSUMPTION'
+      ? avg.gt(0) ? avg : last
+      : last.gt(0) ? last : avg;
+  const isPurchase = parsed.data.type === 'PURCHASE';
+  if (isPurchase && unitCost.lte(0)) {
+    return {
+      fieldErrors: { unitCost: 'أول شراءٍ لهذا المستلزم — اكتب سعر الوحدة ليُحسب في المصروفات.' },
+    };
+  }
   const totalCost = quantity.times(unitCost);
   const delta = supplyDelta(parsed.data.type as 'PURCHASE' | 'CONSUMPTION', quantity);
 
@@ -228,13 +240,17 @@ export async function recordSupplyTransaction(
     };
   }
 
+  const txDate = parseDateOr(parsed.data.txDate);
+  // رقم المصروف قبل المعاملة: يقرأ أرقام السنة ليعطي التالي، كأجرة التوصيل.
+  const expenseNumber = isPurchase ? await nextOpsNumber('secondaryExpense', 'EXP', user.tenantId) : null;
+
   await tenantTransaction(async (tx) => {
-    await tx.supplyTransaction.create({
+    const created = await tx.supplyTransaction.create({
       data: {
         tenantId: user.tenantId,
         supplyId: supply.id,
         type: parsed.data.type,
-        txDate: parseDateOr(parsed.data.txDate),
+        txDate,
         quantity: quantity.toString(),
         unitCost: unitCost.toString(),
         totalCost: totalCost.toString(),
@@ -247,7 +263,7 @@ export async function recordSupplyTransaction(
     // الشراء يُحدِّث المتوسط المرجّح كما يفعل استلام المشتريات تماماً: كان
     // يُحدِّث آخر سعرٍ وحده ويترك avgCost صفراً، فيأتي أول استلامٍ لاحق
     // فيجد متوسطاً صفراً ويعتمد سعره هو على كل الرصيد — تقييمٌ مضخَّم.
-    const isPurchase = parsed.data.type === 'PURCHASE' && unitCost.gt(0);
+    // (وسعر الشراء فوق الصفر دائماً الآن — رُدَّ ما دونه أعلاه.)
     await tx.supply.update({
       where: { id: supply.id },
       data: {
@@ -265,6 +281,13 @@ export async function recordSupplyTransaction(
           : {}),
       },
     });
+
+    // في المعاملة نفسها: شراءٌ بلا مصروفه أو مصروفٌ بلا شرائه لا يقعان.
+    if (expenseNumber) {
+      await tx.secondaryExpense.create({
+        data: supplyExpenseData(user, expenseNumber, { id: created.id, txDate, quantity, totalCost }, supply),
+      });
+    }
   });
 
   await audit({
@@ -277,5 +300,39 @@ export async function recordSupplyTransaction(
   });
 
   revalidatePath('/supplies');
-  return { ok: 'تم تسجيل الحركة.' };
+  if (isPurchase) revalidatePath('/expenses');
+  return {
+    ok: isPurchase
+      ? `تم تسجيل الشراء وقُيِّد مبلغه في المصروفات${typedCost.gt(0) ? '' : ' بآخر سعر شراء معروف'}.`
+      : 'تم تسجيل الحركة.',
+  };
+}
+
+/**
+ * حساب مشتريات المستلزمات السابقة في المصروفات — بضغطة من المالك.
+ *
+ * ما سُجّل قبل ربط الشراء بالمصروفات بقي خارج الربح. ولا يُقيَّد وحده: لعلّ
+ * المالك سجّله بيده في المصروفات يومها، فالتقييد الآلي يكرّره. فيُعرض عليه
+ * بعدده ومبلغه ويقرّر هو.
+ */
+export async function postPastSupplyPurchases(): Promise<void> {
+  const user = await requirePermission('expenses.approve');
+  const pending = await unpostedSupplyPurchases(user.tenantId);
+  if (pending.length === 0) return;
+
+  for (const t of pending) {
+    const number = await nextOpsNumber('secondaryExpense', 'EXP', user.tenantId);
+    await prisma.secondaryExpense.create({ data: supplyExpenseData(user, number, t, t.supply) });
+  }
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'supply.postExpenses',
+    entityType: 'Supply',
+    detail: `${pending.length} شراء مستلزمات حُسب في المصروفات`,
+  });
+
+  revalidatePath('/supplies');
+  revalidatePath('/expenses');
 }

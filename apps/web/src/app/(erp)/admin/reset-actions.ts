@@ -6,6 +6,7 @@ import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import { runBackup } from '@/lib/backup';
 import { DELIVERY_EXPENSE_NOTE } from '@/lib/delivery';
+import { SUPPLY_EXPENSE_NOTE } from '@/lib/supplies';
 import { RESET_GROUPS, type ResetCounts, type ResetState } from './reset-groups';
 
 /**
@@ -193,6 +194,10 @@ export async function resetData(_prev: ResetState, formData: FormData): Promise<
       // الحركات، فمسح الحركات وحدها يترك رصيداً لا سند له في السجل.
       if (picked.has('supplies')) {
         await tx.supplyTransaction.deleteMany({ where: byTenant });
+        // مصروفات شراء المستلزمات مرآةُ هذه الحركات فتزول معها — كما التوصيل.
+        await tx.secondaryExpense.deleteMany({
+          where: { tenantId, category: 'SUPPLIES', notes: { startsWith: SUPPLY_EXPENSE_NOTE } },
+        });
         await tx.supply.updateMany({
           where: byTenant,
           data: { onHand: '0', avgCost: '0', lastUnitCost: null },

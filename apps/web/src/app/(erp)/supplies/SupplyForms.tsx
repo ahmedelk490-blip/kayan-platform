@@ -143,7 +143,7 @@ export function TransactionForm({
           defaultValue="0"
           hint={
             type === 'PURCHASE'
-              ? 'تُحدِّث آخر سعر معروف'
+              ? 'يُقيَّد المبلغ في المصروفات تلقائياً — وصفرٌ يعني آخر سعر شراء'
               : 'اتركها صفراً لتُحسب بمتوسّط تكلفة المستلزم'
           }
           errors={state.fieldErrors}
