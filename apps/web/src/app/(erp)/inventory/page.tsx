@@ -4,6 +4,7 @@ import { available, dec, formatQty, formatMoney,
   stockState,
   compareSizes,
   needsReorder,
+  userCan,
 } from '@erp/domain';
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
@@ -45,6 +46,8 @@ export default async function InventoryPage({
   const sp = (await searchParams) ?? {};
   const initialTab = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab;
   const canWrite = allows(user, 'inventory.write');
+  // دوره يُدخل البضاعة لكنها سُحبت من حسابه: يُقال له ذلك بدل زرٍّ يختفي بصمت.
+  const writeWithdrawn = !canWrite && userCan(user.role, undefined, 'inventory.write');
   const canCorrect = allows(user, 'inventory.correct');
   // إدخال المنتجات يعيش في الكتالوج، لكنه موصولٌ من هنا ليبقى المخزون
   // والمنتجات في مكان واحد — بطلب المالك.
@@ -359,6 +362,11 @@ export default async function InventoryPage({
                   sizeCode: v.size?.code ?? null,
                 }))}
               />
+            )}
+            {writeWithdrawn && (
+              <span className="rounded-lg border border-bad bg-bad-soft px-3 py-1.5 text-xs text-bad">
+                إدخال البضاعة موقوف لحسابك — يفعّله المدير من «الصلاحيات»
+              </span>
             )}
           </div>
         }

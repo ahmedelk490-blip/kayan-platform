@@ -83,9 +83,11 @@ export const PERMISSIONS = {
   'catalog.manage': { nameAr: 'إدارة التصنيفات والقوائم', group: 'المنتجات' },
 
   'inventory.read': { nameAr: 'عرض المخزون', group: 'المخزون' },
-  'inventory.write': { nameAr: 'تعديل المخزون', group: 'المخزون' },
+  // كان اسمها «تعديل المخزون» فسُحبت من أمين المخزن ظنّاً أنها التصحيح، فاختفى
+  // عنه زر إدخال البضاعة. الاسم يقول ما تفعله فعلاً.
+  'inventory.write': { nameAr: 'إدخال وصرف البضاعة (تسجيل حركة وجرد)', group: 'المخزون' },
   // تصحيح كمية حركةٍ أُدخلت غلطاً — للمدير، ويُمنح لمدير المخزن بالاسم إن شاء المالك.
-  'inventory.correct': { nameAr: 'تصحيح كميات حركات المخزون', group: 'المخزون' },
+  'inventory.correct': { nameAr: 'تعديل عدد حركةٍ أُدخلت غلطاً', group: 'المخزون' },
 
   // Phase 5. `manufacturing.read` was renamed to `.view` to match the
   // naming the client specified; nothing else about RBAC changed.
