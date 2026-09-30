@@ -19,7 +19,7 @@ import { StocktakeTable, type StocktakeRow } from './StocktakeTable';
 import { BalancesByProduct, type ProductGroup } from './BalancesByProduct';
 import { ConfirmButton } from '@/components/crud/ConfirmButton';
 import { reverseMovement, deleteMovement } from './actions';
-import { TYPE_LABELS } from './types';
+import { TYPE_LABELS, isManualMovement } from './types';
 
 export const metadata: Metadata = { title: 'المخزون' };
 
@@ -45,6 +45,7 @@ export default async function InventoryPage({
   const sp = (await searchParams) ?? {};
   const initialTab = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab;
   const canWrite = allows(user, 'inventory.write');
+  const canCorrect = allows(user, 'inventory.correct');
   // إدخال المنتجات يعيش في الكتالوج، لكنه موصولٌ من هنا ليبقى المخزون
   // والمنتجات في مكان واحد — بطلب المالك.
   const canSeeProducts = allows(user, 'products.read');
@@ -512,6 +513,14 @@ export default async function InventoryPage({
                   <td className="px-4 py-3 text-txt-3">{m.user?.nameAr ?? m.user?.name ?? '—'}</td>
                   <td className="px-4 py-3 text-end">
                     <div className="flex items-center justify-end gap-3">
+                      {canCorrect && !m.reversedBy && isManualMovement(m) && (
+                        <a
+                          href={`/inventory/product/${m.productId}?show=all#m-${m.id}`}
+                          className="text-xs text-brand hover:underline"
+                        >
+                          تعديل
+                        </a>
+                      )}
                       {canWrite && !m.reversedBy && m.type !== 'REVERSAL' && (
                         <form action={reverseMovement.bind(null, m.id)}>
                           <button type="submit" className="text-xs text-brand hover:underline">

@@ -36,3 +36,34 @@ export const TYPE_LABELS: Record<string, string> = {
   ...Object.fromEntries(Object.entries(TYPES).map(([k, v]) => [k, v.labelAr])),
   REVERSAL: 'حركة عكسية',
 };
+
+/**
+ * هل الحركة مُدخلةٌ باليد (من «تسجيل حركة») لا من مستند؟
+ *
+ * حركات المستندات — الفاتورة والكاشير والمرتجع والهالك والشراء والإنتاج
+ * والحجز — تُصحَّح من مستندها: تعديل كميتها هنا يترك الفاتورة تقول ٣ قطع
+ * والمخزن يقول ٢. فهي تُعرَف بروابطها أو بعبارة سببها الثابتة، وما عداها يدويّ.
+ */
+const DOCUMENT_REASONS = [
+  'صرف بضاعة فاتورة',
+  'إلغاء فاتورة',
+  'تعديل بنود الفاتورة',
+  'بيع كاشير',
+  'مرتجع مبيعات',
+  'هالك معتمد',
+  'إنتاج تام',
+];
+
+export function isManualMovement(m: {
+  type: string;
+  reason: string | null;
+  goodsReceiptLineId: string | null;
+  productionOrderId: string | null;
+  salesOrderLineId: string | null;
+  salesOrderId: string | null;
+}): boolean {
+  if (!(m.type in TYPES) || m.type === 'RESERVE' || m.type === 'UNRESERVE') return false;
+  if (m.goodsReceiptLineId || m.productionOrderId || m.salesOrderLineId || m.salesOrderId) return false;
+  const reason = (m.reason ?? '').trim();
+  return !DOCUMENT_REASONS.some((r) => reason.startsWith(r));
+}

@@ -270,6 +270,11 @@ export function BalancesByProduct({
                     >
                       {details[g.id] ? 'إخفاء التفاصيل' : 'التفاصيل — المخزن والمحجوز والحدّ الأدنى'}
                     </button>
+                    {' · '}
+                    {/* كم كان عندنا ومتى أضفنا وكم بِيع منذها — سجلّ الموديل كلّه. */}
+                    <a href={`/inventory/product/${g.id}`} className="mt-3 text-[0.7rem] text-brand hover:underline">
+                      سجل البضاعة
+                    </a>
 
                     {details[g.id] && (
                       <div className="mt-2">

@@ -84,6 +84,8 @@ export const PERMISSIONS = {
 
   'inventory.read': { nameAr: 'عرض المخزون', group: 'المخزون' },
   'inventory.write': { nameAr: 'تعديل المخزون', group: 'المخزون' },
+  // تصحيح كمية حركةٍ أُدخلت غلطاً — للمدير، ويُمنح لمدير المخزن بالاسم إن شاء المالك.
+  'inventory.correct': { nameAr: 'تصحيح كميات حركات المخزون', group: 'المخزون' },
 
   // Phase 5. `manufacturing.read` was renamed to `.view` to match the
   // naming the client specified; nothing else about RBAC changed.
@@ -179,6 +181,7 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
     'suppliers.write',
     'inventory.read',
     'inventory.write',
+    'inventory.correct',
     'manufacturing.view',
     'manufacturing.write',
     'manufacturing.confirm',

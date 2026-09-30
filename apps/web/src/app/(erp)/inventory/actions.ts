@@ -8,7 +8,7 @@ import { prisma, tenantTransaction } from '@/lib/prisma';
 import { dec, formatQty } from '@erp/domain';
 import { audit, fieldErrors } from '@/lib/audit';
 import { num, numeric, normalizeDigits } from '@/lib/num';
-import { TYPES, type MovementType } from './types';
+import { TYPES, isManualMovement, type MovementType } from './types';
 import { applyStockDelta } from '@/lib/stock';
 
 export interface FormState {
@@ -146,6 +146,85 @@ async function postManyMovements(
  *
  * والشكل القديم (خانةٌ واحدة) يبقى صالحاً: حقلٌ واحد هو حالةُ الكثير.
  */
+/**
+ * تصحيح كمية حركةٍ أُدخلت غلطاً — «أضفنا ٦٤ والصحيح ٤٦».
+ *
+ * كان التصحيح عكسَ الحركة كلّها ثم إدخالها من جديد: خطوتان وسطران في السجل
+ * لرقمٍ واحد أخطأه الإصبع. فصار تعديلاً للكمية نفسها، والرصيد يتحرّك بالفرق
+ * وحده (٦٤ ← ٤٦ = −١٨). ولا يضيع شيء: سبب الحركة يحمل «عُدِّلت من ٦٤ إلى ٤٦»،
+ * وسجلّ التدقيق يحمل من عدّل ومتى.
+ *
+ * بصلاحيةٍ وحدها (inventory.correct): المدير يملكها، ويمنحها لمدير المخزن من
+ * «حسابات الفريق ← الصلاحيات» إن شاء. وللحركات اليدوية وحدها — حركة الفاتورة
+ * والمرتجع والشراء تُصحَّح من مستندها (isManualMovement).
+ */
+export async function correctMovement(
+  movementId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requirePermission('inventory.correct');
+  const qty = num(formData.get('quantity'));
+  if (!(qty > 0) || !Number.isInteger(qty) || qty > 1_000_000) {
+    return { fieldErrors: { quantity: 'اكتب الكمية الصحيحة بالقطع (عدد صحيح أكبر من صفر).' } };
+  }
+
+  const result = await tenantTransaction(async (tx) => {
+    const m = await tx.stockMovement.findFirst({
+      where: { id: movementId, tenantId: user.tenantId },
+      include: { reversedBy: { select: { id: true } }, variant: { select: { sku: true } } },
+    });
+    if (!m) return { error: 'الحركة غير موجودة.' };
+    if (m.reversedBy || !isManualMovement(m)) {
+      return { error: 'هذه الحركة من مستند (فاتورة، مرتجع، شراء…) أو معكوسة — تُصحَّح من مستندها.' };
+    }
+
+    const meta = TYPES[m.type as MovementType];
+    const oldSigned = dec(m.quantity);
+    const newSigned = dec(meta.sign * qty);
+    const delta = newSigned.minus(oldSigned);
+    if (delta.isZero()) return { same: true as const };
+
+    const key = { variantId: m.variantId, warehouseId: m.warehouseId, locationId: m.locationId };
+    if (meta.field === 'onHand' && delta.isNegative()) {
+      const held = await tx.stock.findFirst({
+        where: { ...key, warehouse: { tenantId: user.tenantId } },
+        select: { onHand: true },
+      });
+      const now = dec(held?.onHand ?? 0);
+      if (now.plus(delta).isNegative()) {
+        return {
+          error: `الرصيد الآن ${formatQty(now)} لا يسمح بإنقاص ${formatQty(delta.abs())} — بِيع منه بعد الإضافة. سجّل «تسوية» بالفرق بدل تعديل الحركة.`,
+        };
+      }
+    }
+
+    await applyStockDelta(tx, key, meta.field, delta.toNumber());
+    const note = `عُدِّلت من ${formatQty(oldSigned.abs())} إلى ${formatQty(qty)}`;
+    await tx.stockMovement.update({
+      where: { id: m.id },
+      data: { quantity: newSigned.toString(), reason: m.reason ? `${m.reason} · ${note}` : note },
+    });
+    return { productId: m.productId, sku: m.variant.sku, label: meta.labelAr, note };
+  });
+
+  if ('error' in result) return { error: result.error };
+  if ('same' in result) return { ok: 'الكمية كما هي — لا تغيير.' };
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'stock.movementCorrect',
+    entityType: 'StockMovement',
+    entityId: movementId,
+    detail: `${result.label} · ${result.sku} · ${result.note}`,
+  });
+
+  revalidatePath('/inventory');
+  revalidatePath(`/inventory/product/${result.productId}`);
+  return { ok: `${result.note}.` };
+}
+
 export async function postMovement(_prev: FormState, formData: FormData): Promise<FormState> {
   const user = await requirePermission('inventory.write');
 
