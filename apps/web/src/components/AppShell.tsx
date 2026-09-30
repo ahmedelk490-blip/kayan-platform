@@ -46,12 +46,12 @@ interface NavItem {
 const NAV: NavItem[] = [
   { href: '/dashboard', label: 'لوحة المدير', permission: 'dashboard.view', built: true, group: '' },
 
-  // المبيعات = فواتير المبيعات أولاً (هو المطلوب يومياً)، وتبويب واحد لفواتير
-  // الشراء. عروض الأسعار وأوامر البيع وطلبات الموقع صارت أقساماً أسفل شاشة
-  // الفواتير, لا تبويبات مستقلة — بطلب المالك.
-  { href: '/cashier', label: 'الكاشير', permission: 'invoices.write', built: true, group: 'المبيعات' },
+  // المبيعات بترتيب المالك: اللوحة أولاً، ثم الفواتير، ثم الكاشير قبل طلبات
+  // الموقع. عروض الأسعار وأوامر البيع صارت أقساماً أسفل شاشة الفواتير، لا
+  // تبويبات مستقلة — بطلب المالك.
   { href: '/sales', label: 'لوحة المبيعات', permission: 'sales.view', built: true, group: 'المبيعات' },
   { href: '/invoices', label: 'فواتير المبيعات', permission: 'invoices.view', built: true, group: 'المبيعات' },
+  { href: '/cashier', label: 'الكاشير', permission: 'invoices.write', built: true, group: 'المبيعات' },
   { href: '/sales/web-orders', label: 'طلبات الموقع', permission: 'invoices.write', built: true, group: 'المبيعات' },
 
   // إدارة المنتجات — قسم مستقل يجمع كل ما يخصّ المنتجات: اللوحة، قائمة
