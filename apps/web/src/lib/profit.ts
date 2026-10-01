@@ -78,6 +78,7 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
     bonusesAgg,
     damageAgg,
     penaltiesAgg,
+    salaryPayments,
   ] = await Promise.all([
     prisma.invoice.aggregate({
       where: { ...issued, issueDate: period },
@@ -119,7 +120,7 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
     }),
     prisma.user.findMany({
       where: { tenantId, isActive: true, monthlySalary: { gt: 0 } },
-      select: { monthlySalary: true, createdAt: true },
+      select: { id: true, monthlySalary: true, createdAt: true },
     }),
     prisma.recurringExpense.findMany({
       where: { tenantId, isActive: true },
@@ -146,6 +147,13 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
     prisma.penalty.aggregate({
       where: { tenantId, status: 'PAID', paidAt: period },
       _sum: { amount: true },
+    }),
+    // رواتب صُرفت في المدى — تُحسب لمن لا راتبَ شهرياً مضبوطاً له وحده
+    // (موظفٌ يُصرف له من قسم الرواتب ولم يُكتب راتبه في حسابه، أو تَرَك
+    // العمل). من له راتبٌ شهري تكفيه حصّته أدناه، فصرفه لا يُحسب مرتين.
+    prisma.employeePayment.findMany({
+      where: { tenantId, isDeleted: false, kind: 'SALARY', paidAt: period },
+      select: { employeeId: true, amount: true },
     }),
   ]);
 
@@ -219,6 +227,10 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
         salaries = salaries.plus(dec(u.monthlySalary ?? 0).times(monthsBetween(new Date(start), new Date(winEnd))));
       }
     }
+  }
+  const salaried = new Set(staff.map((u) => u.id));
+  for (const p of salaryPayments) {
+    if (!salaried.has(p.employeeId)) salaries = salaries.plus(dec(p.amount));
   }
   const fixedMonthly = recurring.reduce((s, r) => s.plus(dec(r.amount)), dec(0));
 

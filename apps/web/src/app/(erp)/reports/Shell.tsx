@@ -37,15 +37,18 @@ export function ReportFilter({
   period,
   from,
   to,
+  tabs = true,
 }: {
   basePath: string;
   period: Period | null;
   from: string;
   to: string;
+  /** شريط التنقّل بين التقارير — تُخفيه صفحةٌ فلترها المدة وحدها (الأرباح). */
+  tabs?: boolean;
 }) {
   return (
     <div className="mb-6 space-y-3">
-      <ReportTabs />
+      {tabs && <ReportTabs />}
       <PeriodTabs basePath={basePath} active={period ?? ('' as Period)} />
       <form method="get" action={basePath} className="flex flex-wrap items-end gap-2 rounded-xl border border-line bg-card-2 p-3">
         <label className="block">

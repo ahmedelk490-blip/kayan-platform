@@ -86,6 +86,8 @@ const NAV: NavItem[] = [
   // بوسم «قريباً» بدل أن تَعِد بشاشةٍ فارغة.
   { href: '/portal', label: 'بوابة العميل', permission: 'portal.view', built: false, group: 'العملاء' },
 
+  // الأرباح — عدّادات الحسابات كلها بفلتر المدة، للمدير وحده (cost.view).
+  { href: '/reports/profits', label: 'الأرباح', permission: 'cost.view', built: true, group: 'التقارير' },
   // يومية اليوم — صفحة تقفيل واحدة: مبيعات ومقبوض ومرتجعات ومصاريف اليوم.
   { href: '/reports/daily', label: 'يومية اليوم', permission: 'reports.view', built: true, group: 'التقارير' },
   { href: '/reports', label: 'التقارير', permission: 'reports.view', built: true, group: 'التقارير' },

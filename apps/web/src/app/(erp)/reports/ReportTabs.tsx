@@ -18,6 +18,7 @@ import { usePathname } from 'next/navigation';
  */
 const TABS: { href: string; label: string }[] = [
   { href: '/reports/daily', label: 'يومية اليوم' },
+  { href: '/reports/profits', label: 'الأرباح' },
   { href: '/reports/financial', label: 'ملخص مالي' },
   { href: '/reports/statement', label: 'البيان المالي' },
   { href: '/reports/sales', label: 'المبيعات' },
