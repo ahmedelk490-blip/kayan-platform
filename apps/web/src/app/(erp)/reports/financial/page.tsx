@@ -7,11 +7,11 @@ import {
   monthlySeries,
   RECEIVABLE_STATUSES,
   EXPENSE_CATEGORY_AR,
-  DEDUCTION_KINDS,
   type ExpenseCategory,
 } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { realProfit } from '@/lib/profit';
 import { returnsByInvoice, netOwed } from '@/lib/receivables';
 import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
@@ -25,15 +25,13 @@ import { categoryOf } from '@/app/(erp)/returns/category';
 
 export const metadata: Metadata = { title: 'التقرير المالي' };
 
-/** ألوان شرائح المصروفات — ثابتة بالترتيب فيطابق لونُ الشريط لونَ بنده. */
-const OUTFLOW_TONES = ['bg-brand', 'bg-warn', 'bg-bad', 'bg-txt-3', 'bg-txt-4'];
 
 /**
  * التقرير المالي — الداخل والخارج للفترة.
  *
  * المبيعات المفوترة (فواتير صادرة) مقابل المصروفات المعتمدة، مع المحصَّل
- * والمستحق. ليس ربحاً محاسبياً كاملاً (لا يخصم تكلفة البضاعة المباعة) — لذا
- * يُسمّى «الصافي» صراحةً: مبيعات ناقص مصروفات، لا أكثر.
+ * والمستحق. «الصافي» السريع مبيعاتٌ ناقص مصروفات لا أكثر؛ والربح الحقيقي —
+ * بعد تكلفة البضاعة والتشغيل والرواتب والالتزامات — في بطاقته (lib/profit).
  */
 export default async function FinancialReport({
   searchParams,
@@ -45,7 +43,7 @@ export default async function FinancialReport({
   const range = resolveRange(params);
   const { from, to } = range;
 
-  const [invoices, lines, receivable, expenses] = await Promise.all([
+  const [invoices, lines, receivable, expenses, rp] = await Promise.all([
     prisma.invoice.findMany({
       where: {
         tenantId: user.tenantId,
@@ -80,57 +78,8 @@ export default async function FinancialReport({
       },
       select: { amount: true, category: true, expenseDate: true },
     }),
-  ]);
-
-  // بنود «الربح الصافي الشامل» — كل ما خرج فعلاً في المدى: رواتب ومدفوعات
-  // الموظفين، تكلفة الهالك المعتمد، والمشتريات المؤكَّدة؛ والجزاءات المحصَّلة
-  // تُردّ للربح لأنها استُرجعت من المتسببين.
-  const [salariesAgg, damageAgg, penaltiesAgg, purchasesAgg, returnsAgg] = await Promise.all([
-    // الأنواع المدفوعة للموظف فقط (راتب/مكافأة/عمولة). الخصم والخسارة والسلفة
-    // مالٌ يعود للشركة لا يخرج منها — جمعُها هنا كان يخصمها من الربح مرتين:
-    // مرةً كتكلفة هالك ومرةً كأنها راتب مدفوع.
-    prisma.employeePayment.aggregate({
-      where: {
-        tenantId: user.tenantId,
-        isDeleted: false,
-        kind: { notIn: DEDUCTION_KINDS },
-        paidAt: { gte: from, lte: to },
-      },
-      _sum: { amount: true },
-      _count: { _all: true },
-    }),
-    prisma.damageRecord.aggregate({
-      where: {
-        tenantId: user.tenantId,
-        isDeleted: false,
-        status: 'APPROVED',
-        damageDate: { gte: from, lte: to },
-      },
-      _sum: { totalCost: true },
-      _count: { _all: true },
-    }),
-    prisma.penalty.aggregate({
-      where: { tenantId: user.tenantId, status: 'PAID', paidAt: { gte: from, lte: to } },
-      _sum: { amount: true },
-      _count: { _all: true },
-    }),
-    prisma.purchaseOrder.aggregate({
-      where: {
-        tenantId: user.tenantId,
-        isDeleted: false,
-        status: { in: ['CONFIRMED', 'PARTIALLY_RECEIVED', 'RECEIVED'] },
-        orderDate: { gte: from, lte: to },
-      },
-      _sum: { total: true },
-      _count: { _all: true },
-    }),
-    // المرتجعات: بضاعة رجعت ومالها رُدّ — تُنقص المبيعات، وغيابها كان يترك
-    // فاتورةً رُدَّت بالكامل محسوبةً ربحاً.
-    prisma.salesReturn.aggregate({
-      where: { tenantId: user.tenantId, isDeleted: false, returnDate: { gte: from, lte: to } },
-      _sum: { totalAmount: true },
-      _count: { _all: true },
-    }),
+    // الربح الحقيقي بتفصيله — مصدرٌ واحد للشاشة وملف التصدير (lib/profit).
+    realProfit(user.tenantId, from, to),
   ]);
 
   // عدد القطع الكلي + تفصيله حسب النوع بصورة عامة (بلا ألوان وموديلات) —
@@ -164,41 +113,29 @@ export default async function FinancialReport({
   const net = invoiced.minus(expenseTotal);
   const cashFlow = collected.minus(expenseTotal);
 
-  // الربح الصافي الشامل: المبيعات ناقص كل ما خرج (مصروفات، رواتب، هالك،
-  // مشتريات) زائد الجزاءات المستردّة — بطلب المالك: رقم واحد لأي مدى.
-  const salariesOut = dec(salariesAgg._sum.amount ?? 0);
-  const damageOut = dec(damageAgg._sum.totalCost ?? 0);
-  const penaltiesIn = dec(penaltiesAgg._sum.amount ?? 0);
-  const purchasesOut = dec(purchasesAgg._sum.total ?? 0);
-  const returnsOut = dec(returnsAgg._sum.totalAmount ?? 0);
+  // الربح الحقيقي (lib/profit): البضاعة، فالتشغيل، فالالتزامات — ترتيب سؤال
+  // المالك نفسه. والشريط يُري نصيب كل كلفةٍ مما دخل، والباقي ربح.
+  const costRows = [
+    { key: 'cogs', label: 'تكلفة البضاعة', amount: rp.cogs, tone: 'bg-brand' },
+    { key: 'expenses', label: 'المصروفات التشغيلية', amount: rp.expenses, tone: 'bg-warn' },
+    { key: 'obligations', label: 'الرواتب والالتزامات', amount: rp.salaries.plus(rp.fixed).plus(rp.bonuses), tone: 'bg-bad' },
+    { key: 'returns', label: 'المرتجعات', amount: rp.returns, tone: 'bg-txt-3' },
+    { key: 'damage', label: 'الهالك', amount: rp.damage, tone: 'bg-txt-4' },
+  ].filter((r) => r.amount.gt(0));
 
-  /**
-   * بنود «أين ذهبت المبيعات» — مرتّبةً بالأكبر أولاً لا بترتيبٍ ثابت: أكبر
-   * مصرفٍ يجب أن يكون أول ما تقع عليه العين، فهو القرار الذي يستحق النظر.
-   */
-  const outflowRows = [
-    { key: 'purchases', label: 'المشتريات', count: `${purchasesAgg._count._all} أمر`, amount: purchasesOut },
-    { key: 'salaries', label: 'الرواتب والمكافآت', count: `${salariesAgg._count._all} دفعة`, amount: salariesOut },
-    { key: 'expenses', label: 'المصروفات المعتمدة', count: `${expenses.length} مصروف`, amount: expenseTotal },
-    { key: 'returns', label: 'المرتجعات', count: `${returnsAgg._count._all} مرتجع`, amount: returnsOut },
-    { key: 'damage', label: 'الهالك المعتمد', count: `${damageAgg._count._all} محضر`, amount: damageOut },
-  ]
-    .filter((r) => r.amount.gt(0))
-    .sort((a, b) => b.amount.minus(a.amount).toNumber());
-
-  // المقياس = كل ما دخل (مبيعات + جزاءات مستردّة). النسب منه، لا من المبيعات
-  // وحدها، وإلا تجاوز مجموع الشرائح مئةً حين تُسترَدّ جزاءات.
-  const moneyIn = invoiced.plus(penaltiesIn);
+  // المقياس = كل ما دخل (مبيعات البضاعة + جزاءات مستردّة). النسب منه، وإلا
+  // تجاوز مجموع الشرائح مئةً حين تُسترَدّ جزاءات.
+  const moneyIn = rp.sales.plus(rp.penalties);
   const share = (v: ReturnType<typeof dec>) =>
     moneyIn.lte(0) ? 0 : Math.max(0, Math.min(100, v.dividedBy(moneyIn).times(100).toNumber()));
-  const fullNet = invoiced
-    .minus(returnsOut)
-    .minus(expenseTotal)
-    .minus(salariesOut)
-    .minus(damageOut)
-    .minus(purchasesOut)
-    .plus(penaltiesIn);
-  const profitShare = fullNet.gt(0) ? share(fullNet) : 0;
+  const profitShare = rp.net.gt(0) ? share(rp.net) : 0;
+  const netSales = rp.sales.minus(rp.returns);
+  const margin = netSales.gt(0) ? Math.round(rp.grossProfit.dividedBy(netSales).times(100).toNumber()) : 0;
+  const day = (d: Date) => new Date(d.getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const obligationDays =
+    rp.obligationsFrom && rp.obligationsTo
+      ? Math.round((rp.obligationsTo.getTime() - rp.obligationsFrom.getTime()) / 86_400_000)
+      : 0;
 
   // المصروفات حسب البند.
   const byCategory = new Map<string, ReturnType<typeof dec>>();
@@ -315,7 +252,7 @@ export default async function FinancialReport({
             <Figure
               label="الصافي (مبيعات − مصروفات)"
               value={formatMoney(net)}
-              hint="لا يخصم تكلفة البضاعة — ليس ربحاً محاسبياً كاملاً"
+              hint="لا يخصم تكلفة البضاعة — الربح الحقيقي في البطاقة أدناه"
               strong
               tone={net.lt(0) ? 'bad' : undefined}
             />
@@ -328,25 +265,25 @@ export default async function FinancialReport({
             />
           </div>
 
-          {/* الربح الصافي الشامل.
-              الحكم أولاً ثم تفسيره: كان سبعة سطورٍ متشابهة يقرؤها المالك كلها
-              ليعرف أين ذهب ماله. الآن الرقم وحكمُه في الأعلى، وشريطٌ يُري
-              نصيب كل مصرفٍ من المبيعات، والبنود مرتّبةٌ بالأكبر أولاً. */}
+          {/* الربح الصافي الحقيقي (lib/profit).
+              الحكم أولاً ثم القائمة بترتيبها المحاسبي: مبيعات البضاعة − تكلفتها
+              = مجمل الربح، ثم التشغيل، ثم الرواتب والالتزامات. كان يخصم أوامر
+              الشراء بدل تكلفة البضاعة المباعة فخرج الربح ٩٢٪ من المبيعات. */}
           <section className="erp-card mb-8 overflow-hidden border-s-4 border-s-brand">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
-              <h3 className="text-sm font-semibold text-brand">💰 الربح الصافي الشامل</h3>
+              <h3 className="text-sm font-semibold text-brand">💰 الربح الصافي الحقيقي</h3>
               <span className="tnum text-xs text-txt-3">{range.fromStr} ← {range.toStr}</span>
             </div>
 
             {/* الحكم: كلمة ورقم — بلا حساب ذهني. */}
-            <div className={`px-5 py-5 ${fullNet.lt(0) ? 'bg-bad-soft/40' : 'bg-ok-soft/40'}`}>
+            <div className={`px-5 py-5 ${rp.net.lt(0) ? 'bg-bad-soft/40' : 'bg-ok-soft/40'}`}>
               <p className="text-xs font-medium text-txt-2">
-                {fullNet.lt(0) ? 'خسارة في هذه الفترة' : fullNet.isZero() ? 'لا ربح ولا خسارة' : 'ربح صافٍ في هذه الفترة'}
+                {rp.net.lt(0) ? 'خسارة في هذه الفترة' : rp.net.isZero() ? 'لا ربح ولا خسارة' : 'ربح صافٍ في هذه الفترة'}
               </p>
-              <p className={`tnum mt-1 text-3xl font-bold ${fullNet.lt(0) ? 'text-bad' : 'text-ok'}`}>
-                {formatMoney(fullNet)} <span className="text-base font-medium">د.ع</span>
+              <p className={`tnum mt-1 text-3xl font-bold ${rp.net.lt(0) ? 'text-bad' : 'text-ok'}`}>
+                {formatMoney(rp.net)} <span className="text-base font-medium">د.ع</span>
               </p>
-              {moneyIn.gt(0) && (
+              {moneyIn.gt(0) && rp.net.gt(0) && (
                 <p className="mt-1 text-[0.7rem] text-txt-3">
                   من كل <span className="tnum">100</span> دينار مبيعات، بقي لك{' '}
                   <strong className="tnum">{Math.round(profitShare)}</strong> ديناراً.
@@ -354,16 +291,16 @@ export default async function FinancialReport({
               )}
             </div>
 
-            {/* شريط واحد: نصيب كل مصرفٍ من المبيعات، والباقي ربح. */}
+            {/* شريط واحد: نصيب كل كلفةٍ مما دخل، والباقي ربح. */}
             {moneyIn.gt(0) && (
               <div className="px-5 pt-4">
                 <div className="flex h-3 w-full overflow-hidden rounded-full bg-card-2">
-                  {outflowRows.map((r, idx) => (
+                  {costRows.map((r) => (
                     <span
                       key={r.key}
                       title={`${r.label} ${formatMoney(r.amount)}`}
                       style={{ width: `${share(r.amount)}%` }}
-                      className={OUTFLOW_TONES[idx % OUTFLOW_TONES.length]}
+                      className={r.tone}
                     />
                   ))}
                   {profitShare > 0 && (
@@ -373,52 +310,85 @@ export default async function FinancialReport({
               </div>
             )}
 
-            {/* البنود: الأكبر أولاً، كلٌّ بنسبته من المبيعات. */}
             <dl className="space-y-3 px-5 py-4 text-sm">
-              <div className="flex items-baseline justify-between gap-4 border-b border-line pb-3">
-                <dt className="text-txt-2">
-                  المبيعات المفوترة
-                  {penaltiesIn.gt(0) && (
-                    <span className="text-[0.7rem] text-txt-4"> + جزاءات محصَّلة {formatMoney(penaltiesIn)}</span>
-                  )}
-                </dt>
-                <dd className="tnum font-semibold text-ok">{formatMoney(moneyIn)}</dd>
-              </div>
-
-              {outflowRows.length === 0 ? (
-                <p className="py-2 text-xs text-txt-4">لا مصروفات ولا مشتريات في هذه الفترة.</p>
-              ) : (
-                outflowRows.map((r, idx) => (
-                  <div key={r.key} className="flex items-baseline justify-between gap-4">
-                    <dt className="flex min-w-0 items-center gap-2 text-txt-2">
-                      <span
-                        aria-hidden
-                        className={`h-2.5 w-2.5 shrink-0 rounded-sm ${OUTFLOW_TONES[idx % OUTFLOW_TONES.length]}`}
-                      />
-                      <span className="truncate">{r.label}</span>
-                      <span className="shrink-0 text-[0.7rem] text-txt-4">({r.count})</span>
-                    </dt>
-                    <dd className="shrink-0 text-end">
-                      <span className="tnum text-bad">− {formatMoney(r.amount)}</span>
-                      <span className="tnum block text-[0.65rem] text-txt-4">
-                        {Math.round(share(r.amount))}% من المبيعات
-                      </span>
-                    </dd>
-                  </div>
-                ))
+              <PnlLine
+                kind="in"
+                label="مبيعات البضاعة"
+                note={
+                  rp.deliveryCharged.gt(0)
+                    ? `${formatMoney(rp.invoiced)} مفوترة، منها أجور توصيل على الزبون ${formatMoney(rp.deliveryCharged)} تمرّ للسائق`
+                    : `${rp.invoiceCount} فاتورة`
+                }
+                value={rp.sales}
+              />
+              {rp.returns.gt(0) && (
+                <PnlLine label="المرتجعات" note={`${rp.returnsCount} مرتجع`} value={rp.returns} tone="bg-txt-3" />
               )}
-
-              <div className="flex items-baseline justify-between gap-4 border-t border-line pt-3">
-                <dt className="text-base font-bold text-txt">= الصافي</dt>
-                <dd className={`tnum text-xl font-bold ${fullNet.lt(0) ? 'text-bad' : 'text-ok'}`}>
-                  {formatMoney(fullNet)}
-                </dd>
-              </div>
+              <PnlLine
+                label="تكلفة البضاعة المباعة"
+                note={`${rp.pieces} قطعة × تكلفة القطعة`}
+                value={rp.cogs}
+                tone="bg-brand"
+              />
+              <PnlLine kind="total" label="= مجمل الربح" note={`هامش ${margin}%`} value={rp.grossProfit} />
+              <PnlLine
+                label="المصروفات التشغيلية المعتمدة"
+                note={`${rp.expensesCount} مصروف`}
+                value={rp.expenses}
+                tone="bg-warn"
+              />
+              <PnlLine
+                label="الرواتب — حصّة الفترة"
+                note={
+                  rp.staffCount > 0
+                    ? `${rp.staffCount} موظف · ${formatMoney(rp.salariesMonthly)} شهرياً`
+                    : 'لا رواتب مضبوطة للموظفين'
+                }
+                value={rp.salaries}
+                tone="bg-bad"
+              />
+              {rp.fixedMonthly.gt(0) && (
+                <PnlLine
+                  label="الالتزامات الثابتة — حصّة الفترة"
+                  note={`${rp.fixedNames.slice(0, 3).join('، ')}${rp.fixedNames.length > 3 ? '…' : ''} · ${formatMoney(rp.fixedMonthly)} شهرياً`}
+                  value={rp.fixed}
+                  tone="bg-bad"
+                />
+              )}
+              {rp.bonuses.gt(0) && (
+                <PnlLine label="مكافآت وعمولات مصروفة" note={`${rp.bonusesCount} دفعة`} value={rp.bonuses} tone="bg-bad" />
+              )}
+              {rp.damage.gt(0) && (
+                <PnlLine label="الهالك المعتمد" note={`${rp.damageCount} محضر`} value={rp.damage} tone="bg-txt-4" />
+              )}
+              {rp.penalties.gt(0) && (
+                <PnlLine kind="in" label="جزاءات محصَّلة" note="استُردّت من المتسبّبين" value={rp.penalties} />
+              )}
+              <PnlLine kind="net" label="= صافي الربح" value={rp.net} />
             </dl>
 
+            {/* قطعٌ بلا تكلفة تُحسب صفراً فتنفخ الربح — تُسمّى بدل أن تمرّ بصمت. */}
+            {rp.missingCost.pieces > 0 && (
+              <p className="mx-5 mb-4 rounded-lg border border-warn bg-warn-soft px-4 py-2.5 text-[0.7rem] leading-[1.9] text-warn">
+                ⚠ {rp.missingCost.pieces} قطعة بيعت بلا تكلفة مسجّلة (
+                {rp.missingCost.products.slice(0, 4).join('، ')}
+                {rp.missingCost.products.length > 4 ? '…' : ''}) — حُسبت تكلفتها صفراً، فالربح أعلى من
+                حقيقته حتى تُسجَّل «تكلفة القطعة» في{' '}
+                <Link href="/catalog/products" className="font-semibold underline">
+                  بطاقة المنتج
+                </Link>
+                .
+              </p>
+            )}
+
             <p className="border-t border-line px-5 py-3 text-[0.7rem] leading-[1.8] text-txt-4">
-              المشتريات تُخصم كإنفاق نقدي في مداها (لا كتكلفة بضاعة مباعة) — فبضاعة اشتريتها
-              اليوم وستبيعها الشهر القادم تُخصم اليوم. غيّر المدى أعلاه فيتغيّر كل شيء معه.
+              تكلفة البضاعة = القطع المباعة × تكلفة القطعة من بطاقة المنتج، ناقص ما رجع منها. الرواتب
+              والالتزامات الثابتة بحصّة الأيام كيومية اليوم
+              {rp.obligationsFrom && rp.obligationsTo
+                ? ` (${day(rp.obligationsFrom)} ← ${day(rp.obligationsTo)}، ${obligationDays} يوماً — من أول فاتورة وحتى اليوم)`
+                : ' (لا فواتير بعد فلا تُحسب)'}
+              ، فلا يبدو شهرٌ رابحاً لأن رواتبه لم تُصرف بعد. والمشتريات لا تُخصم هنا: تدخل المخزون
+              وتُخصم حين تُباع ضمن تكلفة البضاعة.
             </p>
           </section>
 
@@ -467,5 +437,40 @@ export default async function FinancialReport({
         </>
       )}
     </AppShell>
+  );
+}
+
+/** سطرٌ من قائمة الربح: داخلٌ (+)، أو كلفةٌ (−) بلون شريطها، أو مجموعٌ (=). */
+function PnlLine({
+  label,
+  note,
+  value,
+  kind = 'out',
+  tone,
+}: {
+  label: string;
+  note?: string;
+  value: ReturnType<typeof dec>;
+  kind?: 'in' | 'out' | 'total' | 'net';
+  tone?: string;
+}) {
+  const sum = kind === 'total' || kind === 'net';
+  const valueClass =
+    kind === 'in'
+      ? 'font-semibold text-ok'
+      : kind === 'out'
+        ? 'text-bad'
+        : `font-bold ${kind === 'net' ? 'text-xl' : ''} ${value.lt(0) ? 'text-bad' : kind === 'net' ? 'text-ok' : 'text-txt'}`;
+  return (
+    <div className={`flex items-baseline justify-between gap-4 ${sum ? 'border-t border-line pt-3' : ''}`}>
+      <dt className="flex min-w-0 flex-wrap items-center gap-x-2 text-txt-2">
+        {tone && <span aria-hidden className={`h-2.5 w-2.5 shrink-0 rounded-sm ${tone}`} />}
+        <span className={sum ? `font-bold text-txt ${kind === 'net' ? 'text-base' : ''}` : ''}>{label}</span>
+        {note && <span className="text-[0.7rem] text-txt-4">({note})</span>}
+      </dt>
+      <dd className={`tnum shrink-0 ${valueClass}`}>
+        {kind === 'out' ? `− ${formatMoney(value)}` : kind === 'in' ? `+ ${formatMoney(value)}` : formatMoney(value)}
+      </dd>
+    </div>
   );
 }

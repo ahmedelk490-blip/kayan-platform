@@ -30,7 +30,8 @@ import { deliveryInvoiceSuffix } from '@/lib/delivery';
 import { isOwnerRole } from '@erp/domain';
 import { ExpenseForm } from './ExpenseForm';
 import { RecurringForm } from './RecurringForm';
-import { createExpense, setExpenseStatus, deleteExpense, deleteRecurring, postRecurring, addRecurring } from './actions';
+import { createExpense, setExpenseStatus, deleteExpense, deleteRecurring, postRecurring, addRecurring, removeCustomerDeliveryExpenses } from './actions';
+import { customerPaidDeliveryExpenses } from '../invoices/shared';
 
 export const metadata: Metadata = { title: 'المصروفات الثانوية' };
 
@@ -200,6 +201,10 @@ export default async function ExpensesPage({
   const canApprove = allows(user, 'expenses.approve');
   const owner = isOwnerRole(user.role);
 
+  // مصاريف توصيلٍ على الزبون سُجّلت قبل التصحيح — تُعرض على المدير ليحذفها.
+  const customerDelivery = canApprove ? await customerPaidDeliveryExpenses(user.tenantId) : [];
+  const customerDeliveryTotal = customerDelivery.reduce((s, r) => s.plus(dec(r.amount)), dec(0));
+
   // مصاريف توصيلٍ زالت فواتيرها — تُحذف وإن كانت معتمدة (انظر lib/delivery).
   // تُفحص لصفوف هذه الصفحة وحدها: وسمٌ لكل مرآة، واستعلامٌ واحد عن فواتيرها.
   const mirrorSuffix = new Map<string, string>();
@@ -282,6 +287,21 @@ export default async function ExpensesPage({
       )}
 
       {/* مبلغ خيالي مُدخل بالغلط يفسد كل تقرير — يُواجَه هنا حتى يُحذف. */}
+      {customerDelivery.length > 0 && (
+        <form
+          action={removeCustomerDeliveryExpenses}
+          className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warn bg-warn-soft px-4 py-3"
+        >
+          <p className="text-xs leading-[1.9] text-warn">
+            {customerDelivery.length} مصروف «شحن وتوصيل» بمبلغ {formatMoney(customerDeliveryTotal)} سُجّل
+            والتوصيل على الزبون — يدفعه الزبون للسائق فلا يُخصم منك.
+          </p>
+          <button type="submit" className="erp-btn">
+            احذفها من المصروفات
+          </button>
+        </form>
+      )}
+
       {suspicious.length > 0 && (
         <p role="alert" className="mb-5 rounded-xl border border-bad bg-bad-soft px-4 py-3 text-xs font-semibold leading-[1.9] text-bad">
           ⚠ يوجد {suspicious.length === 1 ? 'مصروف بمبلغ غير منطقي' : `${suspicious.length} مصروفات بمبالغ غير منطقية`}:{' '}

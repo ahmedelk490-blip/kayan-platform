@@ -1145,7 +1145,7 @@ export function DocumentForm({
           {deliveryMode !== 'NONE' && deliveryFee > 0 && (
             <p className="mt-2 text-[0.7rem] leading-[1.8] text-txt-4">
               {deliveryMode === 'CUSTOMER'
-                ? `يُضاف بند «🚚 أجور توصيل» بقيمة ${formatMoney(dec(deliveryFee))} على الفاتورة — الزبون يدفعه، وأجرة السائق تُسجّل مصروفاً فلا يزيد التوصيل الربح ولا ينقصه.`
+                ? `يُضاف بند «🚚 أجور توصيل» بقيمة ${formatMoney(dec(deliveryFee))} على الفاتورة — يدفعه الزبون للسائق، فلا يُسجَّل مصروفاً عليك ولا يُحسب ربحاً.`
                 : `الزبون لا يدفع شيئاً عن التوصيل، ويُسجَّل مصروف «شحن وتوصيل» بقيمة ${formatMoney(dec(deliveryFee))} يُخصم من الربح في التقارير.`}
             </p>
           )}

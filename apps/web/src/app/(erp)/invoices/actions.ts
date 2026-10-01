@@ -322,10 +322,8 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
       return inv;
     });
 
-    // أجرة السائق تُدفع من عندنا في الحالتين — من جيبنا أو من مال الزبون على
-    // الفاتورة — فتُسجّل مصروفاً في الحالتين (بطلب المالك). ومع بند التوصيل
-    // على الفاتورة يصير أثره في الربح صفراً بدل أن يُحسب ربحاً لا مقابل له.
-    if (delivery.fee > 0) {
+    // مصروف التوصيل حين تكون الأجرة علينا وحدها — انظر recordDeliveryExpense.
+    if (delivery.onUs) {
       await recordDeliveryExpense(user, delivery.fee, {
         id: created.id,
         number: created.number,
@@ -353,7 +351,7 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
     data: { ...baseData, status: 'DRAFT' },
   });
 
-  if (delivery.fee > 0) {
+  if (delivery.onUs) {
     await recordDeliveryExpense(user, delivery.fee, {
       id: invoice.id,
       number: null,
@@ -426,8 +424,11 @@ export async function duplicateInvoice(invoiceId: string): Promise<void> {
   // الخمسة آلاف إيراداً بلا تكلفةٍ تقابلها، فتعود أجرة التوصيل ربحاً من حيث
   // أُخرجت. ومصدر الأجرة هو مصدرها في شاشة التعديل: البند أوّلاً، وإلا فمصروف
   // الشحن الموسوم بمعرّف الفاتورة الأصل (حين كانت علينا فلا بند لها).
+  //
+  // والأجرة على الزبون تُنسخ بندَها مع البنود ولا مصروف لها (بطلب المالك —
+  // انظر recordDeliveryExpense)؛ فالمصروف للنسخة التي أجرتها علينا وحدها.
   const srcDeliveryLine = src.lines.find((l) => !l.variantId && isDeliveryDesc(l.description));
-  let dupFee = srcDeliveryLine ? Number(srcDeliveryLine.unitPrice) : 0;
+  let dupFee = 0;
   if (!srcDeliveryLine) {
     const srcExpense = await prisma.secondaryExpense.findFirst({
       where: {
@@ -677,7 +678,7 @@ export async function updateInvoiceLines(
 
   // يُستدعى دائماً عند التعديل: بصفرٍ يُلغي مصروف توصيلٍ سابق لم يعد علينا
   // (حُوِّل للزبون أو أُلغي)، وإلا بقي يخصم من الربح والزبون يدفعه على الفاتورة.
-  await recordDeliveryExpense(user, delivery.fee, {
+  await recordDeliveryExpense(user, delivery.onUs ? delivery.fee : 0, {
     id: invoiceId,
     number: invoice.number,
     // تاريخ الطلب لا يوم التعديل — الأجرة تخصّ الطلب.

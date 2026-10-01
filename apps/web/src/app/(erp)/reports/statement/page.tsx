@@ -10,6 +10,7 @@ import {
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { isDeliveryDesc } from '@/lib/delivery';
+import { realProfit } from '@/lib/profit';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
 import { DonutChartInteractive } from '@/components/dashboard/DonutChartInteractive';
@@ -37,8 +38,8 @@ export default async function StatementReport({
   const range = resolveRange(params);
   const { from, to } = range;
 
-  const [lines, salaries, expenses, damages, stock, returns] = await Promise.all([
-    // بنود الفواتير الصادرة في الفترة — بالكمية والقيمة وتكلفة المنتج والصنف.
+  const [lines, expenses, stock, rp] = await Promise.all([
+    // بنود الفواتير الصادرة في الفترة — للتفصيل حسب الصنف والمنتج.
     prisma.invoiceLine.findMany({
       where: {
         invoice: {
@@ -53,55 +54,41 @@ export default async function StatementReport({
         lineTotal: true,
         // الوصف لتمييز بند التوصيل 🚚 — مالٌ لا بضاعة.
         description: true,
-        product: { select: { nameAr: true, cost: true, category: { select: { nameAr: true } } } },
+        product: { select: { nameAr: true, category: { select: { nameAr: true } } } },
       },
     }),
-    prisma.employeePayment.findMany({
-      where: { tenantId: user.tenantId, deletedAt: null, kind: 'SALARY', paidAt: { gte: from, lte: to } },
-      select: { amount: true },
-    }),
+    // المصروفات التشغيلية مفصّلةً — بلا المسجَّل من القوالب الثابتة (REC-…):
+    // تلك الالتزامات نفسها، في سطرها بحصّة الفترة (lib/profit).
     prisma.secondaryExpense.findMany({
-      where: { tenantId: user.tenantId, isDeleted: false, status: 'APPROVED', expenseDate: { gte: from, lte: to } },
+      where: {
+        tenantId: user.tenantId,
+        isDeleted: false,
+        status: 'APPROVED',
+        expenseDate: { gte: from, lte: to },
+        NOT: { number: { startsWith: 'REC-' } },
+      },
       select: { amount: true, category: true },
-    }),
-    prisma.damageRecord.findMany({
-      where: { tenantId: user.tenantId, isDeleted: false, status: 'APPROVED', damageDate: { gte: from, lte: to } },
-      select: { totalCost: true },
     }),
     // قيمة المخزون الحالية — موقفٌ لحظيّ لا يتقيّد بالفترة.
     prisma.stock.findMany({
       where: { variant: { product: { tenantId: user.tenantId } } },
       select: { onHand: true, variant: { select: { cost: true, product: { select: { cost: true } } } } },
     }),
-    // الرواجع (مرتجعات المبيعات) المسجّلة في الفترة.
-    prisma.salesReturn.findMany({
-      where: { tenantId: user.tenantId, isDeleted: false, returnDate: { gte: from, lte: to } },
-      select: { totalAmount: true },
-    }),
+    // أرقام الربح كلها من مصدر التقرير المالي نفسه — فلا يخرج تقريران
+    // بصافيين مختلفين للفترة نفسها.
+    realProfit(user.tenantId, from, to),
   ]);
 
-  // ── المبيعات: إجمالي، عدد القطع، تكلفة البضاعة، حسب الصنف، وأكثر المنتجات ──
-  let totalSales = dec(0);
+  // ── المبيعات: عدد القطع، حسب الصنف، وأكثر المنتجات ──
   let piecesSold = dec(0);
-  let cogs = dec(0);
   const byCategory = new Map<string, { revenue: ReturnType<typeof dec>; qty: ReturnType<typeof dec> }>();
   const byProduct = new Map<string, { revenue: ReturnType<typeof dec>; qty: ReturnType<typeof dec> }>();
   for (const l of lines) {
+    // بند التوصيل 🚚 على الزبون يمرّ للسائق: لا صنف ولا قطعة ولا ربح (lib/profit).
+    if (isDeliveryDesc(l.description)) continue;
     const rev = dec(l.lineTotal);
     const qty = dec(l.quantity);
-    totalSales = totalSales.plus(rev);
-
-    // بند التوصيل 🚚 إيرادٌ لا بضاعة: يدخل المبيعات، ويخرج من عدّ القطع ومن
-    // تكلفة البضاعة (وإلا حُسب بضاعةً بتكلفة صفر فابتلع مجمل الربح الفرق)،
-    // ويُصنَّف «توصيل» بدل أن يصنع صنفاً وهمياً اسمه «غير مصنّف».
-    if (isDeliveryDesc(l.description)) {
-      const d = byCategory.get('توصيل') ?? { revenue: dec(0), qty: dec(0) };
-      byCategory.set('توصيل', { revenue: d.revenue.plus(rev), qty: d.qty });
-      continue;
-    }
-
     piecesSold = piecesSold.plus(qty);
-    cogs = cogs.plus(qty.times(dec(l.product?.cost ?? 0)));
     const cat = l.product?.category?.nameAr ?? 'غير مصنّف';
     const c = byCategory.get(cat) ?? { revenue: dec(0), qty: dec(0) };
     byCategory.set(cat, { revenue: c.revenue.plus(rev), qty: c.qty.plus(qty) });
@@ -110,19 +97,15 @@ export default async function StatementReport({
     byProduct.set(pname, { revenue: p.revenue.plus(rev), qty: p.qty.plus(qty) });
   }
   const salesRows = [...byCategory.entries()].sort((a, b) => b[1].revenue.minus(a[1].revenue).toNumber());
-  const returnsTotal = returns.reduce((s, r) => s.plus(dec(r.totalAmount)), dec(0));
   const topByRevenue = [...byProduct.entries()].sort((a, b) => b[1].revenue.minus(a[1].revenue).toNumber());
   const topByQty = [...byProduct.entries()].sort((a, b) => b[1].qty.minus(a[1].qty).toNumber());
 
   // ── التكاليف ──
-  const salaryTotal = salaries.reduce((s, p) => s.plus(dec(p.amount)), dec(0));
-  const damageTotal = damages.reduce((s, d) => s.plus(dec(d.totalCost)), dec(0));
   const expensesByCat = new Map<string, ReturnType<typeof dec>>();
   for (const e of expenses) {
     expensesByCat.set(e.category, (expensesByCat.get(e.category) ?? dec(0)).plus(dec(e.amount)));
   }
   const expenseRows = [...expensesByCat.entries()].sort((a, b) => b[1].minus(a[1]).toNumber());
-  const expenseTotal = expenses.reduce((s, e) => s.plus(dec(e.amount)), dec(0));
 
   // قيمة المخزون الحالية = Σ الرصيد × تكلفة القطعة.
   const inventoryValue = stock.reduce((s, r) => {
@@ -130,10 +113,9 @@ export default async function StatementReport({
     return unit === null ? s : s.plus(dec(r.onHand).times(dec(unit)));
   }, dec(0));
 
-  const grossProfit = totalSales.minus(cogs);
-  const totalOpex = salaryTotal.plus(expenseTotal).plus(damageTotal);
-  // الربح الصافي = مجمل الربح − التكاليف التشغيلية − الرواجع.
-  const net = grossProfit.minus(totalOpex).minus(returnsTotal);
+  // الرواتب والالتزامات الثابتة بحصّة الفترة + المكافآت المصروفة (lib/profit).
+  const obligations = rp.salaries.plus(rp.fixed).plus(rp.bonuses);
+  const totalOpex = rp.expenses.plus(obligations).plus(rp.damage);
 
   const donutPoints = salesRows.map(([cat, v]) => ({ label: cat, value: v.revenue.toNumber(), display: formatMoney(v.revenue) }));
   const topRevenuePoints = topByRevenue.slice(0, 8).map(([name, v]) => ({ label: name, value: v.revenue.toNumber(), display: formatMoney(v.revenue) }));
@@ -160,21 +142,29 @@ export default async function StatementReport({
         <>
           {/* المؤشّرات الكبيرة — كل بند معروف. */}
           <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Figure label="إجمالي المبيعات" value={formatMoney(totalSales)} hint={`${formatQty(piecesSold)} قطعة مباعة`} strong />
-            <Figure label="تكلفة البضاعة المباعة" value={formatMoney(cogs)} hint="الكمية × تكلفة القطعة" />
-            <Figure label="مجمل الربح" value={formatMoney(grossProfit)} hint="المبيعات − تكلفة البضاعة" tone={grossProfit.lt(0) ? 'bad' : undefined} />
-            <Figure label="إجمالي المصروفات" value={formatMoney(totalOpex)} hint="رواتب + مصروفات + هالك" />
-            <Figure label="الرواتب" value={formatMoney(salaryTotal)} />
-            <Figure label="المصروفات" value={formatMoney(expenseTotal)} hint={`${expenseRows.length} بند`} />
-            <Figure label="الهالك" value={formatMoney(damageTotal)} tone={damageTotal.gt(0) ? 'warn' : undefined} />
-            <Figure label="الرواجع (المرتجعات)" value={formatMoney(returnsTotal)} tone={returnsTotal.gt(0) ? 'bad' : undefined} />
+            <Figure label="مبيعات البضاعة" value={formatMoney(rp.sales)} hint={`${formatQty(piecesSold)} قطعة مباعة`} strong />
+            <Figure label="تكلفة البضاعة المباعة" value={formatMoney(rp.cogs)} hint="الكمية × تكلفة القطعة، ناقص ما رجع" />
+            <Figure label="مجمل الربح" value={formatMoney(rp.grossProfit)} hint="المبيعات − المرتجعات − تكلفة البضاعة" tone={rp.grossProfit.lt(0) ? 'bad' : undefined} />
+            <Figure label="إجمالي المصروفات" value={formatMoney(totalOpex)} hint="تشغيل + رواتب والتزامات + هالك" />
+            <Figure label="الرواتب والالتزامات" value={formatMoney(obligations)} hint="حصّة الفترة" />
+            <Figure label="المصروفات التشغيلية" value={formatMoney(rp.expenses)} hint={`${expenseRows.length} بند`} />
+            <Figure label="الهالك" value={formatMoney(rp.damage)} tone={rp.damage.gt(0) ? 'warn' : undefined} />
+            <Figure label="الرواجع (المرتجعات)" value={formatMoney(rp.returns)} tone={rp.returns.gt(0) ? 'bad' : undefined} />
             <Figure label="قيمة المخزون الحالية" value={formatMoney(inventoryValue)} hint="بالتكلفة" />
           </div>
 
           <div className="mb-6 flex items-center justify-between rounded-2xl border-2 border-brand/30 bg-brand-soft/40 px-6 py-4">
             <span className="text-base font-semibold text-txt">الربح الصافي</span>
-            <span className={`tnum text-2xl font-bold ${net.lt(0) ? 'text-bad' : 'text-brand'}`}>{formatMoney(net)}</span>
+            <span className={`tnum text-2xl font-bold ${rp.net.lt(0) ? 'text-bad' : 'text-brand'}`}>{formatMoney(rp.net)}</span>
           </div>
+
+          {rp.missingCost.pieces > 0 && (
+            <p className="mb-6 rounded-lg border border-warn bg-warn-soft px-4 py-2.5 text-[0.7rem] leading-[1.9] text-warn">
+              ⚠ {rp.missingCost.pieces} قطعة بيعت بلا تكلفة مسجّلة ({rp.missingCost.products.slice(0, 4).join('، ')}
+              {rp.missingCost.products.length > 4 ? '…' : ''}) — حُسبت تكلفتها صفراً فالربح أعلى من حقيقته.
+              سجّل «تكلفة القطعة» في بطاقة المنتج.
+            </p>
+          )}
 
           <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
             {/* قائمة الدخل الكاملة */}
@@ -185,30 +175,41 @@ export default async function StatementReport({
                 {salesRows.map(([cat, v]) => (
                   <Line key={cat} label={`${cat} — ${formatQty(v.qty)} قطعة`} value={formatMoney(v.revenue)} />
                 ))}
-                <Line label={`إجمالي المبيعات — ${formatQty(piecesSold)} قطعة`} value={formatMoney(totalSales)} strong tone="ok" />
-              </Group>
-
-              <Group title="تكلفة البضاعة المباعة">
-                <Line label="تكلفة البضاعة المباعة" value={formatMoney(cogs)} />
-                <Line label="مجمل الربح" value={formatMoney(grossProfit)} strong />
-              </Group>
-
-              <Group title="المصروفات (مفصّلة)">
-                <Line label="الرواتب" value={formatMoney(salaryTotal)} />
-                {expenseRows.map(([cat, v]) => (
-                  <Line key={cat} label={(EXPENSE_CATEGORY_AR as Record<string, string>)[cat] ?? cat} value={formatMoney(v)} />
-                ))}
-                <Line label="الهالك" value={formatMoney(damageTotal)} />
-                <Line label="إجمالي المصروفات" value={formatMoney(totalOpex)} strong tone="bad" />
+                <Line label={`مبيعات البضاعة — ${formatQty(piecesSold)} قطعة`} value={formatMoney(rp.sales)} strong tone="ok" />
+                {rp.deliveryCharged.gt(0) && (
+                  <Line label="أجور توصيل على الزبون (تمرّ للسائق — خارج الربح)" value={formatMoney(rp.deliveryCharged)} />
+                )}
               </Group>
 
               <Group title="الرواجع (المرتجعات)">
-                <Line label="قيمة المرتجعات" value={formatMoney(returnsTotal)} tone={returnsTotal.gt(0) ? 'bad' : undefined} />
+                <Line label="قيمة المرتجعات" value={formatMoney(rp.returns)} tone={rp.returns.gt(0) ? 'bad' : undefined} />
               </Group>
+
+              <Group title="تكلفة البضاعة المباعة">
+                <Line label="تكلفة البضاعة المباعة (ناقص ما رجع)" value={formatMoney(rp.cogs)} />
+                <Line label="مجمل الربح" value={formatMoney(rp.grossProfit)} strong />
+              </Group>
+
+              <Group title="المصروفات (مفصّلة)">
+                <Line label="الرواتب — حصّة الفترة" value={formatMoney(rp.salaries)} />
+                {rp.fixed.gt(0) && <Line label="الالتزامات الثابتة — حصّة الفترة" value={formatMoney(rp.fixed)} />}
+                {rp.bonuses.gt(0) && <Line label="مكافآت وعمولات مصروفة" value={formatMoney(rp.bonuses)} />}
+                {expenseRows.map(([cat, v]) => (
+                  <Line key={cat} label={(EXPENSE_CATEGORY_AR as Record<string, string>)[cat] ?? cat} value={formatMoney(v)} />
+                ))}
+                <Line label="الهالك" value={formatMoney(rp.damage)} />
+                <Line label="إجمالي المصروفات" value={formatMoney(totalOpex)} strong tone="bad" />
+              </Group>
+
+              {rp.penalties.gt(0) && (
+                <Group title="إيرادات أخرى">
+                  <Line label="جزاءات محصَّلة" value={formatMoney(rp.penalties)} tone="ok" />
+                </Group>
+              )}
 
               <div className="mt-4 flex items-center justify-between border-t-2 border-brand/30 pt-4">
                 <span className="text-sm font-semibold text-txt">الربح الصافي</span>
-                <span className={`tnum text-xl font-bold ${net.lt(0) ? 'text-bad' : 'text-brand'}`}>{formatMoney(net)}</span>
+                <span className={`tnum text-xl font-bold ${rp.net.lt(0) ? 'text-bad' : 'text-brand'}`}>{formatMoney(rp.net)}</span>
               </div>
             </section>
 
@@ -239,11 +240,12 @@ export default async function StatementReport({
           </section>
 
           <p className="mt-6 max-w-[75ch] text-[0.7rem] leading-[1.9] text-txt-4">
-            كل رقم محسوب من السجلات لحظة العرض بالفلتر المختار. المبيعات وعددها من بنود الفواتير
-            الصادرة؛ تكلفة البضاعة = الكمية × تكلفة قطعة المنتج؛ الرواتب من قسم الرواتب؛ المصروفات
-            هي المعتمدة مفصّلة ببنودها؛ الهالك المعتمد؛ وقيمة المخزون موقفٌ لحظيّ بالتكلفة (لا يُخصم
-            من الربح). الرواجع من مرتجعات المبيعات في الفترة. الربح الصافي = المبيعات − تكلفة البضاعة
-            − الرواتب − المصروفات − الهالك − الرواجع.
+            كل رقم محسوب من السجلات لحظة العرض بالفلتر المختار، ومن مصدر التقرير المالي نفسه.
+            المبيعات من الفواتير الصادرة بلا أجور التوصيل على الزبون (تمرّ للسائق)؛ تكلفة البضاعة =
+            الكمية × تكلفة القطعة، ناقص ما رجع؛ الرواتب والالتزامات الثابتة بحصّة أيام الفترة من أول
+            فاتورة حتى اليوم؛ المصروفات هي المعتمدة مفصّلة ببنودها؛ الهالك المعتمد؛ وقيمة المخزون موقفٌ
+            لحظيّ بالتكلفة (لا يُخصم من الربح). الربح الصافي = المبيعات − المرتجعات − تكلفة البضاعة −
+            الرواتب والالتزامات − المصروفات − الهالك + الجزاءات المحصَّلة.
           </p>
         </>
       )}

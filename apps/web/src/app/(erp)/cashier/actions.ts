@@ -239,10 +239,8 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
     return inv;
   });
 
-  // أجرة السائق تُدفع من عندنا في الحالتين — من جيبنا أو من مال الزبون على
-  // الفاتورة — فتُسجّل مصروفاً في الحالتين (بطلب المالك). ومع بند التوصيل
-  // على الفاتورة يصير أثره في الربح صفراً بدل أن يُحسب ربحاً لا مقابل له.
-  if (deliveryFee > 0) {
+  // مصروف التوصيل حين تكون الأجرة علينا وحدها — انظر recordDeliveryExpense.
+  if (deliveryOnUs) {
     await recordDeliveryExpense(user, deliveryFee, {
       id: created.id,
       number: created.number,

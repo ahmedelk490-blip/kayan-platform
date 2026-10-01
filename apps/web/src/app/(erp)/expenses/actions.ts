@@ -15,6 +15,7 @@ import { audit, fieldErrors } from '@/lib/audit';
 import { nextOpsNumber, parseDateOr, type FormState } from '@/lib/ops';
 import { numeric } from '@/lib/num';
 import { deliveryInvoiceSuffix } from '@/lib/delivery';
+import { customerPaidDeliveryExpenses } from '../invoices/shared';
 
 const Schema = z.object({
   expenseDate: z.string().optional(),
@@ -249,5 +250,31 @@ export async function postRecurring(monthKey: string): Promise<void> {
     });
   }
   await audit({ tenantId: user.tenantId, userId: user.id, action: 'recurring.post', entityType: 'RecurringExpense', entityId: yyyymm, detail: `${templates.length} قالب لشهر ${yyyymm}` });
+  revalidatePath('/expenses');
+}
+
+/**
+ * حذف مصاريف التوصيل التي أجرتها على الزبون — بضغطة من المدير.
+ *
+ * كانت الأجرة تُقيَّد مصروفاً حتى حين يدفعها الزبون للسائق، فرآها المالك في
+ * مصروفاته مالاً لم يخرج منه (انظر recordDeliveryExpense). ما سُجّل منها قبل
+ * التصحيح يُحذف هنا مرةً واحدة.
+ */
+export async function removeCustomerDeliveryExpenses(): Promise<void> {
+  const user = await requirePermission('expenses.approve');
+  const rows = await customerPaidDeliveryExpenses(user.tenantId);
+  if (rows.length > 0) {
+    await prisma.secondaryExpense.updateMany({
+      where: { tenantId: user.tenantId, id: { in: rows.map((r) => r.id) } },
+      data: { isDeleted: true, deletedAt: new Date() },
+    });
+    await audit({
+      tenantId: user.tenantId,
+      userId: user.id,
+      action: 'expense.customerDeliveryCleanup',
+      entityType: 'SecondaryExpense',
+      detail: `${rows.length} مصروف توصيل على الزبون`,
+    });
+  }
   revalidatePath('/expenses');
 }

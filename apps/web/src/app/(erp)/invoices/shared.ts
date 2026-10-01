@@ -4,7 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { iraqYear, dec } from '@erp/domain';
 import { prisma } from '@/lib/prisma';
 import { nextOpsNumber } from '@/lib/ops';
-import { DELIVERY_EXPENSE_NOTE } from '@/lib/delivery';
+import { DELIVERY_EXPENSE_NOTE, deliveryInvoiceSuffix, isDeliveryDesc } from '@/lib/delivery';
 
 export interface FormState {
   error?: string;
@@ -125,11 +125,13 @@ export function deliveryExpenseTag(invoiceId: string): string {
 }
 
 /**
- * أجور التوصيل: مصروف «شحن وتوصيل» باسم الفاتورة.
+ * أجور التوصيل «علينا»: مصروف «شحن وتوصيل» باسم الفاتورة.
  *
- * يُسجَّل كلّما كانت هناك أجرة، لا حين تكون «علينا» وحدها: السائق يأخذها منّا
- * في الحالتين، وبند الفاتورة هو من يردّها حين تكون على الزبون — فيصير أثرها
- * في الربح صفراً هناك وخصماً كاملاً هنا.
+ * يُسجَّل حين تكون الأجرة علينا وحدها (بطلب المالك). كان يُسجَّل في الحالتين
+ * على أن بند الفاتورة يردّه حين تكون على الزبون — فرأى المالك في مصروفاته
+ * أجرةً يدفعها الزبون للسائق ولم تخرج منه. فالأجرة على الزبون بندٌ في الفاتورة
+ * لا غير، والتقارير لا تحسبها ربحاً (lib/profit). والمستدعي يمرّر صفراً حين
+ * لا تكون علينا، فيزول ما سُجّل قبلُ لنفس الفاتورة.
  *
  * ── وتاريخه تاريخ الطلب ─────────────────────────────────────
  *
@@ -202,6 +204,40 @@ export async function recordDeliveryExpense(
       createdById: user.id,
     },
   });
+}
+
+/**
+ * مصاريف توصيلٍ قُيِّدت على فواتير أجرتها على الزبون — قيدُ ما قبل قرار
+ * المالك (انظر recordDeliveryExpense). تُعرض عليه في المصروفات ليحذفها بضغطة.
+ *
+ * فاتورتها تُعرف بوسمها، وأنها «على الزبون» ببند 🚚 فيها.
+ */
+export async function customerPaidDeliveryExpenses(
+  tenantId: string,
+): Promise<{ id: string; amount: Prisma.Decimal }[]> {
+  const mirrors = await prisma.secondaryExpense.findMany({
+    where: { tenantId, category: 'SHIPPING', isDeleted: false, notes: { startsWith: DELIVERY_EXPENSE_NOTE } },
+    select: { id: true, amount: true, category: true, notes: true },
+  });
+  const bySuffix = new Map<string, typeof mirrors>();
+  for (const m of mirrors) {
+    const suffix = deliveryInvoiceSuffix(m);
+    if (suffix) bySuffix.set(suffix, [...(bySuffix.get(suffix) ?? []), m]);
+  }
+  if (bySuffix.size === 0) return [];
+
+  const invoices = await prisma.invoice.findMany({
+    where: { tenantId, OR: [...bySuffix.keys()].map((s) => ({ id: { endsWith: s } })) },
+    select: { id: true, lines: { select: { description: true, variantId: true } } },
+  });
+  const onCustomer = new Set(
+    invoices
+      .filter((i) => i.lines.some((l) => !l.variantId && isDeliveryDesc(l.description)))
+      .map((i) => i.id.slice(-6)),
+  );
+  return [...bySuffix.entries()]
+    .filter(([suffix]) => onCustomer.has(suffix))
+    .flatMap(([, rows]) => rows.map((r) => ({ id: r.id, amount: r.amount })));
 }
 
 /** The tenant's invoicing settings, with the documented defaults. */
