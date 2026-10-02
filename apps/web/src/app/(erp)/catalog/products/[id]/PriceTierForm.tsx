@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
-import { PRICE_SERVICES, PRICE_SERVICE_AR } from '@erp/domain';
+import { PRICE_SERVICES, PRICE_SERVICE_AR, isOrderService } from '@erp/domain';
 import { Field, Select, SubmitButton, FormError } from '@/components/crud/Form';
 import type { FormState } from '../actions';
 
@@ -34,7 +34,7 @@ export function PriceTierForm({
           label="الخدمة"
           required
           errors={state.fieldErrors}
-          options={PRICE_SERVICES.map((s) => ({ value: s, label: PRICE_SERVICE_AR[s] }))}
+          options={PRICE_SERVICES.filter(isOrderService).map((s) => ({ value: s, label: PRICE_SERVICE_AR[s] }))}
         />
         <Field
           name="minQty"

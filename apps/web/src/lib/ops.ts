@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { IRAQ_OFFSET_MS } from '@erp/domain';
+import { IRAQ_OFFSET_MS, iraqMidnight } from '@erp/domain';
 import { prisma } from './prisma';
 
 /**
@@ -72,6 +72,40 @@ export function dateInput(value: Date | null | undefined): string {
   // يوم بغداد لا يوم UTC: بعد منتصف الليل كانت خانة «اليوم» تقول أمس.
   // (تاريخٌ خُزّن منتصفَ ليل UTC أو منتصفَ ليل بغداد يبقى يومه نفسه.)
   return value ? new Date(value.getTime() + IRAQ_OFFSET_MS).toISOString().slice(0, 10) : '';
+}
+
+/** «YYYY-MM-DDTHH:mm» بساعة بغداد — قيمة خانة `<input type="datetime-local">`. */
+export function dateTimeInput(value: Date | null | undefined): string {
+  return value ? new Date(value.getTime() + IRAQ_OFFSET_MS).toISOString().slice(0, 16) : '';
+}
+
+/**
+ * تاريخ الفاتورة ووقتها كما اختارهما البائع (بساعة بغداد) — أو null للحظة الحالية.
+ *
+ * تلقائيّان بالآن، ويغيّرهما البائع من الفاتورة أو الكاشير حين يخصّ الطلب وقتاً
+ * آخر — طلبٌ أُدخل بعد منتصف الليل يخصّ أمس مثلاً (بطلب المالك). `auto` يعني أن
+ * الخانة لم تُلمس: اللحظة الحالية لا ما كانت عليه الخانة حين فُتحت الصفحة.
+ * ويُقبل التاريخ وحده أيضاً (اليوم ← الآن، ويومٌ آخر ← ظهره). ولا وقت بعد الآن.
+ */
+export function chosenIssueAt(
+  raw: FormDataEntryValue | null,
+  auto: boolean,
+): { at: Date } | { error: string } | null {
+  if (auto) return null;
+  const s = String(raw ?? '').trim();
+  if (!s) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?$/.exec(s);
+  if (!m) return { error: 'التاريخ غير صالح.' };
+  const midnight = iraqMidnight(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime();
+  const now = Date.now();
+  const at =
+    m[4] !== undefined
+      ? midnight + (Number(m[4]) * 60 + Number(m[5])) * 60_000
+      : `${m[1]}-${m[2]}-${m[3]}` === dateInput(new Date())
+        ? now
+        : midnight + 12 * 60 * 60_000;
+  if (at > now + 5 * 60_000) return { error: 'التاريخ والوقت لا يكونان بعد الآن.' };
+  return { at: new Date(at) };
 }
 
 /** First and last instant of a YYYY-MM month string, defaulting to now. */

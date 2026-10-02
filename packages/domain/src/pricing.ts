@@ -23,8 +23,16 @@ export const PRICE_SERVICE_AR: Record<PriceService, string> = {
  * الخدمة كانت تُشتقّ من شرائح الأسعار وحدها، فلما أُعيد إدخال المنتجات بلا
  * شرائح اختفى اختيار «تطريز/طباعة» من الفاتورة والكاشير — والمالك يحتاجه لكل
  * طلب: به يُعرف ما يُطرَّز وما يُطبع، وبه يُحسب استهلاك المستلزمات.
+ *
+ * «طباعة» (PRINTING) أُزيلت من الاختيار بطلب المالك («عاوز اشيل طباعة»)، وتبقى
+ * في PRICE_SERVICES فتُقرأ بها الفواتير والشرائح القديمة كما هي.
  */
-export const ORDER_SERVICES: PriceService[] = ['EMBROIDERY', 'PRINTING', 'DTF', 'NONE'];
+export const ORDER_SERVICES: PriceService[] = ['EMBROIDERY', 'DTF', 'NONE'];
+
+/** هل تُعرض الخدمة للاختيار؟ خدمات الشرائح القديمة خارج القائمة (طباعة) لا تُعرض. */
+export function isOrderService(service: string): boolean {
+  return (ORDER_SERVICES as string[]).includes(service);
+}
 
 /**
  * علامة «سعر الخدمة» على شريحة سعر: سعر القطعة لكل خدمة كما يكتبه المالك من

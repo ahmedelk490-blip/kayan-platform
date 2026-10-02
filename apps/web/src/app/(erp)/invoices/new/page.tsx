@@ -4,7 +4,7 @@ import { MANUAL_ORDER_SOURCES, ORDER_SOURCE_AR } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { nextCode } from '@/lib/audit';
-import { dateInput } from '@/lib/ops';
+import { dateTimeInput } from '@/lib/ops';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader } from '@/components/crud/Shell';
 import { DocumentForm, type DocLine } from '@/app/(erp)/sales/DocumentForm';
@@ -108,8 +108,8 @@ export default async function NewInvoicePage({
           bundles={options.bundles}
           values={{
             ...(prefillCustomerId || prefillLines ? { customerId: prefillCustomerId, lines: prefillLines } : {}),
-            // تاريخ الفاتورة: اليوم ببغداد تلقائياً، ويغيّره البائع إن خصّ الطلبُ يوماً آخر.
-            dateA: dateInput(new Date()),
+            // التاريخ والوقت: الآن ببغداد تلقائياً، ويغيّرهما البائع إن خصّ الطلبُ وقتاً آخر.
+            dateA: dateTimeInput(new Date()),
           }}
           webOrderId={webOrderId ?? undefined}
           sources={MANUAL_ORDER_SOURCES.map((s) => ({ value: s, label: ORDER_SOURCE_AR[s] }))}

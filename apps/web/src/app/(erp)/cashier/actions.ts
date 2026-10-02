@@ -10,6 +10,7 @@ import { num, normalizeDigits } from '@/lib/num';
 import { DELIVERY_DESCRIPTION } from '@/lib/delivery';
 import { allocateInvoiceNumber, lockPaymentSequence, nextPaymentNumber, invoiceSettings, recordDeliveryExpense, type FormState } from '../invoices/shared';
 import { adjustStock } from '@/lib/stock';
+import { chosenIssueAt } from '@/lib/ops';
 
 /**
  * إتمام بيع الكاشير — فاتورة مُصدَرة ومُحصَّلة تخصم المخزون، في معاملة واحدة.
@@ -121,8 +122,13 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
     }
   }
 
+  // التاريخ والوقت من خانة الكاشير — الآن تلقائياً، ويغيّرهما البائع لطلبٍ يخصّ
+  // وقتاً آخر (بطلب المالك). الفاتورة والدفعة وأجرة التوصيل كلها بهذا الوقت.
+  const picked = chosenIssueAt(formData.get('issueDate'), String(formData.get('issueDateAuto') ?? '') === '1');
+  if (picked && 'error' in picked) return { fieldErrors: { issueDate: picked.error } };
+
   const settings = await invoiceSettings(user.tenantId);
-  const issuedAt = new Date();
+  const issuedAt = picked ? picked.at : new Date();
 
   const created = await tenantTransaction(async (tx) => {
     const number = await allocateInvoiceNumber(tx, user.tenantId, settings.prefix);

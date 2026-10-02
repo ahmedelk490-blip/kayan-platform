@@ -20,15 +20,15 @@ type Dec = ReturnType<typeof dec>;
 const whole = (d: Dec) => Math.round(d.toNumber());
 
 /**
- * الأرباح — صفحة المالك: كل حسابات المصنع في عدّادات، وفلترها المدة وحدها.
+ * الأرباح — صفحة المالك، بثلاثة أقسام (بطلبه: «تبسيط وتقسيم»).
  *
- * بطلبه: «صفحة مكتوب عليها الأرباح، فيها عدادات بالحسابات، مبسّطة، فيها كل
- * حاجة عن الحسابات، وفلترها المدة الزمنية فقط». فالحكم أولاً (ربحٌ أم خسارة
- * وكم)، ثم الداخل، فالخارج، فالأرصدة الآن — بلا جداول ولا رسوم.
+ * ١. النتيجة: ربحٌ أم خسارة، وكم، وأين ذهبت كل 100 دينار.
+ * ٢. كيف تكوّن الربح: قائمةٌ واحدة من المبيعات إلى الصافي — كانت تسع بطاقات
+ *    متجاورة يجمعها القارئ بعينه.
+ * ٣. فلوسك الآن: أربعة عدّادات — المقبوض، ولنا، وعلينا، والمخزون.
  *
  * الأرقام من lib/profit — مصدر التقرير المالي والبيان المالي نفسه — فلا يخرج
- * ربحان لمدةٍ واحدة. وهي للمدير وحده: cost.view، لأن التكلفة وسعر الجملة
- * شأن المالك (قاعدته).
+ * ربحان لمدةٍ واحدة. وهي للمدير وحده: cost.view (التكلفة شأن المالك).
  */
 export default async function ProfitsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const user = await requirePermission('cost.view');
@@ -79,18 +79,22 @@ export default async function ProfitsPage({ searchParams }: { searchParams: Prom
   const obligations = rp.salaries.plus(rp.fixed).plus(rp.bonuses);
 
   // كل 100 دينار دخلت: أين ذهبت، وكم بقي.
+  const base = rp.sales.plus(rp.penalties);
+  const pct = (v: Dec) =>
+    base.lte(0) ? 0 : Math.max(0, Math.min(100, Math.round(v.dividedBy(base).times(100).toNumber())));
   const parts = [
     { label: 'تكلفة البضاعة', amount: rp.cogs, tone: 'bg-brand' },
     { label: 'المصروفات', amount: rp.expenses, tone: 'bg-warn' },
     { label: 'الرواتب والالتزامات', amount: obligations, tone: 'bg-bad' },
     { label: 'المرتجعات والهالك', amount: rp.returns.plus(rp.damage), tone: 'bg-txt-4' },
   ].filter((p) => p.amount.gt(0));
-  const base = rp.sales.plus(rp.penalties);
-  const pct = (v: Dec) =>
-    base.lte(0) ? 0 : Math.max(0, Math.min(100, Math.round(v.dividedBy(base).times(100).toNumber())));
   const kept = rp.net.gt(0) ? pct(rp.net) : 0;
   const loss = rp.net.lt(0);
   const biggest = [...parts].sort((a, b) => b.amount.minus(a.amount).toNumber())[0];
+  const fixedNote =
+    rp.fixedNames.length > 0
+      ? `حصّة المدة · ${rp.fixedNames.slice(0, 2).join('، ')}${rp.fixedNames.length > 2 ? '…' : ''}`
+      : 'حصّة المدة';
 
   return (
     <AppShell user={user} title="الأرباح">
@@ -110,7 +114,7 @@ export default async function ProfitsPage({ searchParams }: { searchParams: Prom
 
       <ReportFilter basePath="/reports/profits" period={range.period} from={range.fromStr} to={range.toStr} tabs={false} />
 
-      {/* الحكم أولاً: ربحٌ أم خسارة، وكم — ثم أين ذهبت كل 100 دينار. */}
+      {/* ١. النتيجة — ربحٌ أم خسارة، وكم، وأين ذهبت كل 100 دينار. */}
       <section
         className={`erp-card mb-6 border-s-4 p-5 lg:p-6 ${loss ? 'border-s-bad bg-bad-soft/30' : 'border-s-ok bg-ok-soft/30'}`}
       >
@@ -150,13 +154,16 @@ export default async function ProfitsPage({ searchParams }: { searchParams: Prom
               ))}
               {kept > 0 && <span style={{ width: `${kept}%` }} className="bg-ok" title="الربح" />}
             </div>
+            {/* المفتاح بلا بنودٍ نصيبها دون 1% — «0%» بجانب اسمٍ يشوّش ولا يُخبر. */}
             <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[0.7rem] text-txt-3">
-              {parts.map((p) => (
-                <li key={p.label} className="flex items-center gap-1.5">
-                  <span aria-hidden className={`h-2 w-2 rounded-sm ${p.tone}`} />
-                  {p.label} <span className="tnum">{pct(p.amount)}%</span>
-                </li>
-              ))}
+              {parts
+                .filter((p) => pct(p.amount) >= 1)
+                .map((p) => (
+                  <li key={p.label} className="flex items-center gap-1.5">
+                    <span aria-hidden className={`h-2 w-2 rounded-sm ${p.tone}`} />
+                    {p.label} <span className="tnum">{pct(p.amount)}%</span>
+                  </li>
+                ))}
               {kept > 0 && (
                 <li className="flex items-center gap-1.5">
                   <span aria-hidden className="h-2 w-2 rounded-sm bg-ok" />
@@ -168,146 +175,66 @@ export default async function ProfitsPage({ searchParams }: { searchParams: Prom
         )}
       </section>
 
-      <Group title="الداخل">
-        <StatCard
-          index={0}
-          label="المبيعات"
-          value={whole(rp.sales)}
-          unit="د.ع"
-          hint={`${rp.invoiceCount} فاتورة · ${rp.pieces} قطعة`}
-          icon={<Emoji>🧾</Emoji>}
-          tone="success"
-        />
-        <StatCard
-          index={1}
-          label="المقبوض فعلاً"
-          value={whole(collected)}
-          unit="د.ع"
-          hint="ما دخل الصندوق في المدة"
-          icon={<Emoji>💵</Emoji>}
-          tone="success"
-        />
-        <StatCard
-          index={2}
-          label="مجمل الربح"
-          value={whole(rp.grossProfit)}
-          unit="د.ع"
-          hint={`بعد تكلفة البضاعة — هامش ${margin}%`}
-          icon={<Emoji>📈</Emoji>}
-        />
-        {rp.penalties.gt(0) && (
+      {/* ٢. كيف تكوّن الربح — قائمةٌ واحدة تُقرأ من أعلى لأسفل. */}
+      <section className="erp-card mb-6 p-5 lg:p-6">
+        <h3 className="text-sm font-semibold text-brand">كيف تكوّن الربح</h3>
+        <p className="mb-2 text-[0.7rem] text-txt-4">من المبيعات إلى الصافي، خطوةً خطوة.</p>
+        <dl>
+          <Step sign="+" label="المبيعات" note={`${rp.invoiceCount} فاتورة · ${rp.pieces} قطعة`} value={rp.sales} />
+          {rp.returns.gt(0) && <Step sign="−" label="المرتجعات" note={`${rp.returnsCount} مرتجع`} value={rp.returns} />}
+          <Step sign="−" label="تكلفة البضاعة" note={`${rp.pieces} قطعة × تكلفة القطعة`} value={rp.cogs} />
+          <Step sign="=" label="مجمل الربح" note={`هامش ${margin}%`} value={rp.grossProfit} total />
+          <Step sign="−" label="المصروفات" note={`${rp.expensesCount} مصروف معتمد`} value={rp.expenses} />
+          <Step sign="−" label="الرواتب" note={`حصّة المدة · ${rp.staffCount} موظف`} value={rp.salaries} />
+          {rp.fixed.gt(0) && <Step sign="−" label="الالتزامات الثابتة" note={fixedNote} value={rp.fixed} />}
+          {rp.bonuses.gt(0) && <Step sign="−" label="مكافآت وعمولات" note={`${rp.bonusesCount} دفعة`} value={rp.bonuses} />}
+          {rp.damage.gt(0) && <Step sign="−" label="الهالك" note={`${rp.damageCount} محضر`} value={rp.damage} />}
+          {rp.penalties.gt(0) && <Step sign="+" label="جزاءات مستردّة" note="من المتسبّبين في الهالك" value={rp.penalties} />}
+          <Step sign="=" label="صافي الربح" value={rp.net} total big />
+        </dl>
+      </section>
+
+      {/* ٣. فلوسك الآن — أربعة عدّادات. */}
+      <section className="mb-6">
+        <h3 className="mb-3 text-sm font-semibold text-brand">فلوسك الآن</h3>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
           <StatCard
-            index={3}
-            label="جزاءات مستردّة"
-            value={whole(rp.penalties)}
+            index={0}
+            label="المقبوض في المدة"
+            value={whole(collected)}
             unit="د.ع"
-            hint="من المتسبّبين في الهالك"
-            icon={<Emoji>↩️</Emoji>}
+            hint="ما دخل الصندوق"
+            icon={<Emoji>💵</Emoji>}
             tone="success"
           />
-        )}
-      </Group>
-
-      <Group title="الخارج">
-        <StatCard
-          index={4}
-          label="تكلفة البضاعة المباعة"
-          value={whole(rp.cogs)}
-          unit="د.ع"
-          hint={`${rp.pieces} قطعة × تكلفة القطعة`}
-          icon={<Emoji>📦</Emoji>}
-          tone="warning"
-        />
-        <StatCard
-          index={5}
-          label="المصروفات التشغيلية"
-          value={whole(rp.expenses)}
-          unit="د.ع"
-          hint={`${rp.expensesCount} مصروف معتمد`}
-          icon={<Emoji>🧮</Emoji>}
-          tone="warning"
-        />
-        <StatCard
-          index={6}
-          label="الرواتب"
-          value={whole(rp.salaries)}
-          unit="د.ع"
-          hint={`حصّة المدة · ${rp.staffCount} موظف`}
-          icon={<Emoji>👥</Emoji>}
-          tone="warning"
-        />
-        <StatCard
-          index={7}
-          label="الالتزامات الثابتة"
-          value={whole(rp.fixed)}
-          unit="د.ع"
-          hint={
-            rp.fixedNames.length > 0
-              ? `حصّة المدة · ${rp.fixedNames.slice(0, 2).join('، ')}${rp.fixedNames.length > 2 ? '…' : ''}`
-              : 'لا التزامات مضبوطة'
-          }
-          icon={<Emoji>🏠</Emoji>}
-          tone="warning"
-        />
-        <StatCard
-          index={8}
-          label="المرتجعات"
-          value={whole(rp.returns)}
-          unit="د.ع"
-          hint={`${rp.returnsCount} مرتجع`}
-          icon={<Emoji>🔁</Emoji>}
-          tone="neutral"
-        />
-        <StatCard
-          index={9}
-          label="الهالك"
-          value={whole(rp.damage)}
-          unit="د.ع"
-          hint={`${rp.damageCount} محضر معتمد`}
-          icon={<Emoji>⚠️</Emoji>}
-          tone="neutral"
-        />
-        {rp.bonuses.gt(0) && (
           <StatCard
-            index={10}
-            label="مكافآت وعمولات"
-            value={whole(rp.bonuses)}
+            index={1}
+            label="لنا عند الزبائن"
+            value={whole(owedToUs)}
             unit="د.ع"
-            hint={`${rp.bonusesCount} دفعة`}
-            icon={<Emoji>🎁</Emoji>}
-            tone="warning"
+            hint="غير المحصَّل — كل الفترات"
+            icon={<Emoji>📥</Emoji>}
           />
-        )}
-      </Group>
-
-      <Group title="الأرصدة الآن">
-        <StatCard
-          index={11}
-          label="لنا عند الزبائن"
-          value={whole(owedToUs)}
-          unit="د.ع"
-          hint="غير المحصَّل — كل الفترات"
-          icon={<Emoji>📥</Emoji>}
-        />
-        <StatCard
-          index={12}
-          label="علينا للمورّدين"
-          value={whole(weOwe)}
-          unit="د.ع"
-          hint="غير المدفوع من المشتريات"
-          icon={<Emoji>📤</Emoji>}
-          tone="neutral"
-        />
-        <StatCard
-          index={13}
-          label="قيمة المخزون"
-          value={whole(inventoryValue)}
-          unit="د.ع"
-          hint="الرصيد الحالي بالتكلفة"
-          icon={<Emoji>🏷️</Emoji>}
-          tone="neutral"
-        />
-      </Group>
+          <StatCard
+            index={2}
+            label="علينا للمورّدين"
+            value={whole(weOwe)}
+            unit="د.ع"
+            hint="غير المدفوع من المشتريات"
+            icon={<Emoji>📤</Emoji>}
+            tone="neutral"
+          />
+          <StatCard
+            index={3}
+            label="قيمة المخزون"
+            value={whole(inventoryValue)}
+            unit="د.ع"
+            hint="الرصيد الحالي بالتكلفة"
+            icon={<Emoji>🏷️</Emoji>}
+            tone="neutral"
+          />
+        </div>
+      </section>
 
       {/* قطعٌ بلا تكلفة تُحسب صفراً فتنفخ الربح — تُسمّى بدل أن تمرّ بصمت. */}
       {rp.missingCost.pieces > 0 && (
@@ -323,21 +250,50 @@ export default async function ProfitsPage({ searchParams }: { searchParams: Prom
       )}
 
       <p className="max-w-[75ch] text-[0.7rem] leading-[1.9] text-txt-4">
-        صافي الربح = المبيعات − المرتجعات − تكلفة البضاعة − المصروفات − الرواتب والالتزامات الثابتة
-        (حصّة أيام المدة من أول فاتورة حتى اليوم) − الهالك + الجزاءات المستردّة. أجور التوصيل على
-        الزبون تمرّ للسائق فلا تدخل، والمشتريات تُخصم حين تُباع ضمن تكلفة البضاعة. والأرقام نفسها في
-        التقرير المالي والبيان المالي.
+        الرواتب والالتزامات الثابتة بحصّة أيام المدة من أول فاتورة حتى اليوم. أجور التوصيل على الزبون
+        تمرّ للسائق فلا تدخل، والمشتريات تُخصم حين تُباع ضمن تكلفة البضاعة. والأرقام نفسها في التقرير
+        المالي والبيان المالي.
       </p>
     </AppShell>
   );
 }
 
-function Group({ title, children }: { title: string; children: React.ReactNode }) {
+/**
+ * خطوةٌ في قائمة الربح: داخلٌ (+) أو خارجٌ (−) أو حصيلةٌ (=). الإشارة ملوّنة
+ * والرقم هادئ — ستة أرقام حمراء متتالية كانت ستصرخ بلا سبب.
+ */
+function Step({
+  sign,
+  label,
+  note,
+  value,
+  total,
+  big,
+}: {
+  sign: '+' | '−' | '=';
+  label: string;
+  note?: string;
+  value: Dec;
+  total?: boolean;
+  big?: boolean;
+}) {
+  const signTone = sign === '+' ? 'text-ok' : sign === '−' ? 'text-bad' : 'text-brand';
+  const valueTone = value.lt(0) ? 'text-bad' : big ? 'text-ok' : total ? 'text-txt' : 'text-txt-2';
   return (
-    <section className="mb-6">
-      <h3 className="mb-3 text-sm font-semibold text-brand">{title}</h3>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">{children}</div>
-    </section>
+    <div className={`flex items-baseline justify-between gap-4 py-2.5 ${total ? 'border-t border-line' : ''}`}>
+      <dt className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+        <span aria-hidden className={`w-4 shrink-0 text-center text-sm font-bold ${signTone}`}>
+          {sign}
+        </span>
+        <span className={total ? `font-semibold text-txt ${big ? 'text-base' : 'text-sm'}` : 'text-sm text-txt-2'}>
+          {label}
+        </span>
+        {note && <span className="text-[0.7rem] text-txt-4">{note}</span>}
+      </dt>
+      <dd className={`tnum shrink-0 ${big ? 'text-xl font-bold' : total ? 'text-sm font-bold' : 'text-sm'} ${valueTone}`}>
+        {formatMoney(value)}
+      </dd>
+    </div>
   );
 }
 

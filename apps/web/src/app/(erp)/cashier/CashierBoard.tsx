@@ -10,6 +10,7 @@ import {
   PAYMENT_METHOD_AR,
   PRICE_SERVICE_AR,
   ORDER_SERVICES,
+  isOrderService,
   MANUAL_ORDER_SOURCES,
   ORDER_SOURCE_AR,
   compareSizes,
@@ -47,6 +48,7 @@ export function CashierBoard({
   images,
   warehouseId,
   debts,
+  nowInput,
 }: {
   customers: { value: string; label: string }[];
   variants: VariantOption[];
@@ -54,7 +56,13 @@ export function CashierBoard({
   warehouseId: string;
   /** دين كل عميل المفتوح — يظهر تحذيراً لحظة اختياره. */
   debts?: Record<string, { amount: number; count: number }>;
+  /** «الآن» بساعة بغداد لخانة التاريخ والوقت (YYYY-MM-DDTHH:mm). */
+  nowInput: string;
 }) {
+  // التاريخ والوقت — الآن تلقائياً، ويغيّرهما البائع لطلبٍ يخصّ وقتاً آخر (بطلب
+  // المالك). ما لم تُلمس الخانة يسجّل الخادم لحظة البيع نفسها.
+  const [issueAt, setIssueAt] = useState(nowInput);
+  const [issueAtTouched, setIssueAtTouched] = useState(false);
   const [state, formAction] = useActionState<FormState, FormData>(cashierCheckout, {});
   const [cart, setCart] = useState<CartLine[]>([]);
   const [picking, setPicking] = useState<string | null>(null); // productId being configured
@@ -526,6 +534,24 @@ export function CashierBoard({
             </select>
           </label>
         </div>
+        <label className="block">
+          <span className="mb-1 block text-[0.7rem] text-txt-3">التاريخ والوقت</span>
+          <input
+            name="issueDate"
+            type="datetime-local"
+            dir="ltr"
+            value={issueAt}
+            onChange={(e) => {
+              setIssueAt(e.target.value);
+              setIssueAtTouched(true);
+            }}
+            className="erp-input py-2 text-start"
+          />
+          <input type="hidden" name="issueDateAuto" value={issueAtTouched ? '0' : '1'} />
+          <span className={`mt-0.5 block text-[0.7rem] ${state.fieldErrors?.issueDate ? 'text-bad' : 'text-txt-4'}`}>
+            {state.fieldErrors?.issueDate ?? 'الآن تلقائياً — غيّرهما فقط لطلبٍ بوقتٍ آخر'}
+          </span>
+        </label>
         <p className="text-[0.7rem] text-txt-4">المتبقّي: <span className={`tnum font-semibold ${remaining.lte(0) ? 'text-ok' : 'text-warn'}`}>{formatMoney(remaining)}</span></p>
 
         <CheckoutButton disabled={cart.length === 0 || !customerReady} />
@@ -732,7 +758,7 @@ function priceFor(v: VariantOption, qty: number, service?: string): number {
  */
 function servicesOf(variants: VariantOption[]): string[] {
   const seen: string[] = [];
-  for (const v of variants) for (const t of v.tiers) if (!seen.includes(t.service)) seen.push(t.service);
+  for (const v of variants) for (const t of v.tiers) if (isOrderService(t.service) && !seen.includes(t.service)) seen.push(t.service);
   // خدمات الشرائح أوّلاً ثم باقي خدمات الطلب — سعرٌ لخدمةٍ واحدة لا يُخفي غيرها.
   return variants.length === 0 ? seen : [...seen, ...ORDER_SERVICES.filter((s) => !seen.includes(s))];
 }

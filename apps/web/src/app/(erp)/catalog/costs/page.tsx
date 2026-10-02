@@ -10,7 +10,7 @@ import { saveProductNumbers, saveSalaries } from './actions';
 
 export const metadata: Metadata = { title: 'الأسعار والتكاليف' };
 
-const PRICED: PriceService[] = ['EMBROIDERY', 'PRINTING', 'DTF'];
+const PRICED: PriceService[] = ['EMBROIDERY', 'DTF'];
 
 /**
  * الأسعار والتكاليف والرواتب — كل أرقام الحساب في شاشة واحدة (بطلب المالك).

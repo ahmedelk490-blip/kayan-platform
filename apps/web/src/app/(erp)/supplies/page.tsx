@@ -168,7 +168,7 @@ export default async function SuppliesPage({
           <span className="tnum text-xs text-txt-3">{month.key}</span>
         </div>
         <div className="flex flex-wrap gap-2 text-xs text-txt-2">
-          {(['EMBROIDERY', 'PRINTING', 'DTF'] as const).map((s) => (
+          {(['EMBROIDERY', 'DTF', 'PRINTING'] as const).filter((s) => s !== 'PRINTING' || (piecesBy.get(s) ?? 0) > 0).map((s) => (
             <span key={s} className="rounded-full border border-line-2 px-3 py-1.5">
               {PRICE_SERVICE_AR[s]}: <strong className="tnum">{piecesBy.get(s) ?? 0}</strong> قطعة
             </span>

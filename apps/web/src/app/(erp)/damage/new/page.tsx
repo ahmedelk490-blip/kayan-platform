@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { PRICE_SERVICES, PRICE_SERVICE_AR, userCan } from '@erp/domain';
+import { PRICE_SERVICES, PRICE_SERVICE_AR, isOrderService, userCan } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -48,7 +48,7 @@ export default async function NewDamagePage() {
     colors: [],
   }));
   const colors = colorRows.map((c) => ({ value: c.id, label: c.nameAr }));
-  const services = PRICE_SERVICES.filter((s) => s !== 'NONE').map((s) => ({ value: s, label: PRICE_SERVICE_AR[s] }));
+  const services = PRICE_SERVICES.filter((s) => s !== 'NONE' && isOrderService(s)).map((s) => ({ value: s, label: PRICE_SERVICE_AR[s] }));
 
   return (
     <AppShell user={user} title="محضر هالك جديد">

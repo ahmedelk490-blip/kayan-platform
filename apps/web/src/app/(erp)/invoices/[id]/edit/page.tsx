@@ -9,7 +9,7 @@ import { DocumentForm, type DocLine } from '@/app/(erp)/sales/DocumentForm';
 import { loadSalesOptions } from '@/app/(erp)/sales/options';
 import { PRICE_SERVICE_AR } from '@erp/domain';
 import { isDeliveryDesc } from '@/lib/delivery';
-import { dateInput } from '@/lib/ops';
+import { dateTimeInput } from '@/lib/ops';
 import { deliveryExpenseTag } from '../../shared';
 import { updateInvoiceLines } from '../../actions';
 
@@ -112,7 +112,7 @@ export default async function EditInvoicePage({
             deliveryFee,
             deliveryOn,
             // تاريخ الفاتورة الحالي — يغيّره البائع عند الحاجة (المسوّدة يعطيها الإصدار تاريخها).
-            dateA: invoice.issueDate ? dateInput(invoice.issueDate) : undefined,
+            dateA: invoice.issueDate ? dateTimeInput(invoice.issueDate) : undefined,
           }}
           labels={{ dateA: 'تاريخ الإصدار', dateB: 'تاريخ الاستحقاق' }}
           submitLabel="حفظ التعديلات"

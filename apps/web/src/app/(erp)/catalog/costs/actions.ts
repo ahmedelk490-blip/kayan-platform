@@ -9,7 +9,7 @@ import { audit } from '@/lib/audit';
 import { num } from '@/lib/num';
 
 /** الخدمات التي لها سعر قطعة في الشاشة — «بدون خدمة» سعرها سعر المنتج نفسه. */
-const PRICED: PriceService[] = ['EMBROIDERY', 'PRINTING', 'DTF'];
+const PRICED: PriceService[] = ['EMBROIDERY', 'DTF'];
 
 /**
  * حفظ تكلفة القطعة وأسعار الخدمات لكل المنتجات — بضغطة واحدة.

@@ -7,6 +7,7 @@ import { ModuleHeader } from '@/components/crud/Shell';
 import { Note } from '@/components/crud/Note';
 import { loadSalesOptions } from '@/app/(erp)/sales/options';
 import { CashierBoard } from './CashierBoard';
+import { dateTimeInput } from '@/lib/ops';
 
 export const metadata: Metadata = { title: 'الكاشير' };
 
@@ -60,6 +61,7 @@ export default async function CashierPage() {
             debts={options.debts}
             images={images}
             warehouseId={warehouse.id}
+            nowInput={dateTimeInput(new Date())}
           />
         </>
       )}

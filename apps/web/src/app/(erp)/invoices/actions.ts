@@ -20,11 +20,10 @@ import {
   formatQty,
   isOrderSource,
   isOwnerRole,
-  iraqMidnight,
   PRICE_SERVICE_AR,
   type PriceService,
 } from '@erp/domain';
-import { dateInput } from '@/lib/ops';
+import { chosenIssueAt } from '@/lib/ops';
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors, nextCode } from '@/lib/audit';
@@ -63,25 +62,9 @@ function lineDescription(
   return extras ? `${base} — ${extras}` : base;
 }
 
-/**
- * تاريخ الفاتورة الذي اختاره البائع (YYYY-MM-DD بيوم بغداد) — أو null إن تُرك.
- *
- * تلقائيٌّ باليوم، ويغيّره البائع حين يخصّ الطلب يوماً آخر — طلبٌ نزل بعد منتصف
- * الليل يخصّ أمس مثلاً (بطلب المالك). اليوم نفسه يأخذ اللحظة الحالية بساعتها،
- * واليوم الآخر ظهرَه (١٢ ببغداد) فلا ينزلق لجاره. ولا تاريخ بعد اليوم.
- */
-function chosenIssueDate(
-  raw: FormDataEntryValue | null,
-): { ymd: string; at: Date } | { error: string } | null {
-  const ymd = String(raw ?? '').trim();
-  if (!ymd) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
-  if (!m) return { error: 'تاريخ الفاتورة غير صالح.' };
-  const today = dateInput(new Date());
-  if (ymd > today) return { error: 'تاريخ الفاتورة لا يكون بعد اليوم.' };
-  if (ymd === today) return { ymd, at: new Date() };
-  const midnight = iraqMidnight(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  return { ymd, at: new Date(midnight.getTime() + 12 * 60 * 60 * 1000) };
+/** تاريخ الفاتورة ووقتها من الفورم — انظر chosenIssueAt (lib/ops). */
+function pickedIssueAt(formData: FormData) {
+  return chosenIssueAt(formData.get('issueDate'), String(formData.get('issueDateAuto') ?? '') === '1');
 }
 
 /** قراءة خانة التوصيل: المبلغ ولمن — على الزبون (بند) أو علينا (مصروف). */
@@ -304,7 +287,7 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
       }
     }
 
-    const picked = chosenIssueDate(formData.get('issueDate'));
+    const picked = pickedIssueAt(formData);
     if (picked && 'error' in picked) return { fieldErrors: { issueDate: picked.error } };
 
     const settings = await invoiceSettings(user.tenantId);
@@ -594,10 +577,13 @@ export async function updateInvoiceLines(
 
   // تاريخ الفاتورة يُعدَّل هنا أيضاً (بطلب المالك) — للصادرة وحدها؛ المسوّدة
   // يعطيها الإصدار تاريخها.
-  const picked = invoice.status !== 'DRAFT' ? chosenIssueDate(formData.get('issueDate')) : null;
+  const picked = invoice.status !== 'DRAFT' ? pickedIssueAt(formData) : null;
   if (picked && 'error' in picked) return { fieldErrors: { issueDate: picked.error } };
+  // دقيقةٌ فأكثر فرقاً — الخانة بدقّة الدقيقة، فالثواني لا تُعدّ تغييراً.
   const newIssueAt =
-    picked && invoice.issueDate && picked.ymd !== dateInput(invoice.issueDate) ? picked.at : null;
+    picked && invoice.issueDate && Math.abs(picked.at.getTime() - invoice.issueDate.getTime()) >= 60_000
+      ? picked.at
+      : null;
   const termDays = newIssueAt ? (await invoiceSettings(user.tenantId)).termDays : 0;
 
   const rawLines = readLines(formData);

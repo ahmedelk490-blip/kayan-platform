@@ -9,6 +9,7 @@ import {
   dec,
   PRICE_SERVICE_AR,
   ORDER_SERVICES,
+  isOrderService,
   compareSizes,
   PAYMENT_METHODS,
   PAYMENT_METHOD_AR,
@@ -101,7 +102,7 @@ const emptyLine = (): DocLine => ({
  */
 function servicesOf(v: VariantOption): string[] {
   const seen: string[] = [];
-  for (const t of v.tiers) if (!seen.includes(t.service)) seen.push(t.service);
+  for (const t of v.tiers) if (isOrderService(t.service) && !seen.includes(t.service)) seen.push(t.service);
   // خدمات شرائحه أوّلاً ثم باقي خدمات الطلب: سعرٌ لخدمةٍ واحدة لا يُخفي غيرها.
   return [...seen, ...ORDER_SERVICES.filter((s) => !seen.includes(s))];
 }
@@ -223,6 +224,9 @@ export function DocumentForm({
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   /** فورم فاتورة (لا عرض سعر ولا أمر بيع) — له خانة «تاريخ الفاتورة» الظاهرة. */
   const isInvoice = labels.dateA === 'تاريخ الإصدار';
+  // التاريخ والوقت — مضبوطان لتُعرف لمسة البائع: ما لم يُلمس يأخذ وقت الحفظ.
+  const [issueAt, setIssueAt] = useState(values?.dateA ?? '');
+  const [issueAtTouched, setIssueAtTouched] = useState(false);
   const [lines, setLines] = useState<DocLine[]>(() =>
     values?.lines?.length ? values.lines.map((l) => hydrate(l, variants)) : [emptyLine()],
   );
@@ -289,7 +293,7 @@ export function DocumentForm({
     const seen: string[] = [];
     for (const v of variants) {
       if (v.productId !== szProductId) continue;
-      for (const t of v.tiers) if (!seen.includes(t.service)) seen.push(t.service);
+      for (const t of v.tiers) if (isOrderService(t.service) && !seen.includes(t.service)) seen.push(t.service);
     }
     // خدمات شرائحه ثم باقي خدمات الطلب — كان الاختيار يختفي مع المنتج بلا شرائح،
     // وسعرٌ لخدمةٍ واحدة كان سيُخفي غيرها.
@@ -1196,13 +1200,19 @@ export function DocumentForm({
         <section className="rounded-xl border border-line bg-card p-4">
           <Field
             name="issueDate"
-            label="تاريخ الفاتورة"
-            type="date"
+            label="التاريخ والوقت"
+            type="datetime-local"
             dir="ltr"
-            defaultValue={values?.dateA}
-            hint="اليوم تلقائياً — غيّره فقط إن كان الطلب ليومٍ آخر."
+            value={issueAt}
+            onChange={(e) => {
+              setIssueAt(e.target.value);
+              setIssueAtTouched(true);
+            }}
+            hint="الآن تلقائياً — غيّرهما فقط إن كان الطلب لوقتٍ آخر."
             errors={state.fieldErrors}
           />
+          {/* لم تُلمس الخانة: يُسجَّل وقت الحفظ نفسه لا وقت فتح الصفحة. */}
+          <input type="hidden" name="issueDateAuto" value={issueAtTouched ? '0' : '1'} />
         </section>
       )}
 
