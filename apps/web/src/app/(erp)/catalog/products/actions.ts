@@ -534,9 +534,21 @@ export async function addColorsToProduct(
   for (const combo of combos) {
     const exists = await prisma.productVariant.findFirst({
       where: { productId, colorId: combo.colorId, sizeId: combo.sizeId },
-      select: { id: true },
+      select: { id: true, isDeleted: true, isActive: true },
     });
-    if (exists) continue;
+    if (exists) {
+      // تركيبةٌ رُفعت أو عُطّلت ثم طُلبت ثانيةً تُحيا بصفّها وتاريخها. كانت تُعدّ
+      // «موجودة سلفاً» وهي مخفية: أضاف المالك «الأزرق» بمقاساته فقيل له موجود
+      // ولم يظهر. (ما عُطّل عمداً بلا مقاس بعد أن صار للمنتج مقاسات يبقى معطَّلاً.)
+      if (exists.isDeleted || (!exists.isActive && combo.sizeId)) {
+        await prisma.productVariant.updateMany({
+          where: { id: exists.id, product: { tenantId: user.tenantId } },
+          data: { isDeleted: false, deletedAt: null, isActive: true },
+        });
+        added += 1;
+      }
+      continue;
+    }
     // كود فريد عالمياً: لو تصادم يُلحق بمقطع عشوائي.
     let sku = combo.sku;
     if (await prisma.productVariant.findUnique({ where: { sku } })) {
@@ -854,11 +866,12 @@ export async function toggleProductColor(
   for (const combo of combos) {
     const existing = await prisma.productVariant.findFirst({
       where: { productId, colorId, sizeId: combo.sizeId },
-      select: { id: true, isDeleted: true },
+      select: { id: true, isDeleted: true, isActive: true },
     });
     if (existing) {
-      // لونٌ رُفِع ثم عاد: يُحيَى صفّه بتاريخه بدل أن يُنشأ ثانٍ بكود مختلف.
-      if (existing.isDeleted) {
+      // لونٌ رُفِع أو عُطّلت مقاساته ثم عاد: يُحيَى صفّه بتاريخه بدل أن يُنشأ
+      // ثانٍ بكود مختلف — أو أن يُقال «موجود سلفاً» وهو مخفيّ.
+      if (existing.isDeleted || (!existing.isActive && combo.sizeId)) {
         await prisma.productVariant.updateMany({
           where: { id: existing.id, product: { tenantId: user.tenantId } },
           data: { isDeleted: false, deletedAt: null, isActive: true },

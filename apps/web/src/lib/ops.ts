@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { IRAQ_OFFSET_MS } from '@erp/domain';
 import { prisma } from './prisma';
 
 /**
@@ -68,7 +69,9 @@ export function parseDateOr(value: string | null | undefined, fallback = new Dat
 
 /** Format a Date for an `<input type="date">`. */
 export function dateInput(value: Date | null | undefined): string {
-  return value ? value.toISOString().slice(0, 10) : '';
+  // يوم بغداد لا يوم UTC: بعد منتصف الليل كانت خانة «اليوم» تقول أمس.
+  // (تاريخٌ خُزّن منتصفَ ليل UTC أو منتصفَ ليل بغداد يبقى يومه نفسه.)
+  return value ? new Date(value.getTime() + IRAQ_OFFSET_MS).toISOString().slice(0, 10) : '';
 }
 
 /** First and last instant of a YYYY-MM month string, defaulting to now. */

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import {
   dec,
   formatMoney,
@@ -10,7 +11,7 @@ import {
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { STOCK_ON_SHELF, isLiveVariant } from '@/lib/stock';
-import { returnsByInvoice, netOwed } from '@/lib/receivables';
+import { returnsByInvoice, netOwed, collectionPercent } from '@/lib/receivables';
 import { AppShell } from '@/components/AppShell';
 import { WelcomeHeader } from '@/components/dashboard/WelcomeHeader';
 import { StatCard } from '@/components/dashboard/StatCard';
@@ -159,15 +160,19 @@ export default async function ManagerDashboard() {
 
         {/* الأرقام الأربعة الحاسمة — لا أكثر. التفاصيل في التقارير. */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+          {/* البطاقة نفسها تفتح قائمة المستحقات (تقدّم الديون) — كانت تقول «اضغط
+              الجرس»، والجرس لا يذكر إلا المتأخر عن موعده، فلا يصل المالك إليها. */}
           {seeMoney && (
-            <StatCard
-              index={0}
-              label="مستحقات عند العملاء"
-              value={formatMoney(outstanding)}
-              hint="اضغط الجرس لقائمة المتأخر"
-              icon={<IconBell />}
-              tone={dec(outstanding).gt(0) ? 'warning' : 'success'}
-            />
+            <Link href="/reports/aging" className="block" aria-label="قائمة المستحقات عند العملاء">
+              <StatCard
+                index={0}
+                label="مستحقات عند العملاء"
+                value={formatMoney(outstanding)}
+                hint="اضغط لعرض قائمة المستحقات"
+                icon={<IconBell />}
+                tone={dec(outstanding).gt(0) ? 'warning' : 'success'}
+              />
+            </Link>
           )}
           {seeMoney && (
             <StatCard
@@ -209,8 +214,9 @@ export default async function ManagerDashboard() {
             {seeMoney && (
               <Donut
                 label="نسبة التحصيل"
-                value={Number(collected)}
+                value={Number(invoiced.minus(outstanding))}
                 max={Number(invoiced) || 1}
+                center={`${collectionPercent(invoiced, outstanding)}%`}
                 sub={`${formatMoney(outstanding)} ما زال مستحقاً`}
                 tone={dec(outstanding).gt(0) ? 'warn' : 'ok'}
               />

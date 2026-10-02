@@ -17,6 +17,15 @@ export const PRICE_SERVICE_AR: Record<PriceService, string> = {
   PRINTING: 'طباعة',
 };
 
+/**
+ * خدمات الطلب حين لا شرائح للمنتج — بترتيب العرض، والافتراضي أوّلها.
+ *
+ * الخدمة كانت تُشتقّ من شرائح الأسعار وحدها، فلما أُعيد إدخال المنتجات بلا
+ * شرائح اختفى اختيار «تطريز/طباعة» من الفاتورة والكاشير — والمالك يحتاجه لكل
+ * طلب: به يُعرف ما يُطرَّز وما يُطبع، وبه يُحسب استهلاك المستلزمات.
+ */
+export const ORDER_SERVICES: PriceService[] = ['EMBROIDERY', 'PRINTING', 'DTF', 'NONE'];
+
 export function isPriceService(value: string): value is PriceService {
   return (PRICE_SERVICES as readonly string[]).includes(value);
 }

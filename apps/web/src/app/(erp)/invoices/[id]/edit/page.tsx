@@ -7,11 +7,29 @@ import { AppShell } from '@/components/AppShell';
 import { ModuleHeader } from '@/components/crud/Shell';
 import { DocumentForm, type DocLine } from '@/app/(erp)/sales/DocumentForm';
 import { loadSalesOptions } from '@/app/(erp)/sales/options';
+import { PRICE_SERVICE_AR } from '@erp/domain';
 import { isDeliveryDesc } from '@/lib/delivery';
+import { dateInput } from '@/lib/ops';
 import { deliveryExpenseTag } from '../../shared';
 import { updateInvoiceLines } from '../../actions';
 
 export const metadata: Metadata = { title: 'تعديل بنود الفاتورة' };
+
+const SERVICE_BY_AR = new Map(Object.entries(PRICE_SERVICE_AR).map(([key, ar]) => [ar, key]));
+
+/**
+ * الخدمة والتفاصيل من وصف البند المجمّد: «منتج · لون · مقاس — تطريز — تفاصيل».
+ *
+ * كانت سطور التعديل تُبنى بخدمةٍ وتفاصيل فارغة، فكل حفظٍ يمحو «— تطريز» وما
+ * كتبه البائع من الوصف — ويختفي نوع الخدمة من الفاتورة بعد أول تعديل.
+ */
+function splitDescription(description: string): { service: string; notes: string } {
+  const parts = description.split(' — ');
+  parts.shift(); // المنتج · اللون · المقاس
+  const service = parts[0] ? SERVICE_BY_AR.get(parts[0]) : undefined;
+  if (service) parts.shift();
+  return { service: service ?? '', notes: parts.join(' — ') };
+}
 
 /**
  * تعديل بنود فاتورة قائمة — تغيير الأعداد وإضافة/حذف أصناف على نفس فاتورة
@@ -43,12 +61,11 @@ export default async function EditInvoicePage({
       colorId: '',
       sizeId: '',
       variantId: l.variantId ?? '',
-      service: '',
+      ...splitDescription(l.description),
       quantity: Number(l.quantity),
       unitPrice: Number(l.unitPrice),
       discountAmount: Number(l.discountAmount),
       taxRate: Number(l.taxRate),
-      notes: '',
     }));
 
   // توصيل الفاتورة الحالي: بند 🚚 (على الزبون)، وإلا مصروف الشحن الموسوم
@@ -94,6 +111,8 @@ export default async function EditInvoicePage({
             lines,
             deliveryFee,
             deliveryOn,
+            // تاريخ الفاتورة الحالي — يغيّره البائع عند الحاجة (المسوّدة يعطيها الإصدار تاريخها).
+            dateA: invoice.issueDate ? dateInput(invoice.issueDate) : undefined,
           }}
           labels={{ dateA: 'تاريخ الإصدار', dateB: 'تاريخ الاستحقاق' }}
           submitLabel="حفظ التعديلات"

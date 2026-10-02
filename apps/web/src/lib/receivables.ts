@@ -30,6 +30,22 @@ export async function returnsByInvoice(
   return map;
 }
 
+/**
+ * نسبة التحصيل: ما حُصّل من المفوتر = (المفوتر − الباقي) ÷ المفوتر.
+ *
+ * لا مجموعُ المدفوع ÷ المفوتر: فاتورةٌ دُفع فيها أكثر لا تغطّي ديناً على أخرى،
+ * فكانت اللوحة تقول «١٠٠٪» وعلى الزبائن ٨٣ ألفاً. وبالتقريب نزولاً — لا
+ * تُعرض ١٠٠٪ ما دام على أحدٍ دينار.
+ */
+export function collectionPercent(
+  invoiced: ReturnType<typeof dec>,
+  outstanding: ReturnType<typeof dec>,
+): number {
+  if (invoiced.lte(0)) return 100;
+  const pct = Math.floor(invoiced.minus(outstanding).dividedBy(invoiced).times(100).toNumber());
+  return outstanding.gt(0) ? Math.min(99, Math.max(0, pct)) : 100;
+}
+
 /** الإجمالي الصافي لفاتورة بعد مرتجعاتها — أساس أي حساب مستحق. */
 export function netOwed(
   invoice: { id: string; total: unknown },

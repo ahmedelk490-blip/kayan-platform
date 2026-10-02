@@ -12,6 +12,7 @@ import {
   overpayment,
   INVOICE_STATUS_AR,
   PAYMENT_METHOD_AR,
+  isOwnerRole,
   type InvoiceStatus,
 } from '@erp/domain';
 import { requirePermission, allows } from '@/lib/guard';
@@ -26,7 +27,7 @@ import { dateInput } from '@/lib/ops';
 import type { SearchParams } from '@/lib/query';
 import { waLink } from '@/lib/wa';
 import { PaymentForm, VoidForm } from '../PaymentForm';
-import { issueInvoice, cancelInvoice, recordPayment, reversePayment, duplicateInvoice } from '../actions';
+import { issueInvoice, cancelInvoice, recordPayment, reversePayment, duplicateInvoice, discountRemaining } from '../actions';
 
 export const metadata: Metadata = { title: 'الفاتورة' };
 
@@ -269,6 +270,15 @@ export default async function InvoicePage({
                 <Row label="المتبقي" value={formatMoney(left)} strong />
               </div>
             </dl>
+            {/* الباقي فرقُ سعرٍ اتُّفق عليه لا دين؟ يُقلب خصماً بضغطة — للمدير وحده. */}
+            {isOwnerRole(user.role) && invoice.status !== 'DRAFT' && dec(left).gt(0) && (
+              <form action={discountRemaining.bind(null, invoice.id)} className="ms-auto mt-3 max-w-xs text-end">
+                <ConfirmButton
+                  label={`اعتبر الباقي (${formatMoney(left)}) خصماً`}
+                  message={`الزبون اتفق على سعرٍ أقل ودفع ما عليه؟ يصير الباقي ${formatMoney(left)} خصماً على الفاتورة فتصير مدفوعة بالكامل، وتنقص المبيعات والربح بقدره.`}
+                />
+              </form>
+            )}
             {credit.gt(0) && (
               <p className="mt-3 rounded-lg border border-warn bg-warn-soft px-4 py-2.5 text-[0.7rem] leading-[1.9] text-warn">
                 ⚠ دُفع أكثر من المستحق بـ <strong className="tnum">{formatMoney(credit)}</strong> د.ع —

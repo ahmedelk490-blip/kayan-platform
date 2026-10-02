@@ -9,6 +9,7 @@ import {
   PAYMENT_METHODS,
   PAYMENT_METHOD_AR,
   PRICE_SERVICE_AR,
+  ORDER_SERVICES,
   MANUAL_ORDER_SOURCES,
   ORDER_SOURCE_AR,
   compareSizes,
@@ -601,7 +602,7 @@ function VariantPicker({
   const lines: CartLine[] = rows.flatMap((r) => {
     const q = qtyBySize[r.key] || 0;
     if (q <= 0 || !r.variant) return [];
-    const svcLabel = service ? (PRICE_SERVICE_AR as Record<string, string>)[service] ?? '' : '';
+    const svcLabel = service && service !== 'NONE' ? (PRICE_SERVICE_AR as Record<string, string>)[service] ?? '' : '';
     const label = svcLabel && svcLabel !== 'بدون' ? `${r.variant.label} · ${svcLabel}` : r.variant.label;
     return [{ key: `${r.variant.value}:${r.key}:${Date.now()}`, variantId: r.variant.value, label, quantity: q, unitPrice: priceFor(r.variant, q, service) }];
   });
@@ -725,9 +726,12 @@ function priceFor(v: VariantOption, qty: number, service?: string): number {
   return v.price > 0 ? v.price : 0;
 }
 
-/** خدمات المتغيّرات المتاحة (من الشرائح) بلا تكرار. */
+/**
+ * خدمات المتغيّرات المتاحة (من الشرائح) بلا تكرار — وبلا شرائح فخدمات الطلب
+ * كلها: كان اختيار «تطريز/طباعة» يختفي مع المنتجات المُدخلة بلا شرائح.
+ */
 function servicesOf(variants: VariantOption[]): string[] {
   const seen: string[] = [];
   for (const v of variants) for (const t of v.tiers) if (!seen.includes(t.service)) seen.push(t.service);
-  return seen;
+  return seen.length > 0 || variants.length === 0 ? seen : [...ORDER_SERVICES];
 }

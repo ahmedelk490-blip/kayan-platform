@@ -4,6 +4,7 @@ import { MANUAL_ORDER_SOURCES, ORDER_SOURCE_AR } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { nextCode } from '@/lib/audit';
+import { dateInput } from '@/lib/ops';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader } from '@/components/crud/Shell';
 import { DocumentForm, type DocLine } from '@/app/(erp)/sales/DocumentForm';
@@ -105,16 +106,19 @@ export default async function NewInvoicePage({
           customers={options.customers}
           variants={options.variants}
           bundles={options.bundles}
-          values={
-            prefillCustomerId || prefillLines
-              ? { customerId: prefillCustomerId, lines: prefillLines }
-              : undefined
-          }
+          values={{
+            ...(prefillCustomerId || prefillLines ? { customerId: prefillCustomerId, lines: prefillLines } : {}),
+            // تاريخ الفاتورة: اليوم ببغداد تلقائياً، ويغيّره البائع إن خصّ الطلبُ يوماً آخر.
+            dateA: dateInput(new Date()),
+          }}
           webOrderId={webOrderId ?? undefined}
           sources={MANUAL_ORDER_SOURCES.map((s) => ({ value: s, label: ORDER_SOURCE_AR[s] }))}
           labels={{ dateA: 'تاريخ الإصدار', dateB: 'تاريخ الاستحقاق' }}
           submitLabel="إنشاء الفاتورة"
           instantIssue
+          // «إصدار وتحصيل فوري» مؤشَّرٌ من البداية: الزبون يدفع كاملاً عادةً. كان
+          // فارغاً فتُحفظ الفاتورة مسوّدةً حين يُنسى التأشير، ثم تُصدَر بلا دفعة.
+          instantDefault
           allowNewCustomer
           withDelivery
           lastPriceAction={lastCustomerPrice}
@@ -123,7 +127,7 @@ export default async function NewInvoicePage({
         <p className="mt-4 text-[0.7rem] text-txt-4">
           {webOrderId
             ? 'اختر الخدمة لكل صنف فيُحسب السعر، ثم أنشئ الفاتورة — يُوسَم طلب الموقع تلقائياً.'
-            : 'تُنشأ الفاتورة كمسوّدة، ثم تُصدَّر من صفحتها ليُخصَّص لها الرقم المتسلسل.'}
+            : '«إصدار وتحصيل فوري» مؤشَّر تلقائياً بالمبلغ كاملاً — أزِل العلامة لحفظها مسوّدة تُصدَر لاحقاً.'}
         </p>
       </div>
     </AppShell>

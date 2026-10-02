@@ -8,6 +8,7 @@ import {
   applicableTier,
   dec,
   PRICE_SERVICE_AR,
+  ORDER_SERVICES,
   compareSizes,
   PAYMENT_METHODS,
   PAYMENT_METHOD_AR,
@@ -94,11 +95,14 @@ const emptyLine = (): DocLine => ({
   notes: '',
 });
 
-/** خدمات هذا المتغيّر — المميّزة من شرائحه، بترتيب ظهورها. */
+/**
+ * خدمات هذا المتغيّر — المميّزة من شرائحه، بترتيب ظهورها؛ وبلا شرائح فخدمات
+ * الطلب كلها: المنتج بلا شرائح يبقى طلبه تطريزاً أو طباعة، والسعر يُكتب باليد.
+ */
 function servicesOf(v: VariantOption): string[] {
   const seen: string[] = [];
   for (const t of v.tiers) if (!seen.includes(t.service)) seen.push(t.service);
-  return seen;
+  return seen.length > 0 ? seen : [...ORDER_SERVICES];
 }
 
 /** قيمة فريدة مع تسمية — للقوائم المنسدلة المشتقّة. */
@@ -216,6 +220,8 @@ export function DocumentForm({
   withDelivery?: boolean;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
+  /** فورم فاتورة (لا عرض سعر ولا أمر بيع) — له خانة «تاريخ الفاتورة» الظاهرة. */
+  const isInvoice = labels.dateA === 'تاريخ الإصدار';
   const [lines, setLines] = useState<DocLine[]>(() =>
     values?.lines?.length ? values.lines.map((l) => hydrate(l, variants)) : [emptyLine()],
   );
@@ -284,7 +290,8 @@ export function DocumentForm({
       if (v.productId !== szProductId) continue;
       for (const t of v.tiers) if (!seen.includes(t.service)) seen.push(t.service);
     }
-    return seen;
+    // منتجٌ بلا شرائح: خدمات الطلب كلها — كان الاختيار يختفي فيُحفظ الطلب بلا خدمة.
+    return seen.length > 0 || !szProductId ? seen : [...ORDER_SERVICES];
   })();
 
   function addBySizes() {
@@ -306,8 +313,17 @@ export function DocumentForm({
         taxRate: 0,
         notes: '',
       };
-      // السعر المقترح يملأ الخانة توفيراً للكتابة — ويبقى قابلاً للتعديل بيد البائع.
-      line.unitPrice = suggestedPrice(line) ?? 0;
+      // مقاسٌ يُضاف لصنفٍ موجود يأخذ سعر بطاقته: البطاقة تعرض سعر أوّل مقاسٍ
+      // وحده، فكان المقاس المضاف بعدها يدخل بالسعر المقترح خفيةً تحت سعرٍ آخر
+      // معروض. وإلا فالمقترح يملأ الخانة توفيراً للكتابة — ويبقى بيد البائع.
+      const sameCard = lines.find(
+        (l) =>
+          l.variantId &&
+          l.productId === szProductId &&
+          l.colorId === szColorId &&
+          l.service === line.service,
+      );
+      line.unitPrice = sameCard ? sameCard.unitPrice : suggestedPrice(line) ?? 0;
       return line;
     };
 
@@ -1172,6 +1188,22 @@ export function DocumentForm({
         </p>
       )}
 
+      {/* تاريخ الفاتورة — ظاهرٌ لا مطويّ (بطلب المالك): تلقائيٌّ باليوم، ويغيّره
+          البائع حين يخصّ الطلب يوماً آخر — طلبٌ بعد منتصف الليل يخصّ أمس مثلاً. */}
+      {isInvoice && (
+        <section className="rounded-xl border border-line bg-card p-4">
+          <Field
+            name="issueDate"
+            label="تاريخ الفاتورة"
+            type="date"
+            dir="ltr"
+            defaultValue={values?.dateA}
+            hint="اليوم تلقائياً — غيّره فقط إن كان الطلب ليومٍ آخر."
+            errors={state.fieldErrors}
+          />
+        </section>
+      )}
+
       {/* ٣.٥ إصدار وتحصيل فوري — للفاتورة المباشرة فقط. العميل الذي يدفع في
           الحال يخرج بفاتورة مُصدَرة ومُحصَّلة بضغطة، بلا خطوتَي إصدار وتحصيل
           منفصلتين. الخادم يُخصّص الرقم المتسلسل ويسجّل الدفعة في معاملة واحدة. */}
@@ -1194,6 +1226,8 @@ export function DocumentForm({
             يدفع في الحال. اتركه فارغاً لحفظها كمسوّدة تُصدَّر لاحقاً.
           </p>
           <input type="hidden" name="issueNow" value={issueNow ? '1' : '0'} />
+          {/* «المبلغ كامل» يحسبه الخادم من إجماليه — لا رقم المتصفّح. */}
+          <input type="hidden" name="paymentFull" value={payTouched ? '0' : '1'} />
 
           {issueNow && (
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -1250,6 +1284,20 @@ export function DocumentForm({
                 >
                   {formatMoney(dec(totals.total).minus(payValue))}
                 </div>
+                {/* دفع أقلّ من الإجمالي: دينٌ عليه، أم سعرٌ اتُّفق عليه؟ كان الفرق
+                    يُسجَّل ديناً دائماً فتخرج فواتير «تحصيل فوري» مدفوعةً جزئياً. */}
+                {dec(totals.total).minus(payValue).gt(0) && payValue > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDocDiscount((d) => d + dec(totals.total).minus(payValue).toNumber());
+                      setPayTouched(false);
+                    }}
+                    className="mt-1 text-start text-[0.7rem] text-brand hover:underline"
+                  >
+                    اتفقتم على سعرٍ أقل؟ اجعل الفرق خصماً
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -1289,7 +1337,10 @@ export function DocumentForm({
             </label>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field name={labels.dateA === 'تاريخ الإصدار' ? 'issueDate' : 'orderDate'} label={labels.dateA} type="date" dir="ltr" defaultValue={values?.dateA} />
+            {/* تاريخ الفاتورة صار ظاهراً أعلى الفورم — هنا تاريخ الأمر/العرض وحده. */}
+            {!isInvoice && (
+              <Field name="orderDate" label={labels.dateA} type="date" dir="ltr" defaultValue={values?.dateA} />
+            )}
             <Field name={labels.dateB === 'تاريخ الانتهاء' ? 'expiryDate' : 'requiredDeliveryDate'} label={labels.dateB} type="date" dir="ltr" defaultValue={values?.dateB} />
           </div>
           <TextArea name="notes" label="ملاحظات" defaultValue={values?.notes} rows={3} />
@@ -1300,7 +1351,9 @@ export function DocumentForm({
         label={
           instantIssue && issueNow
             ? payValue > 0
-              ? 'إنشاء وإصدار وتحصيل'
+              ? dec(totals.total).minus(payValue).gt(0)
+                ? 'إنشاء وإصدار وتحصيل جزئي (الباقي دين)'
+                : 'إنشاء وإصدار وتحصيل'
               : 'إنشاء وإصدار'
             : submitLabel
         }

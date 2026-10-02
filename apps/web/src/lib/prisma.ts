@@ -18,6 +18,17 @@ import { currentTenant } from './tenant-context';
 process.env.TOKIO_WORKER_THREADS ??= '2';
 
 /**
+ * توقيت الخادم توقيتُ بغداد — كل تاريخٍ يُعرض أو يُحسب بالساعة المحلية.
+ *
+ * الاستضافة على UTC، أي ثلاث ساعات خلف بغداد: طلبٌ نزل بعد منتصف الليل في
+ * ٢/١٠ كان يُعرض بتاريخ ١/١٠ في الفواتير والطباعة والقوائم (بلاغ المالك)،
+ * وأوّل الشهر يقع في شهرٍ قبله في الرسوم الشهرية. والمستعملون كلهم في
+ * العراق، فساعة الخادم ساعتهم. وما يحسب ببغداد صراحةً (iraqMidnight وأمثالها)
+ * يبقى صحيحاً: حسابه بـUTC لا بالساعة المحلية.
+ */
+process.env.TZ = 'Asia/Baghdad';
+
+/**
  * Prisma clients.
  *
  * Next.js dev reloads modules on every edit; without the global cache each

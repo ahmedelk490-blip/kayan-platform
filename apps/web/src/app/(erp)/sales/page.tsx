@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import {
   userCan,
   dec,
@@ -10,7 +11,7 @@ import {
 } from '@erp/domain';
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
-import { returnsByInvoice, netOwed } from '@/lib/receivables';
+import { returnsByInvoice, netOwed, collectionPercent } from '@/lib/receivables';
 import { AppShell } from '@/components/AppShell';
 import { WelcomeHeader } from '@/components/dashboard/WelcomeHeader';
 import { StatCard } from '@/components/dashboard/StatCard';
@@ -187,15 +188,18 @@ export default async function SalesDashboard() {
               tone="primary"
             />
           )}
+          {/* تفتح قائمة المستحقات بأسماء الزبائن وفواتيرهم — تقدّم الديون. */}
           {seeMoney && (
-            <StatCard
-              index={2}
-              label="مستحقات غير محصَّلة"
-              value={formatMoney(outstanding)}
-              hint={`${formatMoney(collected)} محصَّل`}
-              icon={<IconBell />}
-              tone={dec(outstanding).gt(0) ? 'warning' : 'success'}
-            />
+            <Link href="/reports/aging" className="block" aria-label="قائمة المستحقات غير المحصّلة">
+              <StatCard
+                index={2}
+                label="مستحقات غير محصَّلة"
+                value={formatMoney(outstanding)}
+                hint={`${formatMoney(collected)} محصَّل — اضغط للقائمة`}
+                icon={<IconBell />}
+                tone={dec(outstanding).gt(0) ? 'warning' : 'success'}
+              />
+            </Link>
           )}
           {seeCustomers && (
             <StatCard
@@ -216,7 +220,7 @@ export default async function SalesDashboard() {
             <Donut label="نسبة التحويل" value={converted} max={quotationTotal || 1} sub={`${converted} من ${quotationTotal} عرض`} tone="ok" />
             <Donut label="الأوامر المسلَّمة" value={deliveredOrders} max={orderTotal || 1} center={`${deliveredOrders}/${orderTotal}`} sub="مُسلَّم ومكتمل" tone="brand" />
             {seeMoney && (
-              <Donut label="نسبة التحصيل" value={Number(collected)} max={Number(invoiced) || 1} sub={`${formatMoney(collected)} من ${formatMoney(invoiced)}`} tone={dec(outstanding).gt(0) ? 'warn' : 'ok'} />
+              <Donut label="نسبة التحصيل" value={Number(invoiced.minus(outstanding))} max={Number(invoiced) || 1} center={`${collectionPercent(invoiced, dec(outstanding))}%`} sub={`${formatMoney(collected)} من ${formatMoney(invoiced)}`} tone={dec(outstanding).gt(0) ? 'warn' : 'ok'} />
             )}
           </div>
         )}

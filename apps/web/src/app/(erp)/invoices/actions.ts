@@ -19,9 +19,12 @@ import {
   formatMoney,
   formatQty,
   isOrderSource,
+  isOwnerRole,
+  iraqMidnight,
   PRICE_SERVICE_AR,
   type PriceService,
 } from '@erp/domain';
+import { dateInput } from '@/lib/ops';
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors, nextCode } from '@/lib/audit';
@@ -52,9 +55,33 @@ function lineDescription(
   notes: string | null,
 ): string {
   const base = [v.product.nameAr, v.color?.nameAr, v.size?.code].filter(Boolean).join(' · ');
-  const svc = service ? ((PRICE_SERVICE_AR as Record<string, string>)[service as PriceService] ?? service) : '';
+  const svc =
+    service && service !== 'NONE'
+      ? ((PRICE_SERVICE_AR as Record<string, string>)[service as PriceService] ?? service)
+      : '';
   const extras = [svc && svc !== 'بدون' ? svc : null, notes].filter(Boolean).join(' — ');
   return extras ? `${base} — ${extras}` : base;
+}
+
+/**
+ * تاريخ الفاتورة الذي اختاره البائع (YYYY-MM-DD بيوم بغداد) — أو null إن تُرك.
+ *
+ * تلقائيٌّ باليوم، ويغيّره البائع حين يخصّ الطلب يوماً آخر — طلبٌ نزل بعد منتصف
+ * الليل يخصّ أمس مثلاً (بطلب المالك). اليوم نفسه يأخذ اللحظة الحالية بساعتها،
+ * واليوم الآخر ظهرَه (١٢ ببغداد) فلا ينزلق لجاره. ولا تاريخ بعد اليوم.
+ */
+function chosenIssueDate(
+  raw: FormDataEntryValue | null,
+): { ymd: string; at: Date } | { error: string } | null {
+  const ymd = String(raw ?? '').trim();
+  if (!ymd) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  if (!m) return { error: 'تاريخ الفاتورة غير صالح.' };
+  const today = dateInput(new Date());
+  if (ymd > today) return { error: 'تاريخ الفاتورة لا يكون بعد اليوم.' };
+  if (ymd === today) return { ymd, at: new Date() };
+  const midnight = iraqMidnight(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return { ymd, at: new Date(midnight.getTime() + 12 * 60 * 60 * 1000) };
 }
 
 /** قراءة خانة التوصيل: المبلغ ولمن — على الزبون (بند) أو علينا (مصروف). */
@@ -256,7 +283,10 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
       return { error: 'لا تملك صلاحية إصدار الفواتير — احفظها كمسوّدة ثم اطلب إصدارها.' };
     }
 
-    const payAmount = dec(decimal(formData.get('paymentAmount')));
+    // «المبلغ كامل» يُحسب هنا لا في المتصفّح: إجمالي الخادم هو المرجع، فلا يفترق
+    // المدفوع عن الإجمالي بفرق حسابٍ أو بسطرٍ أُضيف بعد كتابة المبلغ.
+    const payFull = String(formData.get('paymentFull') ?? '') === '1';
+    const payAmount = payFull ? dec(totals.total) : dec(decimal(formData.get('paymentAmount')));
     const payMethodRaw = String(formData.get('paymentMethod') ?? 'CASH');
     const wantsPayment = payAmount.gt(0);
 
@@ -274,8 +304,12 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
       }
     }
 
+    const picked = chosenIssueDate(formData.get('issueDate'));
+    if (picked && 'error' in picked) return { fieldErrors: { issueDate: picked.error } };
+
     const settings = await invoiceSettings(user.tenantId);
-    const issuedAt = new Date();
+    // تاريخ البائع إن غيّره، وإلا اللحظة — والدفعة الفورية بتاريخ الفاتورة نفسه.
+    const issuedAt = picked ? picked.at : new Date();
     // فاتورة مباشرة تصرف بضاعتها من المخزون فور إصدارها — كالكاشير.
     const warehouseId = await defaultWarehouseId(user.tenantId);
     const stockLines = rawLines.map((l) => ({
@@ -558,6 +592,14 @@ export async function updateInvoiceLines(
   if (!invoice) return { error: 'الفاتورة غير موجودة.' };
   if (invoice.status === 'VOID') return { error: 'الفاتورة ملغاة — لا تُعدَّل.' };
 
+  // تاريخ الفاتورة يُعدَّل هنا أيضاً (بطلب المالك) — للصادرة وحدها؛ المسوّدة
+  // يعطيها الإصدار تاريخها.
+  const picked = invoice.status !== 'DRAFT' ? chosenIssueDate(formData.get('issueDate')) : null;
+  if (picked && 'error' in picked) return { fieldErrors: { issueDate: picked.error } };
+  const newIssueAt =
+    picked && invoice.issueDate && picked.ymd !== dateInput(invoice.issueDate) ? picked.at : null;
+  const termDays = newIssueAt ? (await invoiceSettings(user.tenantId)).termDays : 0;
+
   const rawLines = readLines(formData);
   if (rawLines.length === 0) return { error: 'أضف صنفاً واحداً على الأقل بكمية أكبر من صفر.' };
 
@@ -648,8 +690,18 @@ export async function updateInvoiceLines(
         notes,
         status: newStatus,
         lines: { create: lineData },
+        ...(newIssueAt ? { issueDate: newIssueAt, dueDate: dueDate(newIssueAt, termDays) } : {}),
       },
     });
+
+    // دفعة «التحصيل الفوري» وُلدت مع الفاتورة بلحظتها نفسها فتنتقل معها — وإلا
+    // بقي المقبوض في يومٍ والبيع في يوم. الدفعات اللاحقة تبقى بتواريخها.
+    if (newIssueAt && invoice.issueDate) {
+      await tx.payment.updateMany({
+        where: { tenantId: user.tenantId, invoiceId, paidAt: invoice.issueDate },
+        data: { paidAt: newIssueAt },
+      });
+    }
 
     if (warehouseId) {
       const variantIds = new Set([...oldQty.keys(), ...newQty.keys()]);
@@ -1231,6 +1283,54 @@ export async function reversePayment(invoiceId: string, paymentId: string): Prom
     });
   }
 
+  revalidatePath(`/invoices/${invoiceId}`);
+  redirect(`/invoices/${invoiceId}`);
+}
+
+/**
+ * «اعتبر الباقي خصماً» — للمدير وحده.
+ *
+ * فواتير «تحصيل فوري» خرجت مدفوعةً جزئياً: البائع اتفق مع الزبون على سعرٍ أقل
+ * فكتب ما دفعه فعلاً، وبقي سعر القطعة المقترح على الفاتورة — فصار الفرق ديناً
+ * لا وجود له (بلاغ المالك). هنا يُقلب الباقي خصماً على الفاتورة: ينقص إجماليها
+ * بقدره فتصير مدفوعة بالكامل، وتنقص المبيعات والربح معه — وهو الصحيح.
+ */
+export async function discountRemaining(invoiceId: string): Promise<void> {
+  const user = await requirePermission('invoices.write');
+  if (!isOwnerRole(user.role)) redirect(`/invoices/${invoiceId}`);
+
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: invoiceId, tenantId: user.tenantId, isDeleted: false },
+    select: { number: true, status: true, total: true, paidAmount: true, discountAmount: true },
+  });
+  if (!invoice || invoice.status === 'DRAFT' || invoice.status === 'VOID') {
+    redirect(`/invoices/${invoiceId}`);
+  }
+
+  const returned = await returnedValueOf(user.tenantId, invoiceId);
+  const left = balance(dec(invoice.total).minus(returned), invoice.paidAmount);
+  if (left.lte(0)) redirect(`/invoices/${invoiceId}`);
+
+  const newTotal = dec(invoice.total).minus(left);
+  await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: {
+      discountAmount: dec(invoice.discountAmount).plus(left).toString(),
+      total: newTotal.toString(),
+      status: deriveInvoiceStatus(newTotal.minus(returned), dec(invoice.paidAmount), invoice.status as never),
+    },
+  });
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'invoice.discountRemaining',
+    entityType: 'Invoice',
+    entityId: invoiceId,
+    detail: `${invoice.number ?? ''} خصم ${left.toString()}`,
+  });
+
+  revalidatePath('/invoices');
   revalidatePath(`/invoices/${invoiceId}`);
   redirect(`/invoices/${invoiceId}`);
 }
