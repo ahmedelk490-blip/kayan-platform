@@ -102,7 +102,8 @@ const emptyLine = (): DocLine => ({
 function servicesOf(v: VariantOption): string[] {
   const seen: string[] = [];
   for (const t of v.tiers) if (!seen.includes(t.service)) seen.push(t.service);
-  return seen.length > 0 ? seen : [...ORDER_SERVICES];
+  // خدمات شرائحه أوّلاً ثم باقي خدمات الطلب: سعرٌ لخدمةٍ واحدة لا يُخفي غيرها.
+  return [...seen, ...ORDER_SERVICES.filter((s) => !seen.includes(s))];
 }
 
 /** قيمة فريدة مع تسمية — للقوائم المنسدلة المشتقّة. */
@@ -290,8 +291,9 @@ export function DocumentForm({
       if (v.productId !== szProductId) continue;
       for (const t of v.tiers) if (!seen.includes(t.service)) seen.push(t.service);
     }
-    // منتجٌ بلا شرائح: خدمات الطلب كلها — كان الاختيار يختفي فيُحفظ الطلب بلا خدمة.
-    return seen.length > 0 || !szProductId ? seen : [...ORDER_SERVICES];
+    // خدمات شرائحه ثم باقي خدمات الطلب — كان الاختيار يختفي مع المنتج بلا شرائح،
+    // وسعرٌ لخدمةٍ واحدة كان سيُخفي غيرها.
+    return !szProductId ? seen : [...seen, ...ORDER_SERVICES.filter((s) => !seen.includes(s))];
   })();
 
   function addBySizes() {

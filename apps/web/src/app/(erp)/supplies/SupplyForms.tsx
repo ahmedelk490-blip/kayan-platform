@@ -27,7 +27,14 @@ export function SupplyForm({
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
   /** قيم أوّلية للتعديل؛ غيابها يعني نموذج إضافة جديد. */
-  defaults?: { nameAr: string; kind: SupplyKind; category: string; unit: string; minStock: number };
+  defaults?: {
+    nameAr: string;
+    kind: SupplyKind;
+    category: string;
+    unit: string;
+    minStock: number;
+    perPiece?: number | null;
+  };
   submitLabel?: string;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
@@ -73,6 +80,16 @@ export function SupplyForm({
         <Field name="nameAr" label="الاسم" required defaultValue={defaults?.nameAr} errors={state.fieldErrors} />
         <Field name="unit" label="الوحدة" placeholder="رول · زجاجة · بكرة" defaultValue={defaults?.unit} errors={state.fieldErrors} />
         <Field name="minStock" label="حد أدنى" type="number" dir="ltr" defaultValue={String(defaults?.minStock ?? 0)} errors={state.fieldErrors} />
+        {/* نصٌّ لا رقم: الخانة الرقمية ترفض الكسر (٠٫٥ بكرة للقطعة مثلاً). */}
+        <Field
+          name="perPiece"
+          label="استهلاك القطعة"
+          dir="ltr"
+          placeholder="مثال 0.5"
+          defaultValue={defaults?.perPiece ?? ''}
+          hint="كم تستهلك القطعة الواحدة — للحساب فقط، لا يُنزَّل من الرصيد"
+          errors={state.fieldErrors}
+        />
       </div>
 
       <div className="flex items-center gap-3">

@@ -26,6 +26,13 @@ export const PRICE_SERVICE_AR: Record<PriceService, string> = {
  */
 export const ORDER_SERVICES: PriceService[] = ['EMBROIDERY', 'PRINTING', 'DTF', 'NONE'];
 
+/**
+ * علامة «سعر الخدمة» على شريحة سعر: سعر القطعة لكل خدمة كما يكتبه المالك من
+ * شاشة «الأسعار والتكاليف». سعرٌ مقترح في الفاتورة والكاشير وحدهما (البائع
+ * يغيّره)، ولا يظهر على الموقع العام — لا يمسّ ما يراه الزبون (بطلب المالك).
+ */
+export const SERVICE_PRICE_NOTE = 'سعر الخدمة';
+
 export function isPriceService(value: string): value is PriceService {
   return (PRICE_SERVICES as readonly string[]).includes(value);
 }

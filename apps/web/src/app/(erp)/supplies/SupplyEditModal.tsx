@@ -16,7 +16,14 @@ export function SupplyEditModal({
   defaults,
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
-  defaults: { nameAr: string; kind: SupplyKind; category: string; unit: string; minStock: number };
+  defaults: {
+    nameAr: string;
+    kind: SupplyKind;
+    category: string;
+    unit: string;
+    minStock: number;
+    perPiece?: number | null;
+  };
 }) {
   return (
     <FormModal trigger="تعديل" title={`تعديل ${defaults.nameAr}`} wide>

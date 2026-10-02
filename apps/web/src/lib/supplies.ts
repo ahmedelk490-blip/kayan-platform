@@ -1,5 +1,42 @@
-import { dec, formatQty } from '@erp/domain';
+import { dec, formatQty, PRICE_SERVICE_AR, type PriceService } from '@erp/domain';
 import { prisma } from '@/lib/prisma';
+
+/**
+ * استهلاك القطعة من مستلزم — سطرٌ «perPiece=…» في ملاحظاته، بلا عمودٍ جديد.
+ *
+ * للحساب والعرض وحدهما (بطلب المالك: «يتحسب لكن ما يأثر على السستم»): «يكفي
+ * لكم قطعة» و«المحسوب من مبيعات الشهر» — لا ينزّل من الرصيد شيئاً ولا يسجّل
+ * حركة ولا مصروفاً. الاستهلاك الفعلي يبقى حركةً يسجّلها صاحبها.
+ */
+const PER_PIECE = 'perPiece=';
+
+export function perPieceOf(notes: string | null | undefined): number | null {
+  const line = (notes ?? '').split('\n').find((l) => l.startsWith(PER_PIECE));
+  const v = line ? Number(line.slice(PER_PIECE.length)) : Number.NaN;
+  return Number.isFinite(v) && v > 0 ? v : null;
+}
+
+export function withPerPiece(notes: string | null | undefined, value: number | null | undefined): string | null {
+  const rest = (notes ?? '').split('\n').filter((l) => !l.startsWith(PER_PIECE));
+  if (value && value > 0) rest.push(`${PER_PIECE}${value}`);
+  const out = rest.join('\n').trim();
+  return out || null;
+}
+
+/** خدمات الطلب التي يستهلك منها كل نوع مستلزم: الخيط للتطريز، والحبر والفلم للطباعة. */
+export const SERVICES_OF_SUPPLY_KIND: Record<string, PriceService[]> = {
+  EMBROIDERY: ['EMBROIDERY'],
+  PRINTING: ['PRINTING', 'DTF'],
+};
+
+/** خدمة بند الفاتورة من وصفه المجمّد: «منتج · لون · مقاس — تطريز — تفاصيل». */
+export function serviceOfDescription(description: string): PriceService | null {
+  const parts = description.split(' — ').slice(1);
+  for (const [key, ar] of Object.entries(PRICE_SERVICE_AR)) {
+    if (parts.includes(ar)) return key as PriceService;
+  }
+  return null;
+}
 
 /**
  * شراء المستلزمات في المصروفات.

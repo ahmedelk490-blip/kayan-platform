@@ -733,5 +733,6 @@ function priceFor(v: VariantOption, qty: number, service?: string): number {
 function servicesOf(variants: VariantOption[]): string[] {
   const seen: string[] = [];
   for (const v of variants) for (const t of v.tiers) if (!seen.includes(t.service)) seen.push(t.service);
-  return seen.length > 0 || variants.length === 0 ? seen : [...ORDER_SERVICES];
+  // خدمات الشرائح أوّلاً ثم باقي خدمات الطلب — سعرٌ لخدمةٍ واحدة لا يُخفي غيرها.
+  return variants.length === 0 ? seen : [...seen, ...ORDER_SERVICES.filter((s) => !seen.includes(s))];
 }

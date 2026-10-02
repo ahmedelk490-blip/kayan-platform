@@ -8,7 +8,7 @@ import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 import { numeric } from '@/lib/num';
 import { parseDateOr, nextOpsNumber, type FormState } from '@/lib/ops';
-import { supplyExpenseData, unpostedSupplyPurchases } from '@/lib/supplies';
+import { supplyExpenseData, unpostedSupplyPurchases, withPerPiece } from '@/lib/supplies';
 
 const SupplySchema = z
   .object({
@@ -17,6 +17,8 @@ const SupplySchema = z
     category: z.string().min(1, 'الفئة مطلوبة.'),
     unit: z.string().trim().max(24).optional().or(z.literal('')),
     minStock: numeric(z.coerce.number().min(0).optional()),
+    // استهلاك القطعة — للحساب وحده (انظر perPieceOf)، اختياري.
+    perPiece: numeric(z.coerce.number().min(0, 'قيمة غير صالحة.').optional()),
   })
   // A thread is not a printing supply. Validating the pair, not each field
   // alone, is what stops the two lists quietly merging.
@@ -46,6 +48,7 @@ export async function createSupply(_prev: FormState, formData: FormData): Promis
     category: String(formData.get('category') ?? ''),
     unit: String(formData.get('unit') ?? ''),
     minStock: String(formData.get('minStock') ?? '0'),
+    perPiece: String(formData.get('perPiece') ?? ''),
   });
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
 
@@ -58,6 +61,7 @@ export async function createSupply(_prev: FormState, formData: FormData): Promis
       category: parsed.data.category,
       unit: parsed.data.unit || null,
       minStock: parsed.data.minStock ?? 0,
+      notes: withPerPiece(null, parsed.data.perPiece),
     },
   });
 
@@ -94,10 +98,17 @@ export async function updateSupply(
     category: String(formData.get('category') ?? ''),
     unit: String(formData.get('unit') ?? ''),
     minStock: String(formData.get('minStock') ?? '0'),
+    perPiece: String(formData.get('perPiece') ?? ''),
   });
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
 
-  const updated = await prisma.supply.updateMany({
+  const current = await prisma.supply.findFirst({
+    where: { id: supplyId, tenantId: user.tenantId, isDeleted: false },
+    select: { notes: true },
+  });
+  if (!current) return { error: 'المستلزم غير موجود.' };
+
+  await prisma.supply.updateMany({
     where: { id: supplyId, tenantId: user.tenantId, isDeleted: false },
     data: {
       nameAr: parsed.data.nameAr,
@@ -105,9 +116,9 @@ export async function updateSupply(
       category: parsed.data.category,
       unit: parsed.data.unit || null,
       minStock: parsed.data.minStock ?? 0,
+      notes: withPerPiece(current.notes, parsed.data.perPiece),
     },
   });
-  if (updated.count === 0) return { error: 'المستلزم غير موجود.' };
 
   await audit({
     tenantId: user.tenantId,

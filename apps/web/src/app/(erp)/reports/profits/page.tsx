@@ -97,9 +97,14 @@ export default async function ProfitsPage({ searchParams }: { searchParams: Prom
       <ModuleHeader
         title="الأرباح"
         action={
-          <Link href={`/reports/financial?from=${range.fromStr}&to=${range.toStr}`} className="erp-btn-ghost">
-            التفصيل الكامل
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/catalog/costs" className="erp-btn-ghost">
+              الأسعار والتكاليف
+            </Link>
+            <Link href={`/reports/financial?from=${range.fromStr}&to=${range.toStr}`} className="erp-btn-ghost">
+              التفصيل الكامل
+            </Link>
+          </div>
         }
       />
 
@@ -310,8 +315,8 @@ export default async function ProfitsPage({ searchParams }: { searchParams: Prom
           ⚠ {rp.missingCost.pieces} قطعة بيعت بلا تكلفة مسجّلة ({rp.missingCost.products.slice(0, 4).join('، ')}
           {rp.missingCost.products.length > 4 ? '…' : ''}) — حُسبت تكلفتها صفراً، فالربح أعلى من حقيقته حتى
           تُسجَّل «تكلفة القطعة» في{' '}
-          <Link href="/catalog/products" className="font-semibold underline">
-            بطاقة المنتج
+          <Link href="/catalog/costs" className="font-semibold underline">
+            «الأسعار والتكاليف»
           </Link>
           .
         </p>

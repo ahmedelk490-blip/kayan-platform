@@ -8,6 +8,7 @@ import {
   SUPPLY_KIND_AR,
   SUPPLY_CATEGORY_AR,
   SUPPLY_TX_TYPE_AR,
+  PRICE_SERVICE_AR,
   type SupplyKind, userCan,} from '@erp/domain';
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
@@ -16,7 +17,12 @@ import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import type { SearchParams } from '@/lib/query';
 import { monthRange, dateInput } from '@/lib/ops';
 import { SupplyForm, TransactionForm } from './SupplyForms';
-import { unpostedSupplyPurchases } from '@/lib/supplies';
+import {
+  unpostedSupplyPurchases,
+  perPieceOf,
+  serviceOfDescription,
+  SERVICES_OF_SUPPLY_KIND,
+} from '@/lib/supplies';
 import { createSupply, recordSupplyTransaction, updateSupply, deleteSupply, postPastSupplyPurchases } from './actions';
 import { SupplyEditModal } from './SupplyEditModal';
 
@@ -76,6 +82,30 @@ export default async function SuppliesPage({
     seeCosts && allows(user, 'expenses.approve') ? await unpostedSupplyPurchases(user.tenantId) : [];
   const unpostedTotal = unposted.reduce((s, t) => s.plus(dec(t.totalCost)), dec(0));
 
+  // ── الاستهلاك المحسوب (بطلب المالك: يُحسب ولا يمسّ الرصيد) ──
+  // قطع الشهر حسب الخدمة من بنود الفواتير الصادرة، × «استهلاك القطعة» لكل
+  // مستلزم. عرضٌ وحده: لا حركة تُسجَّل ولا رصيد ينقص.
+  const monthLines = await prisma.invoiceLine.findMany({
+    where: {
+      variantId: { not: null },
+      invoice: {
+        tenantId: user.tenantId,
+        isDeleted: false,
+        status: { notIn: ['DRAFT', 'VOID'] },
+        issueDate: { gte: month.from, lte: month.to },
+      },
+    },
+    select: { description: true, quantity: true },
+  });
+  const piecesBy = new Map<string, number>();
+  for (const l of monthLines) {
+    const svc = serviceOfDescription(l.description) ?? 'UNKNOWN';
+    piecesBy.set(svc, (piecesBy.get(svc) ?? 0) + Number(l.quantity));
+  }
+  const piecesFor = (kind: string) =>
+    (SERVICES_OF_SUPPLY_KIND[kind] ?? []).reduce((n, s) => n + (piecesBy.get(s) ?? 0), 0);
+  const anyPerPiece = supplies.some((s) => perPieceOf(s.notes) !== null);
+
   const purchases = dec(monthSpend.find((g) => g.type === 'PURCHASE')?._sum.totalCost ?? 0);
   const consumption = dec(monthSpend.find((g) => g.type === 'CONSUMPTION')?._sum.totalCost ?? 0);
 
@@ -131,6 +161,31 @@ export default async function SuppliesPage({
         </form>
       )}
 
+      {/* قطع الشهر حسب الخدمة — أساس الاستهلاك المحسوب في الجدول أدناه. */}
+      <section className="erp-card mb-6 p-5">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
+          <h3 className="text-sm font-semibold text-brand">قطع الشهر حسب الخدمة</h3>
+          <span className="tnum text-xs text-txt-3">{month.key}</span>
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs text-txt-2">
+          {(['EMBROIDERY', 'PRINTING', 'DTF'] as const).map((s) => (
+            <span key={s} className="rounded-full border border-line-2 px-3 py-1.5">
+              {PRICE_SERVICE_AR[s]}: <strong className="tnum">{piecesBy.get(s) ?? 0}</strong> قطعة
+            </span>
+          ))}
+          {(piecesBy.get('UNKNOWN') ?? 0) > 0 && (
+            <span className="rounded-full border border-warn px-3 py-1.5 text-warn">
+              بلا خدمة محدّدة: <strong className="tnum">{piecesBy.get('UNKNOWN')}</strong>
+            </span>
+          )}
+        </div>
+        <p className="mt-3 text-[0.7rem] leading-[1.9] text-txt-4">
+          {anyPerPiece
+            ? 'المحسوب في الجدول = هذه القطع × «استهلاك القطعة» لكل مستلزم (الخيط للتطريز، والحبر والفلم للطباعة) — حسابٌ فقط، لا يُنزَّل من الرصيد ولا يسجّل حركة.'
+            : 'اكتب «استهلاك القطعة» لكل مستلزم من «تعديل» ليُحسب كم استهلكت مبيعات الشهر وكم قطعة يكفي الرصيد — حسابٌ فقط، لا يمسّ الرصيد.'}
+        </p>
+      </section>
+
       <div className="mb-4 flex flex-wrap gap-2">
         <Link
           href="/supplies"
@@ -158,7 +213,13 @@ export default async function SuppliesPage({
       </div>
 
       <Table
-        headers={['الكود', 'الاسم', 'النوع', 'الفئة', 'الرصيد', 'الوحدة', ...(seeCosts ? ['آخر سعر'] : []), 'الحد الأدنى', ...(canWrite ? [''] : [])]}
+        headers={[
+          'الكود', 'الاسم', 'النوع', 'الفئة', 'الرصيد', 'الوحدة',
+          ...(seeCosts ? ['آخر سعر'] : []),
+          'الحد الأدنى',
+          ...(anyPerPiece ? ['استهلاك القطعة', 'محسوب للشهر', 'يكفي لـ'] : []),
+          ...(canWrite ? [''] : []),
+        ]}
         empty={supplies.length === 0}
       >
         {supplies.map((s) => {
@@ -191,6 +252,32 @@ export default async function SuppliesPage({
                 </td>
               )}
               <td className="tnum px-4 py-3 text-txt-4">{formatQty(s.minStock)}</td>
+              {anyPerPiece &&
+                (() => {
+                  const perPiece = perPieceOf(s.notes);
+                  if (perPiece === null) {
+                    return (
+                      <>
+                        <td className="px-4 py-3 text-txt-4">—</td>
+                        <td className="px-4 py-3 text-txt-4">—</td>
+                        <td className="px-4 py-3 text-txt-4">—</td>
+                      </>
+                    );
+                  }
+                  return (
+                    <>
+                      <td className="tnum px-4 py-3 text-txt-3">
+                        {perPiece} {s.unit ?? ''}
+                      </td>
+                      <td className="tnum px-4 py-3 text-txt-2">
+                        {formatQty(dec(perPiece).times(piecesFor(s.kind)))} {s.unit ?? ''}
+                      </td>
+                      <td className="tnum px-4 py-3 font-medium text-brand">
+                        {Math.max(0, Math.floor(Number(s.onHand) / perPiece))} قطعة
+                      </td>
+                    </>
+                  );
+                })()}
               {canWrite && (
                 <td className="px-4 py-3 text-end">
                   <div className="flex items-center justify-end gap-3">
@@ -202,6 +289,7 @@ export default async function SuppliesPage({
                         category: s.category,
                         unit: s.unit ?? '',
                         minStock: Number(s.minStock),
+                        perPiece: perPieceOf(s.notes),
                       }}
                     />
                     <form action={deleteSupply.bind(null, s.id)}>

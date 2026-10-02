@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { SERVICE_PRICE_NOTE } from '@erp/domain';
 import { prisma } from './prisma';
 import { setCurrentTenant } from './tenant-context';
 
@@ -89,7 +90,8 @@ async function queryProducts(): Promise<PublicProduct[]> {
       },
       materials: { select: { material: { select: { nameAr: true } } } },
       priceTiers: {
-        where: { isActive: true },
+        // بلا «أسعار الخدمات» الداخلية — الموقع يعرض الشرائح العامة وحدها.
+        where: { isActive: true, OR: [{ notes: null }, { notes: { not: SERVICE_PRICE_NOTE } }] },
         orderBy: [{ service: 'asc' }, { minQty: 'asc' }],
         select: { service: true, minQty: true, maxQty: true, price: true, currency: true },
       },
@@ -170,7 +172,8 @@ export async function publicProduct(id: string): Promise<PublicProductDetail | n
         },
         materials: { select: { material: { select: { nameAr: true } } } },
         priceTiers: {
-          where: { isActive: true },
+          // بلا «أسعار الخدمات» الداخلية — الموقع يعرض الشرائح العامة وحدها.
+          where: { isActive: true, OR: [{ notes: null }, { notes: { not: SERVICE_PRICE_NOTE } }] },
           orderBy: [{ service: 'asc' }, { minQty: 'asc' }],
           select: { service: true, minQty: true, maxQty: true, price: true, currency: true, variantId: true },
         },
