@@ -44,6 +44,8 @@ export function ProductColors({
   const [removed, setRemoved] = useState<State>({});
 
   function remove(c: ColorChoice) {
+    // الرفع يشطب رصيده من المخزن — يُسأل قبله لا بعده.
+    if (!window.confirm(`حذف اللون «${c.nameAr}» من الموديل؟\nرصيده في المخزن يُشطب، والفواتير والتقارير القديمة لا تتأثّر.`)) return;
     setBusyId(c.id);
     setRemoved({});
     startTransition(async () => {

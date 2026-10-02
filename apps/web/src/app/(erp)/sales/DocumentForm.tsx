@@ -563,822 +563,832 @@ export function DocumentForm({
   const hasTax = !totals.taxAmount.eq(0);
 
   return (
-    <form action={formAction} className="space-y-6" noValidate>
-      {webOrderId && <input type="hidden" name="webOrderId" value={webOrderId} />}
-      <FormError message={state.error} />
-      {state.ok && (
-        <p role="status" className="rounded-lg border border-ok bg-ok-soft px-4 py-2.5 text-xs text-ok">
-          {state.ok}
-        </p>
-      )}
-
-      {/* ١. العميل — قائمة قابلة للبحث، أو «+ عميل جديد» (اسم وهاتف) في مكانه. */}
-      <div className="block">
-        <span className="mb-1.5 flex items-center justify-between text-xs text-txt-2">
-          <span>العميل</span>
-          {allowNewCustomer && (
-            <button
-              type="button"
-              onClick={() => setNewCustomer((v) => !v)}
-              className="text-[0.7rem] font-medium text-brand hover:underline"
-            >
-              {newCustomer ? '← اختيار عميل موجود' : '+ عميل جديد'}
-            </button>
-          )}
-        </span>
-        {newCustomer ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <input
-              name="newCustomerName"
-              required
-              placeholder="اسم العميل الجديد"
-              className="erp-input py-2.5"
-            />
-            <input
-              name="newCustomerPhone"
-              required
-              dir="ltr"
-              inputMode="tel"
-              placeholder="رقم الهاتف (يمنع التكرار)"
-              className="erp-input py-2.5 text-start"
-            />
-            {/* العنوان اختياري لكنه أساس التوصيل — يُحفظ على العميل ويطبع على الفاتورة. */}
-            <input
-              name="newCustomerAddress"
-              placeholder="📍 العنوان — للتوصيل (اختياري)"
-              className="erp-input py-2.5 sm:col-span-2"
-            />
-          </div>
-        ) : (
-          <SearchableSelect
-            name="customerId"
-            options={customers}
-            placeholder="ابحث عن العميل أو اختره…"
-            defaultValue={values?.customerId}
-            required
-            onSelect={setCustomerId}
-          />
-        )}
-        {state.fieldErrors?.customerId && (
-          <span className="mt-1 block text-[0.7rem] text-bad">{state.fieldErrors.customerId}</span>
-        )}
-        {/* دين العميل يواجه البائع لحظة الاختيار — يقرر بالبيع الآجل وهو شايف. */}
-        {!newCustomer && customerId && debts?.[customerId] && (
-          <span className="mt-1.5 block rounded-lg border border-warn bg-warn-soft px-3 py-1.5 text-[0.7rem] font-medium text-warn">
-            ⚠ عليه {formatMoney(dec(debts[customerId].amount))} د.ع من {debts[customerId].count}{' '}
-            {debts[customerId].count === 1 ? 'فاتورة مفتوحة' : 'فواتير مفتوحة'}
-          </span>
-        )}
-      </div>
-
-      {/* مصدر الطلب — كل المصادر ظاهرة كأزرار جنب بعض، ضغطة واحدة تختار. */}
-      {sources && sources.length > 0 && (
-        <fieldset>
-          <legend className="mb-2 text-xs text-txt-2">مصدر الطلب</legend>
-          <div className="flex flex-wrap gap-2">
-            {sources.map((s) => (
-              <label
-                key={s.value}
-                className="cursor-pointer rounded-full border border-line-2 px-4 py-2 text-xs font-medium text-txt-2 transition-colors has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:checked]:text-brand"
-              >
-                <input type="radio" name="source" value={s.value} className="sr-only" />
-                {s.label}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-      )}
-
-      {/* ١.٤ إضافة بالمقاسات — منتج ولون ثم كمية لكل مقاس، كما في الكاشير:
-          التوزيعة كلها (2×L و3×XL…) تدخل دفعة واحدة بدل سطرٍ لكل مقاس. */}
-      {products.length > 0 && (
-        <section className="rounded-xl border border-line bg-card p-4 shadow-[inset_0_2px_0_var(--color-brand)]">
-          <h3 className="mb-3 text-sm font-semibold text-ok">إضافة بالمقاسات — كمية لكل مقاس</h3>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1.5 block text-xs text-txt-2">المنتج</span>
-              <select
-                value={szProductId}
-                onChange={(e) => {
-                  const pid = e.target.value;
-                  setSzProductId(pid);
-                  const colors = colorsOf(variants, pid);
-                  setSzColorId(colors.length === 1 ? colors[0].id : '');
-                  setSzQty({});
-                  setSzService('');
-                  setSzMsg(null);
-                }}
-                className="erp-input py-2.5"
-              >
-                <option value="">اختر المنتج…</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>{p.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-xs text-txt-2">اللون</span>
-              <select
-                value={szColorId}
-                onChange={(e) => {
-                  setSzColorId(e.target.value);
-                  setSzQty({});
-                }}
-                disabled={szColors.length === 0}
-                className="erp-input py-2.5 disabled:opacity-50"
-              >
-                <option value="">{szColors.length ? 'اختر اللون…' : '—'}</option>
-                {szColors.map((c) => (
-                  <option key={c.id} value={c.id}>{c.label}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          {/* الخدمة — أزرارٌ ظاهرة لا قائمة مخفية: هي ما يحدّد السعر المقترح،
-              وكانت تُؤخذ تلقائياً فيُسعَّر طلبُ طباعةٍ بسعر التطريز. */}
-          {szProductId && szServices.length > 0 && (
-            <div className="mt-3">
-              <p className="mb-2 text-xs text-txt-3">الخدمة</p>
-              <div className="flex flex-wrap gap-2">
-                {szServices.map((sv) => {
-                  const on = (szService || szServices[0]) === sv;
-                  return (
-                    <button
-                      key={sv}
-                      type="button"
-                      onClick={() => setSzService(sv)}
-                      className={`rounded-full border px-4 py-2 text-xs font-medium transition-colors ${
-                        on ? 'border-ok bg-ok text-white' : 'border-line-2 bg-card text-txt-2'
-                      }`}
-                    >
-                      {PRICE_SERVICE_AR[sv as PriceService] ?? sv}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+    <form action={formAction} className="@container" noValidate>
+      {/* عمودان حين يتّسع الفورم (بطلب المالك: «رتّب شكل الفاتورة»): الطلب يميناً —
+          العميل والأصناف — وملخّصه يساراً: التوصيل والإجمالي والتاريخ والدفع والحفظ.
+          وفي الضيّق عمودٌ واحد بالترتيب نفسه. */}
+      <div className="grid gap-6 @4xl:grid-cols-[minmax(0,1fr)_21rem] @4xl:items-start">
+        <div className="min-w-0 space-y-6">
+          {webOrderId && <input type="hidden" name="webOrderId" value={webOrderId} />}
+          <FormError message={state.error} />
+          {state.ok && (
+            <p role="status" className="rounded-lg border border-ok bg-ok-soft px-4 py-2.5 text-xs text-ok">
+              {state.ok}
+            </p>
           )}
 
-          {szProductId && (szColors.length === 0 || szColorId) && (
-            <div className="mt-3">
-              <p className="mb-2 text-xs text-txt-3">
-                {szSizes.length > 0 ? 'الكمية لكل مقاس' : 'الكمية'}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {(szSizes.length > 0 ? szSizes : [{ id: '__base', label: 'الكمية' }]).map((s) => {
-                  const q = szQty[s.id] || 0;
-                  return (
-                    <div
-                      key={s.id}
-                      className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 ${q > 0 ? 'border-ok bg-card' : 'border-line bg-card'}`}
-                    >
-                      <span className="min-w-8 text-center text-xs font-semibold text-txt">{s.label}</span>
-                      <button
-                        type="button"
-                        aria-label="أنقص"
-                        onClick={() => setSzQty((p) => ({ ...p, [s.id]: Math.max(0, (p[s.id] || 0) - 1) }))}
-                        className="grid h-9 w-9 place-items-center rounded-md border border-line-2 text-base text-txt-2 active:bg-card-2"
-                      >
-                        −
-                      </button>
-                      <span className="tnum min-w-6 text-center text-sm font-medium text-txt">{q}</span>
-                      <button
-                        type="button"
-                        aria-label="زد"
-                        onClick={() => setSzQty((p) => ({ ...p, [s.id]: (p[s.id] || 0) + 1 }))}
-                        className="grid h-9 w-9 place-items-center rounded-md border border-line-2 text-base text-txt-2 active:bg-card-2"
-                      >
-                        +
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <span className="tnum text-xs text-txt-3">
-                  {Object.values(szQty).reduce((s, n) => s + n, 0)} قطعة محددة
-                </span>
+          {/* ١. العميل — قائمة قابلة للبحث، أو «+ عميل جديد» (اسم وهاتف) في مكانه. */}
+          <div className="block">
+            <span className="mb-1.5 flex items-center justify-between text-xs text-txt-2">
+              <span>العميل</span>
+              {allowNewCustomer && (
                 <button
                   type="button"
-                  onClick={addBySizes}
-                  disabled={Object.values(szQty).every((n) => !n)}
-                  className="rounded-lg bg-ok px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                  onClick={() => setNewCustomer((v) => !v)}
+                  className="text-[0.7rem] font-medium text-brand hover:underline"
                 >
-                  أضف للفاتورة
+                  {newCustomer ? '← اختيار عميل موجود' : '+ عميل جديد'}
                 </button>
-              </div>
-            </div>
-          )}
-          {szMsg && <p className="mt-2 text-[0.7rem] font-medium text-ok">{szMsg}</p>}
-        </section>
-      )}
-
-      {/* ١.٥ السيريه/الطقم — إضافة توزيع مقاسات دفعة واحدة. يظهر فقط حين توجد
-          سيريات معرّفة. لا يمنع الإدخال اليدوي؛ يضيف سطوره فوقه. */}
-      {seriesProducts.length > 0 && (
-        <details className="rounded-xl border border-line bg-card p-4">
-          <summary className="cursor-pointer select-none text-sm font-medium text-txt-2">
-            إضافة سيريه / طقم — توزيع مقاسات جاهز
-          </summary>
-          <div className="mt-3">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <label className="block">
-              <span className="mb-1.5 block text-xs text-txt-2">المنتج</span>
-              <select
-                value={seriesProductId}
-                onChange={(e) => {
-                  const pid = e.target.value;
-                  setSeriesProductId(pid);
-                  const colors = colorsOf(variants, pid);
-                  setSeriesColorId(colors.length === 1 ? colors[0].id : '');
-                  const bs = bundles.filter((b) => b.productId === pid);
-                  setSeriesBundleId(bs.length === 1 ? bs[0].id : '');
-                  setSeriesMsg(null);
-                }}
-                className="erp-input py-2.5"
-              >
-                <option value="">اختر…</option>
-                {seriesProducts.map((p) => (
-                  <option key={p.id} value={p.id}>{p.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-xs text-txt-2">اللون</span>
-              <select
-                value={seriesColorId}
-                onChange={(e) => setSeriesColorId(e.target.value)}
-                disabled={seriesColors.length === 0}
-                className="erp-input py-2.5 disabled:opacity-50"
-              >
-                <option value="">{seriesColors.length ? 'اختر…' : '—'}</option>
-                {seriesColors.map((c) => (
-                  <option key={c.id} value={c.id}>{c.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-xs text-txt-2">السيريه</span>
-              <select
-                value={seriesBundleId}
-                onChange={(e) => setSeriesBundleId(e.target.value)}
-                disabled={seriesBundles.length === 0}
-                className="erp-input py-2.5 disabled:opacity-50"
-              >
-                <option value="">{seriesBundles.length ? 'اختر…' : '—'}</option>
-                {seriesBundles.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.nameAr} ({b.lines.reduce((s, l) => s + l.quantity, 0)} قطعة)
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="flex items-end gap-2">
-              <label className="block flex-1">
-                <span className="mb-1.5 block text-xs text-txt-2">عدد الأطقم</span>
+              )}
+            </span>
+            {newCustomer ? (
+              <div className="grid gap-3 sm:grid-cols-2">
                 <input
-                  type="number"
-                  min="1"
-                  step="1"
+                  name="newCustomerName"
+                  required
+                  placeholder="اسم العميل الجديد"
+                  className="erp-input py-2.5"
+                />
+                <input
+                  name="newCustomerPhone"
+                  required
                   dir="ltr"
-                  value={seriesCount}
-                  onChange={(e) => setSeriesCount(Math.max(1, Math.round(Number(e.target.value) || 1)))}
+                  inputMode="tel"
+                  placeholder="رقم الهاتف (يمنع التكرار)"
                   className="erp-input py-2.5 text-start"
                 />
-              </label>
-              <button
-                type="button"
-                onClick={addSeries}
-                disabled={!seriesBundleId || !seriesColorId}
-                className="h-[42px] shrink-0 rounded-lg bg-brand px-4 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-              >
-                أضف
-              </button>
-            </div>
-          </div>
-          {seriesBundleId && (
-            <p className="mt-2 text-[0.7rem] text-txt-3">
-              {seriesBundles
-                .find((b) => b.id === seriesBundleId)
-                ?.lines.map((l) => `${l.quantity * Math.max(1, seriesCount)}× ${l.sizeCode}`)
-                .join(' · ')}
-            </p>
-          )}
-          {seriesMsg && <p className="mt-2 text-[0.7rem] font-medium text-brand">{seriesMsg}</p>}
-          </div>
-        </details>
-      )}
-
-      {/* ٢. البنود — لكل بند: المنتج واللون والمقاس والخدمة والكمية، وحقل
-          تفاصيل حرّ، وسعر الوحدة يكتبه البائع بنفسه (المقترح تلميح فقط).
-          الخصم والضريبة أُزيلا من الصف وتُرسل أصفاراً. */}
-      <section>
-        <h3 className="mb-3 text-sm font-semibold text-brand">الأصناف</h3>
-
-        <div className="space-y-3">
-          {/* بطاقةٌ لكل (منتج × لون × خدمة) ومقاساتها صفُّ عدّادات داخلها —
-              بنفس شكل «إضافة بالمقاسات» أعلاه، بطلب المالك. */}
-          {groups.map((g) => {
-            const first = g.items[0].line;
-            const indexes = g.items.map((it) => it.index);
-            const productLabel = products.find((pp) => pp.id === first.productId)?.label;
-            const colorName = colorsOf(variants, first.productId).find((c) => c.id === first.colorId)?.label;
-            const svcAr = first.service
-              ? (PRICE_SERVICE_AR as Record<string, string>)[first.service] ?? first.service
-              : null;
-            const pieces = g.items.reduce((n, it) => n + it.line.quantity, 0);
-            const money = g.items.reduce((m, it) => m.plus(calcLine(it.line).lineTotal), dec(0));
-            const suggestion = suggestedPrice(first);
-            const lastPrice =
-              customerId && first.variantId ? lastPrices[`${customerId}:${first.variantId}`] : undefined;
-
-            return (
-              <div key={g.key} className="rounded-xl border border-line bg-card p-4">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-txt">{productLabel ?? '—'}</span>
-                    {colorName && (
-                      <span className="rounded-full border border-line-2 bg-card px-2.5 py-1 text-[0.7rem] text-txt-2">
-                        {colorName}
-                      </span>
-                    )}
-                    {svcAr && svcAr !== 'بدون' && (
-                      <span className="rounded-full border border-brand/40 bg-brand-soft px-2.5 py-1 text-[0.7rem] text-brand">
-                        {svcAr}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeIndexes(indexes)}
-                    className="text-[0.7rem] text-bad hover:underline"
-                  >
-                    حذف الصنف
-                  </button>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {g.items.map(({ line, index }) => {
-                    const sizeLabel =
-                      sizesOf(variants, line.productId, line.colorId).find((z) => z.id === line.sizeId)?.label ??
-                      'الكمية';
-                    const v = variants.find((x) => x.value === line.variantId);
-                    const short = v ? line.quantity > v.available : false;
-                    return (
-                      <div
-                        key={index}
-                        className={`flex items-center gap-1.5 rounded-lg border bg-card px-2 py-1.5 ${short ? 'border-bad' : 'border-line'}`}
-                      >
-                        <span className="min-w-8 text-center text-xs font-semibold text-txt">{sizeLabel}</span>
-                        <button
-                          type="button"
-                          aria-label="أنقص"
-                          onClick={() =>
-                            line.quantity <= 1
-                              ? removeIndexes([index])
-                              : update(index, { quantity: line.quantity - 1 })
-                          }
-                          className="grid h-9 w-9 place-items-center rounded-md border border-line-2 text-base text-txt-2 active:bg-card-2"
-                        >
-                          −
-                        </button>
-                        <span className="tnum min-w-6 text-center text-sm font-medium text-txt">{line.quantity}</span>
-                        <button
-                          type="button"
-                          aria-label="زد"
-                          onClick={() => update(index, { quantity: line.quantity + 1 })}
-                          className="grid h-9 w-9 place-items-center rounded-md border border-line-2 text-base text-txt-2 active:bg-card-2"
-                        >
-                          +
-                        </button>
-                        {short && v && <span className="text-[0.65rem] text-bad">متاح {v.available}</span>}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* سطرٌ لكل مقاس يصل الخادم كما يتوقّعه — العرض مجموعٌ لا البنية. */}
-                {g.items.map(({ line, index }) => (
-                  <span key={`h-${index}`} className="hidden">
-                    <input type="hidden" name="lineVariantId" value={line.variantId} />
-                    <input type="hidden" name="lineService" value={line.service} />
-                    <input type="hidden" name="lineQuantity" value={line.quantity} />
-                    <input type="hidden" name="lineUnitPrice" value={line.unitPrice} />
-                    <input type="hidden" name="lineNotes" value={line.notes} />
-                    <input type="hidden" name="lineDiscount" value={0} />
-                    <input type="hidden" name="lineTaxRate" value={0} />
-                  </span>
-                ))}
-
-                <label className="mt-3 block">
-                  <span className="mb-1.5 block text-xs text-txt-2">تفاصيل الصنف — تسري على كل المقاسات</span>
-                  <input
-                    value={first.notes}
-                    onChange={(e) => updateGroup(indexes, { notes: e.target.value })}
-                    placeholder="مثال: طباعة شعار على الصدر…"
-                    className="erp-input py-2.5"
-                  />
-                </label>
-
-                <div className="mt-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2 border-t border-line/60 pt-3">
-                  <div className="w-44">
-                    <label className="block">
-                      <span className="mb-1.5 block text-xs text-txt-2">سعر القطعة — لكل المقاسات</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        dir="ltr"
-                        value={first.unitPrice}
-                        onChange={(e) => updateGroup(indexes, { unitPrice: Number(e.target.value) || 0 })}
-                        className="erp-input py-2.5 text-start"
-                      />
-                    </label>
-                    {suggestion != null && suggestion !== first.unitPrice ? (
-                      <button
-                        type="button"
-                        onClick={() => updateGroup(indexes, { unitPrice: suggestion })}
-                        className="mt-0.5 block text-[0.65rem] text-brand hover:underline"
-                      >
-                        المقترح {formatMoney(dec(suggestion))} — اضغط لاعتماده
-                      </button>
-                    ) : (
-                      <span className="mt-0.5 block text-[0.65rem] text-txt-4">السعر بيدك — اكتبه مباشرة</span>
-                    )}
-                    {lastPrice && lastPrice.price !== first.unitPrice && (
-                      <button
-                        type="button"
-                        onClick={() => updateGroup(indexes, { unitPrice: lastPrice.price })}
-                        className="mt-0.5 block text-[0.65rem] text-ok hover:underline"
-                        title={lastPrice.date ? `بتاريخ ${lastPrice.date}` : undefined}
-                      >
-                        آخر سعر لهذا العميل {formatMoney(dec(lastPrice.price))} — اضغط لاعتماده
-                      </button>
-                    )}
-                  </div>
-                  <div className="text-end text-sm">
-                    <span className="tnum block text-[0.7rem] text-txt-3">{pieces} قطعة</span>
-                    <span className="text-xs text-txt-3">الإجمالي </span>
-                    <span className="tnum font-semibold text-txt">{formatMoney(money)}</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-
-          {/* صنفٌ لم يُحلّ متغيّره بعد — يبقى بمحرّره حتى يُختار، ثم ينضمّ لبطاقته. */}
-          {pendingLines.map(({ line, index }) => {
-            const colors = colorsOf(variants, line.productId);
-            const sizes = sizesOf(variants, line.productId, line.colorId);
-            return (
-              <div key={`p-${index}`} className="rounded-xl border border-dashed border-line bg-card p-4">
-                <div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-[1.6fr_1fr_0.8fr_auto]">
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs text-txt-2">المنتج</span>
-                    <select
-                      value={line.productId}
-                      onChange={(e) => chooseInLine(index, { productId: e.target.value })}
-                      className="erp-input py-2.5"
-                    >
-                      <option value="">اختر المنتج…</option>
-                      {products.map((pp) => (
-                        <option key={pp.id} value={pp.id}>{pp.label}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs text-txt-2">اللون</span>
-                    <select
-                      value={line.colorId}
-                      onChange={(e) => chooseInLine(index, { colorId: e.target.value })}
-                      disabled={colors.length === 0}
-                      className="erp-input py-2.5 disabled:opacity-50"
-                    >
-                      <option value="">{colors.length ? 'اختر اللون…' : '—'}</option>
-                      {colors.map((c) => (
-                        <option key={c.id} value={c.id}>{c.label}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs text-txt-2">المقاس</span>
-                    <select
-                      value={line.sizeId}
-                      onChange={(e) => chooseInLine(index, { sizeId: e.target.value })}
-                      disabled={sizes.length === 0}
-                      className="erp-input py-2.5 disabled:opacity-50"
-                    >
-                      <option value="">{sizes.length ? 'اختر المقاس…' : '—'}</option>
-                      {sizes.map((z) => (
-                        <option key={z.id} value={z.id}>{z.label}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => removeIndexes([index])}
-                    className="grid h-[42px] w-10 place-items-center rounded-lg border border-line text-txt-3 transition-colors hover:border-bad hover:text-bad"
-                    aria-label="حذف الصنف"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <p className="mt-2 text-[0.7rem] text-txt-4">
-                  اختر المنتج واللون والمقاس — ينضمّ الصنف عندها لبطاقته مع بقية مقاساته.
-                </p>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* الإدخال اليدويّ صنفاً صنفاً — طريقٌ ثالث لنفس الغرض، لا يُزاحِم
-            «إضافة بالمقاسات» في الوزن البصري، ويبقى موجوداً لمن يحتاجه. */}
-        <button
-          type="button"
-          onClick={() => setLines((p) => [...p, emptyLine()])}
-          className="mt-3 text-[0.7rem] text-txt-3 transition-colors hover:text-brand"
-        >
-          + إضافة صنف يدويّاً
-        </button>
-      </section>
-
-      {/* ٢.٥ سعر التوصيل — على الزبون (بند يرفع الإجمالي) أو علينا (مصروف
-          شحن وتوصيل يُخصم من الربح، والفاتورة لا تتغيّر). اختياري: صفر = بلا. */}
-      {withDelivery && (
-        <section className="rounded-xl border border-line bg-card p-4">
-          <h3 className="mb-3 text-sm font-semibold text-txt">🚚 التوصيل</h3>
-
-          {/* الاختيار أولاً، والمبلغ يُملأ بنفسه — لا رقم يُكتب كل مرة. */}
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                { value: 'CUSTOMER', label: 'على الزبون' },
-                { value: 'US', label: 'علينا' },
-                { value: 'NONE', label: 'بلا توصيل' },
-              ] as const
-            ).map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                onClick={() => chooseDelivery(o.value)}
-                className={`rounded-full border px-4 py-2 text-xs font-medium transition-colors ${
-                  deliveryMode === o.value
-                    ? 'border-brand bg-brand-soft text-brand'
-                    : 'border-line-2 text-txt-2 hover:border-line'
-                }`}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-          <input type="hidden" name="deliveryFee" value={deliverySubmitted} />
-          <input type="hidden" name="deliveryOn" value={deliveryOn} />
-
-          {deliveryMode !== 'NONE' && (
-            <div className="mt-3 flex flex-wrap items-end gap-4">
-              <label className="block">
-                <span className="mb-1.5 block text-xs text-txt-2">
-                  {deliveryMode === 'CUSTOMER' ? 'المبلغ على الزبون' : 'يُخصم من ربحنا'}
-                </span>
+                {/* العنوان اختياري لكنه أساس التوصيل — يُحفظ على العميل ويطبع على الفاتورة. */}
                 <input
-                  type="number"
-                  min="0"
-                  step="500"
-                  dir="ltr"
-                  value={deliveryFee}
-                  onChange={(e) => setDeliveryFee(Math.max(0, Number(e.target.value) || 0))}
-                  className="erp-input w-36 py-2.5 text-start"
+                  name="newCustomerAddress"
+                  placeholder="📍 العنوان — للتوصيل (اختياري)"
+                  className="erp-input py-2.5 sm:col-span-2"
                 />
-              </label>
+              </div>
+            ) : (
+              <SearchableSelect
+                name="customerId"
+                options={customers}
+                placeholder="ابحث عن العميل أو اختره…"
+                defaultValue={values?.customerId}
+                required
+                onSelect={setCustomerId}
+              />
+            )}
+            {state.fieldErrors?.customerId && (
+              <span className="mt-1 block text-[0.7rem] text-bad">{state.fieldErrors.customerId}</span>
+            )}
+            {/* دين العميل يواجه البائع لحظة الاختيار — يقرر بالبيع الآجل وهو شايف. */}
+            {!newCustomer && customerId && debts?.[customerId] && (
+              <span className="mt-1.5 block rounded-lg border border-warn bg-warn-soft px-3 py-1.5 text-[0.7rem] font-medium text-warn">
+                ⚠ عليه {formatMoney(dec(debts[customerId].amount))} د.ع من {debts[customerId].count}{' '}
+                {debts[customerId].count === 1 ? 'فاتورة مفتوحة' : 'فواتير مفتوحة'}
+              </span>
+            )}
+          </div>
 
-              {/* حين تكون الأجرة علينا يُقال صراحةً إن الزبون لا يدفع شيئاً —
-                  وإلا ظنَّ من يرى الرقم أنه مضاف على الفاتورة. */}
-              {deliveryMode === 'US' && (
-                <div className="block">
-                  <span className="mb-1.5 block text-xs text-txt-2">على الزبون</span>
-                  <div className="tnum rounded-lg border border-line bg-card px-3 py-2.5 text-sm font-bold text-ok">
-                    0
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {deliveryMode !== 'NONE' && deliveryFee > 0 && (
-            <p className="mt-2 text-[0.7rem] leading-[1.8] text-txt-4">
-              {deliveryMode === 'CUSTOMER'
-                ? `يُضاف بند «🚚 أجور توصيل» بقيمة ${formatMoney(dec(deliveryFee))} على الفاتورة — يدفعه الزبون للسائق، فلا يُسجَّل مصروفاً عليك ولا يُحسب ربحاً.`
-                : `الزبون لا يدفع شيئاً عن التوصيل، ويُسجَّل مصروف «شحن وتوصيل» بقيمة ${formatMoney(dec(deliveryFee))} يُخصم من الربح في التقارير.`}
-            </p>
-          )}
-        </section>
-      )}
-
-      {/* ٣. الإجمالي — كبير وواضح. */}
-      <div className="flex items-center justify-between rounded-xl border border-brand-line bg-brand-soft px-5 py-4">
-        <span className="text-sm text-txt-2">الإجمالي</span>
-        <span className="tnum text-2xl font-bold text-brand">{formatMoney(totals.total)}</span>
-      </div>
-      {shortLines.length > 0 && (
-        <p className="-mt-3 rounded-xl border border-warn bg-warn-soft px-4 py-2.5 text-[0.75rem] leading-[1.8] text-warn">
-          ⚠ {shortLines.length} مقاس بكمية أكبر من المتاح في المخزن — البيع مسموح
-          (ما سيُنتَج يُباع)، لكن رصيد هذه المقاسات سينزل تحت الصفر ويظهر أحمرَ
-          في «أرصدة المنتجات». سجّل الاستلام أوّلاً إن كانت البضاعة قد وصلت.
-        </p>
-      )}
-      {(hasDiscount || hasTax) && (
-        <p className="-mt-3 flex flex-wrap justify-end gap-x-4 text-xs text-txt-3">
-          <span>المجموع <span className="tnum">{formatMoney(totals.subtotal)}</span></span>
-          {hasDiscount && <span>الخصم <span className="tnum">-{formatMoney(totals.discountAmount)}</span></span>}
-          {hasTax && <span>الضريبة <span className="tnum">{formatMoney(totals.taxAmount)}</span></span>}
-        </p>
-      )}
-
-      {/* تاريخ الفاتورة — ظاهرٌ لا مطويّ (بطلب المالك): تلقائيٌّ باليوم، ويغيّره
-          البائع حين يخصّ الطلب يوماً آخر — طلبٌ بعد منتصف الليل يخصّ أمس مثلاً. */}
-      {isInvoice && (
-        <section className="rounded-xl border border-line bg-card p-4">
-          <Field
-            name="issueDate"
-            label="التاريخ والوقت"
-            type="datetime-local"
-            dir="ltr"
-            value={issueAt}
-            onChange={(e) => {
-              setIssueAt(e.target.value);
-              setIssueAtTouched(true);
-            }}
-            hint="الآن تلقائياً — غيّرهما فقط إن كان الطلب لوقتٍ آخر."
-            errors={state.fieldErrors}
-          />
-          {/* لم تُلمس الخانة: يُسجَّل وقت الحفظ نفسه لا وقت فتح الصفحة. */}
-          <input type="hidden" name="issueDateAuto" value={issueAtTouched ? '0' : '1'} />
-        </section>
-      )}
-
-      {/* ٣.٥ الدفع — للفاتورة المباشرة فقط: أزرارٌ ظاهرة لحالة الدفع (كامل/جزء/
-          مستحقات/مسودة) بدل خانة «إصدار وتحصيل فوري» وحدها. الخادم يُخصّص الرقم
-          المتسلسل ويسجّل الدفعة في معاملة واحدة. */}
-      {instantIssue && (
-        <section className="rounded-xl border border-line bg-card p-4">
-          <p className="mb-2.5 text-sm font-medium text-txt">الدفع</p>
-          <PayModePills
-            value={payMode}
-            onChange={(m) => {
-              setPayMode(m);
-              setPayAmount(0);
-            }}
-            modes={['FULL', 'PART', 'DUE', 'DRAFT']}
-          />
-          <input type="hidden" name="issueNow" value={payMode === 'DRAFT' ? '0' : '1'} />
-          <input type="hidden" name="paymentMode" value={payMode} />
-          {/* «المبلغ كامل» يحسبه الخادم من إجماليه — لا رقم المتصفّح. */}
-          <input type="hidden" name="paymentFull" value={payMode === 'FULL' ? '1' : '0'} />
-          {payMode !== 'PART' && <input type="hidden" name="paymentAmount" value={payValue} />}
-
-          {payMode === 'DRAFT' && (
-            <p className="mt-3 text-[0.7rem] leading-[1.8] text-txt-4">
-              تُحفظ بلا رقم ولا دفعة ولا صرف من المخزن — وتُصدَر لاحقاً من صفحة الفاتورة.
-            </p>
-          )}
-          {payMode === 'DUE' && (
-            <p className="mt-3 rounded-lg border border-warn bg-warn-soft px-3 py-2 text-xs leading-[1.8] text-warn">
-              تُصدَر الفاتورة والمبلغ كله (<span className="tnum font-semibold">{formatMoney(totals.total)}</span>)
-              مستحقاتٌ على العميل — يظهر في «تقدّم الديون» حتى يُحصَّل.
-            </p>
-          )}
-
-          {(payMode === 'FULL' || payMode === 'PART') && (
-            <div className={`mt-4 grid gap-3 ${payMode === 'PART' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
-              {payMode === 'PART' ? (
-                <label className="block">
-                  <span className="mb-1.5 block text-xs text-txt-2">المبلغ المدفوع</span>
-                  <input
-                    name="paymentAmount"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    dir="ltr"
-                    placeholder="كم دفع؟"
-                    value={payAmount || ''}
-                    onChange={(e) => setPayAmount(Math.max(0, Number(e.target.value) || 0))}
-                    className="erp-input py-2.5 text-start"
-                  />
-                  <span className={`mt-1 block text-[0.7rem] ${state.fieldErrors?.paymentAmount ? 'text-bad' : 'text-txt-4'}`}>
-                    {state.fieldErrors?.paymentAmount ?? 'الباقي يُسجَّل مستحقاتٍ على العميل.'}
-                  </span>
-                </label>
-              ) : (
-                <div className="block">
-                  <span className="mb-1.5 block text-xs text-txt-2">المبلغ المدفوع</span>
-                  <div className="tnum rounded-lg border border-line bg-card-2 px-3 py-2.5 text-sm font-bold text-ok">
-                    {formatMoney(totals.total)}
-                  </div>
-                  <span className="mt-1 block text-[0.7rem] text-txt-4">الإجمالي كاملاً.</span>
-                </div>
-              )}
-              <label className="block">
-                <span className="mb-1.5 block text-xs text-txt-2">طريقة السداد</span>
-                <select
-                  name="paymentMethod"
-                  value={payMethod}
-                  onChange={(e) => setPayMethod(e.target.value)}
-                  className="erp-input py-2.5"
-                >
-                  {PAYMENT_METHODS.map((m) => (
-                    <option key={m} value={m}>
-                      {PAYMENT_METHOD_AR[m]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {payMode === 'PART' && (
-                <div className="block">
-                  <span className="mb-1.5 block text-xs text-txt-2">المتبقّي على العميل</span>
-                  <div
-                    className={`tnum rounded-lg border border-line bg-card px-3 py-2.5 text-sm font-bold ${
-                      dec(totals.total).minus(payValue).lte(0) ? 'text-ok' : 'text-warn'
-                    }`}
+          {/* مصدر الطلب — كل المصادر ظاهرة كأزرار جنب بعض، ضغطة واحدة تختار. */}
+          {sources && sources.length > 0 && (
+            <fieldset>
+              <legend className="mb-2 text-xs text-txt-2">مصدر الطلب</legend>
+              <div className="flex flex-wrap gap-2">
+                {sources.map((s) => (
+                  <label
+                    key={s.value}
+                    className="cursor-pointer rounded-full border border-line-2 px-4 py-2 text-xs font-medium text-txt-2 transition-colors has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:checked]:text-brand"
                   >
-                    {formatMoney(dec(totals.total).minus(payValue))}
+                    <input type="radio" name="source" value={s.value} className="sr-only" />
+                    {s.label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
+
+          {/* ١.٤ إضافة بالمقاسات — منتج ولون ثم كمية لكل مقاس، كما في الكاشير:
+              التوزيعة كلها (2×L و3×XL…) تدخل دفعة واحدة بدل سطرٍ لكل مقاس. */}
+          {products.length > 0 && (
+            <section className="rounded-xl border border-line bg-card p-4 shadow-[inset_0_2px_0_var(--color-brand)]">
+              <h3 className="mb-3 text-sm font-semibold text-ok">إضافة بالمقاسات — كمية لكل مقاس</h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs text-txt-2">المنتج</span>
+                  <select
+                    value={szProductId}
+                    onChange={(e) => {
+                      const pid = e.target.value;
+                      setSzProductId(pid);
+                      const colors = colorsOf(variants, pid);
+                      setSzColorId(colors.length === 1 ? colors[0].id : '');
+                      setSzQty({});
+                      setSzService('');
+                      setSzMsg(null);
+                    }}
+                    className="erp-input py-2.5"
+                  >
+                    <option value="">اختر المنتج…</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>{p.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs text-txt-2">اللون</span>
+                  <select
+                    value={szColorId}
+                    onChange={(e) => {
+                      setSzColorId(e.target.value);
+                      setSzQty({});
+                    }}
+                    disabled={szColors.length === 0}
+                    className="erp-input py-2.5 disabled:opacity-50"
+                  >
+                    <option value="">{szColors.length ? 'اختر اللون…' : '—'}</option>
+                    {szColors.map((c) => (
+                      <option key={c.id} value={c.id}>{c.label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {/* الخدمة — أزرارٌ ظاهرة لا قائمة مخفية: هي ما يحدّد السعر المقترح،
+                  وكانت تُؤخذ تلقائياً فيُسعَّر طلبُ طباعةٍ بسعر التطريز. */}
+              {szProductId && szServices.length > 0 && (
+                <div className="mt-3">
+                  <p className="mb-2 text-xs text-txt-3">الخدمة</p>
+                  <div className="flex flex-wrap gap-2">
+                    {szServices.map((sv) => {
+                      const on = (szService || szServices[0]) === sv;
+                      return (
+                        <button
+                          key={sv}
+                          type="button"
+                          onClick={() => setSzService(sv)}
+                          className={`rounded-full border px-4 py-2 text-xs font-medium transition-colors ${
+                            on ? 'border-ok bg-ok text-white' : 'border-line-2 bg-card text-txt-2'
+                          }`}
+                        >
+                          {PRICE_SERVICE_AR[sv as PriceService] ?? sv}
+                        </button>
+                      );
+                    })}
                   </div>
-                  {/* دفع أقلّ من الإجمالي: دينٌ عليه، أم سعرٌ اتُّفق عليه؟ كان الفرق
-                      يُسجَّل ديناً دائماً فتخرج فواتير «تحصيل فوري» مدفوعةً جزئياً. */}
-                  {dec(totals.total).minus(payValue).gt(0) && payValue > 0 && (
+                </div>
+              )}
+
+              {szProductId && (szColors.length === 0 || szColorId) && (
+                <div className="mt-3">
+                  <p className="mb-2 text-xs text-txt-3">
+                    {szSizes.length > 0 ? 'الكمية لكل مقاس' : 'الكمية'}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {(szSizes.length > 0 ? szSizes : [{ id: '__base', label: 'الكمية' }]).map((s) => {
+                      const q = szQty[s.id] || 0;
+                      return (
+                        <div
+                          key={s.id}
+                          className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 ${q > 0 ? 'border-ok bg-card' : 'border-line bg-card'}`}
+                        >
+                          <span className="min-w-8 text-center text-xs font-semibold text-txt">{s.label}</span>
+                          <button
+                            type="button"
+                            aria-label="أنقص"
+                            onClick={() => setSzQty((p) => ({ ...p, [s.id]: Math.max(0, (p[s.id] || 0) - 1) }))}
+                            className="grid h-9 w-9 place-items-center rounded-md border border-line-2 text-base text-txt-2 active:bg-card-2"
+                          >
+                            −
+                          </button>
+                          <span className="tnum min-w-6 text-center text-sm font-medium text-txt">{q}</span>
+                          <button
+                            type="button"
+                            aria-label="زد"
+                            onClick={() => setSzQty((p) => ({ ...p, [s.id]: (p[s.id] || 0) + 1 }))}
+                            className="grid h-9 w-9 place-items-center rounded-md border border-line-2 text-base text-txt-2 active:bg-card-2"
+                          >
+                            +
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <span className="tnum text-xs text-txt-3">
+                      {Object.values(szQty).reduce((s, n) => s + n, 0)} قطعة محددة
+                    </span>
                     <button
                       type="button"
-                      onClick={() => {
-                        setDocDiscount((d) => d + dec(totals.total).minus(payValue).toNumber());
-                        setPayMode('FULL');
-                      }}
-                      className="mt-1 text-start text-[0.7rem] text-brand hover:underline"
+                      onClick={addBySizes}
+                      disabled={Object.values(szQty).every((n) => !n)}
+                      className="rounded-lg bg-ok px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
                     >
-                      اتفقتم على سعرٍ أقل؟ اجعل الفرق خصماً
+                      أضف للفاتورة
                     </button>
+                  </div>
+                </div>
+              )}
+              {szMsg && <p className="mt-2 text-[0.7rem] font-medium text-ok">{szMsg}</p>}
+            </section>
+          )}
+
+          {/* ١.٥ السيريه/الطقم — إضافة توزيع مقاسات دفعة واحدة. يظهر فقط حين توجد
+              سيريات معرّفة. لا يمنع الإدخال اليدوي؛ يضيف سطوره فوقه. */}
+          {seriesProducts.length > 0 && (
+            <details className="rounded-xl border border-line bg-card p-4">
+              <summary className="cursor-pointer select-none text-sm font-medium text-txt-2">
+                إضافة سيريه / طقم — توزيع مقاسات جاهز
+              </summary>
+              <div className="mt-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs text-txt-2">المنتج</span>
+                  <select
+                    value={seriesProductId}
+                    onChange={(e) => {
+                      const pid = e.target.value;
+                      setSeriesProductId(pid);
+                      const colors = colorsOf(variants, pid);
+                      setSeriesColorId(colors.length === 1 ? colors[0].id : '');
+                      const bs = bundles.filter((b) => b.productId === pid);
+                      setSeriesBundleId(bs.length === 1 ? bs[0].id : '');
+                      setSeriesMsg(null);
+                    }}
+                    className="erp-input py-2.5"
+                  >
+                    <option value="">اختر…</option>
+                    {seriesProducts.map((p) => (
+                      <option key={p.id} value={p.id}>{p.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs text-txt-2">اللون</span>
+                  <select
+                    value={seriesColorId}
+                    onChange={(e) => setSeriesColorId(e.target.value)}
+                    disabled={seriesColors.length === 0}
+                    className="erp-input py-2.5 disabled:opacity-50"
+                  >
+                    <option value="">{seriesColors.length ? 'اختر…' : '—'}</option>
+                    {seriesColors.map((c) => (
+                      <option key={c.id} value={c.id}>{c.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs text-txt-2">السيريه</span>
+                  <select
+                    value={seriesBundleId}
+                    onChange={(e) => setSeriesBundleId(e.target.value)}
+                    disabled={seriesBundles.length === 0}
+                    className="erp-input py-2.5 disabled:opacity-50"
+                  >
+                    <option value="">{seriesBundles.length ? 'اختر…' : '—'}</option>
+                    {seriesBundles.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.nameAr} ({b.lines.reduce((s, l) => s + l.quantity, 0)} قطعة)
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex items-end gap-2">
+                  <label className="block flex-1">
+                    <span className="mb-1.5 block text-xs text-txt-2">عدد الأطقم</span>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      dir="ltr"
+                      value={seriesCount}
+                      onChange={(e) => setSeriesCount(Math.max(1, Math.round(Number(e.target.value) || 1)))}
+                      className="erp-input py-2.5 text-start"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addSeries}
+                    disabled={!seriesBundleId || !seriesColorId}
+                    className="h-[42px] shrink-0 rounded-lg bg-brand px-4 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                  >
+                    أضف
+                  </button>
+                </div>
+              </div>
+              {seriesBundleId && (
+                <p className="mt-2 text-[0.7rem] text-txt-3">
+                  {seriesBundles
+                    .find((b) => b.id === seriesBundleId)
+                    ?.lines.map((l) => `${l.quantity * Math.max(1, seriesCount)}× ${l.sizeCode}`)
+                    .join(' · ')}
+                </p>
+              )}
+              {seriesMsg && <p className="mt-2 text-[0.7rem] font-medium text-brand">{seriesMsg}</p>}
+              </div>
+            </details>
+          )}
+
+          {/* ٢. البنود — لكل بند: المنتج واللون والمقاس والخدمة والكمية، وحقل
+              تفاصيل حرّ، وسعر الوحدة يكتبه البائع بنفسه (المقترح تلميح فقط).
+              الخصم والضريبة أُزيلا من الصف وتُرسل أصفاراً. */}
+          <section>
+            <h3 className="mb-3 text-sm font-semibold text-brand">الأصناف</h3>
+
+            <div className="space-y-3">
+              {/* بطاقةٌ لكل (منتج × لون × خدمة) ومقاساتها صفُّ عدّادات داخلها —
+                  بنفس شكل «إضافة بالمقاسات» أعلاه، بطلب المالك. */}
+              {groups.map((g) => {
+                const first = g.items[0].line;
+                const indexes = g.items.map((it) => it.index);
+                const productLabel = products.find((pp) => pp.id === first.productId)?.label;
+                const colorName = colorsOf(variants, first.productId).find((c) => c.id === first.colorId)?.label;
+                const svcAr = first.service
+                  ? (PRICE_SERVICE_AR as Record<string, string>)[first.service] ?? first.service
+                  : null;
+                const pieces = g.items.reduce((n, it) => n + it.line.quantity, 0);
+                const money = g.items.reduce((m, it) => m.plus(calcLine(it.line).lineTotal), dec(0));
+                const suggestion = suggestedPrice(first);
+                const lastPrice =
+                  customerId && first.variantId ? lastPrices[`${customerId}:${first.variantId}`] : undefined;
+
+                return (
+                  <div key={g.key} className="rounded-xl border border-line bg-card p-4">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-txt">{productLabel ?? '—'}</span>
+                        {colorName && (
+                          <span className="rounded-full border border-line-2 bg-card px-2.5 py-1 text-[0.7rem] text-txt-2">
+                            {colorName}
+                          </span>
+                        )}
+                        {svcAr && svcAr !== 'بدون' && (
+                          <span className="rounded-full border border-brand/40 bg-brand-soft px-2.5 py-1 text-[0.7rem] text-brand">
+                            {svcAr}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeIndexes(indexes)}
+                        className="text-[0.7rem] text-bad hover:underline"
+                      >
+                        حذف الصنف
+                      </button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {g.items.map(({ line, index }) => {
+                        const sizeLabel =
+                          sizesOf(variants, line.productId, line.colorId).find((z) => z.id === line.sizeId)?.label ??
+                          'الكمية';
+                        const v = variants.find((x) => x.value === line.variantId);
+                        const short = v ? line.quantity > v.available : false;
+                        return (
+                          <div
+                            key={index}
+                            className={`flex items-center gap-1.5 rounded-lg border bg-card px-2 py-1.5 ${short ? 'border-bad' : 'border-line'}`}
+                          >
+                            <span className="min-w-8 text-center text-xs font-semibold text-txt">{sizeLabel}</span>
+                            <button
+                              type="button"
+                              aria-label="أنقص"
+                              onClick={() =>
+                                line.quantity <= 1
+                                  ? removeIndexes([index])
+                                  : update(index, { quantity: line.quantity - 1 })
+                              }
+                              className="grid h-9 w-9 place-items-center rounded-md border border-line-2 text-base text-txt-2 active:bg-card-2"
+                            >
+                              −
+                            </button>
+                            <span className="tnum min-w-6 text-center text-sm font-medium text-txt">{line.quantity}</span>
+                            <button
+                              type="button"
+                              aria-label="زد"
+                              onClick={() => update(index, { quantity: line.quantity + 1 })}
+                              className="grid h-9 w-9 place-items-center rounded-md border border-line-2 text-base text-txt-2 active:bg-card-2"
+                            >
+                              +
+                            </button>
+                            {short && v && <span className="text-[0.65rem] text-bad">متاح {v.available}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* سطرٌ لكل مقاس يصل الخادم كما يتوقّعه — العرض مجموعٌ لا البنية. */}
+                    {g.items.map(({ line, index }) => (
+                      <span key={`h-${index}`} className="hidden">
+                        <input type="hidden" name="lineVariantId" value={line.variantId} />
+                        <input type="hidden" name="lineService" value={line.service} />
+                        <input type="hidden" name="lineQuantity" value={line.quantity} />
+                        <input type="hidden" name="lineUnitPrice" value={line.unitPrice} />
+                        <input type="hidden" name="lineNotes" value={line.notes} />
+                        <input type="hidden" name="lineDiscount" value={0} />
+                        <input type="hidden" name="lineTaxRate" value={0} />
+                      </span>
+                    ))}
+
+                    <label className="mt-3 block">
+                      <span className="mb-1.5 block text-xs text-txt-2">تفاصيل الصنف — تسري على كل المقاسات</span>
+                      <input
+                        value={first.notes}
+                        onChange={(e) => updateGroup(indexes, { notes: e.target.value })}
+                        placeholder="مثال: طباعة شعار على الصدر…"
+                        className="erp-input py-2.5"
+                      />
+                    </label>
+
+                    <div className="mt-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2 border-t border-line/60 pt-3">
+                      <div className="w-44">
+                        <label className="block">
+                          <span className="mb-1.5 block text-xs text-txt-2">سعر القطعة — لكل المقاسات</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            dir="ltr"
+                            value={first.unitPrice}
+                            onChange={(e) => updateGroup(indexes, { unitPrice: Number(e.target.value) || 0 })}
+                            className="erp-input py-2.5 text-start"
+                          />
+                        </label>
+                        {suggestion != null && suggestion !== first.unitPrice ? (
+                          <button
+                            type="button"
+                            onClick={() => updateGroup(indexes, { unitPrice: suggestion })}
+                            className="mt-0.5 block text-[0.65rem] text-brand hover:underline"
+                          >
+                            المقترح {formatMoney(dec(suggestion))} — اضغط لاعتماده
+                          </button>
+                        ) : (
+                          <span className="mt-0.5 block text-[0.65rem] text-txt-4">السعر بيدك — اكتبه مباشرة</span>
+                        )}
+                        {lastPrice && lastPrice.price !== first.unitPrice && (
+                          <button
+                            type="button"
+                            onClick={() => updateGroup(indexes, { unitPrice: lastPrice.price })}
+                            className="mt-0.5 block text-[0.65rem] text-ok hover:underline"
+                            title={lastPrice.date ? `بتاريخ ${lastPrice.date}` : undefined}
+                          >
+                            آخر سعر لهذا العميل {formatMoney(dec(lastPrice.price))} — اضغط لاعتماده
+                          </button>
+                        )}
+                      </div>
+                      <div className="text-end text-sm">
+                        <span className="tnum block text-[0.7rem] text-txt-3">{pieces} قطعة</span>
+                        <span className="text-xs text-txt-3">الإجمالي </span>
+                        <span className="tnum font-semibold text-txt">{formatMoney(money)}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* صنفٌ لم يُحلّ متغيّره بعد — يبقى بمحرّره حتى يُختار، ثم ينضمّ لبطاقته. */}
+              {pendingLines.map(({ line, index }) => {
+                const colors = colorsOf(variants, line.productId);
+                const sizes = sizesOf(variants, line.productId, line.colorId);
+                return (
+                  <div key={`p-${index}`} className="rounded-xl border border-dashed border-line bg-card p-4">
+                    <div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-[1.6fr_1fr_0.8fr_auto]">
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs text-txt-2">المنتج</span>
+                        <select
+                          value={line.productId}
+                          onChange={(e) => chooseInLine(index, { productId: e.target.value })}
+                          className="erp-input py-2.5"
+                        >
+                          <option value="">اختر المنتج…</option>
+                          {products.map((pp) => (
+                            <option key={pp.id} value={pp.id}>{pp.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs text-txt-2">اللون</span>
+                        <select
+                          value={line.colorId}
+                          onChange={(e) => chooseInLine(index, { colorId: e.target.value })}
+                          disabled={colors.length === 0}
+                          className="erp-input py-2.5 disabled:opacity-50"
+                        >
+                          <option value="">{colors.length ? 'اختر اللون…' : '—'}</option>
+                          {colors.map((c) => (
+                            <option key={c.id} value={c.id}>{c.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs text-txt-2">المقاس</span>
+                        <select
+                          value={line.sizeId}
+                          onChange={(e) => chooseInLine(index, { sizeId: e.target.value })}
+                          disabled={sizes.length === 0}
+                          className="erp-input py-2.5 disabled:opacity-50"
+                        >
+                          <option value="">{sizes.length ? 'اختر المقاس…' : '—'}</option>
+                          {sizes.map((z) => (
+                            <option key={z.id} value={z.id}>{z.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => removeIndexes([index])}
+                        className="grid h-[42px] w-10 place-items-center rounded-lg border border-line text-txt-3 transition-colors hover:border-bad hover:text-bad"
+                        aria-label="حذف الصنف"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[0.7rem] text-txt-4">
+                      اختر المنتج واللون والمقاس — ينضمّ الصنف عندها لبطاقته مع بقية مقاساته.
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* الإدخال اليدويّ صنفاً صنفاً — طريقٌ ثالث لنفس الغرض، لا يُزاحِم
+                «إضافة بالمقاسات» في الوزن البصري، ويبقى موجوداً لمن يحتاجه. */}
+            <button
+              type="button"
+              onClick={() => setLines((p) => [...p, emptyLine()])}
+              className="mt-3 text-[0.7rem] text-txt-3 transition-colors hover:text-brand"
+            >
+              + إضافة صنف يدويّاً
+            </button>
+          </section>
+
+        </div>
+
+        <div className="@container space-y-5">
+          {/* ٢.٥ سعر التوصيل — على الزبون (بند يرفع الإجمالي) أو علينا (مصروف
+              شحن وتوصيل يُخصم من الربح، والفاتورة لا تتغيّر). اختياري: صفر = بلا. */}
+          {withDelivery && (
+            <section className="rounded-xl border border-line bg-card p-4">
+              <h3 className="mb-3 text-sm font-semibold text-txt">🚚 التوصيل</h3>
+
+              {/* الاختيار أولاً، والمبلغ يُملأ بنفسه — لا رقم يُكتب كل مرة. */}
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    { value: 'CUSTOMER', label: 'على الزبون' },
+                    { value: 'US', label: 'علينا' },
+                    { value: 'NONE', label: 'بلا توصيل' },
+                  ] as const
+                ).map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => chooseDelivery(o.value)}
+                    className={`rounded-full border px-4 py-2 text-xs font-medium transition-colors ${
+                      deliveryMode === o.value
+                        ? 'border-brand bg-brand-soft text-brand'
+                        : 'border-line-2 text-txt-2 hover:border-line'
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              <input type="hidden" name="deliveryFee" value={deliverySubmitted} />
+              <input type="hidden" name="deliveryOn" value={deliveryOn} />
+
+              {deliveryMode !== 'NONE' && (
+                <div className="mt-3 flex flex-wrap items-end gap-4">
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs text-txt-2">
+                      {deliveryMode === 'CUSTOMER' ? 'المبلغ على الزبون' : 'يُخصم من ربحنا'}
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="500"
+                      dir="ltr"
+                      value={deliveryFee}
+                      onChange={(e) => setDeliveryFee(Math.max(0, Number(e.target.value) || 0))}
+                      className="erp-input w-36 py-2.5 text-start"
+                    />
+                  </label>
+
+                  {/* حين تكون الأجرة علينا يُقال صراحةً إن الزبون لا يدفع شيئاً —
+                      وإلا ظنَّ من يرى الرقم أنه مضاف على الفاتورة. */}
+                  {deliveryMode === 'US' && (
+                    <div className="block">
+                      <span className="mb-1.5 block text-xs text-txt-2">على الزبون</span>
+                      <div className="tnum rounded-lg border border-line bg-card px-3 py-2.5 text-sm font-bold text-ok">
+                        0
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
-            </div>
+
+              {deliveryMode !== 'NONE' && deliveryFee > 0 && (
+                <p className="mt-2 text-[0.7rem] leading-[1.8] text-txt-4">
+                  {deliveryMode === 'CUSTOMER'
+                    ? `يُضاف بند «🚚 أجور توصيل» بقيمة ${formatMoney(dec(deliveryFee))} على الفاتورة — يدفعه الزبون للسائق، فلا يُسجَّل مصروفاً عليك ولا يُحسب ربحاً.`
+                    : `الزبون لا يدفع شيئاً عن التوصيل، ويُسجَّل مصروف «شحن وتوصيل» بقيمة ${formatMoney(dec(deliveryFee))} يُخصم من الربح في التقارير.`}
+                </p>
+              )}
+            </section>
           )}
-        </section>
-      )}
 
-      {/* ٤. اختياري ومطويّ: خصم وتواريخ وملاحظات — لا يراها من لا يحتاجها. */}
-      <details className="rounded-xl border border-line bg-card-2 px-4 py-3">
-        <summary className="cursor-pointer select-none text-sm font-medium text-txt-2">
-          خيارات إضافية — خصم، تواريخ، ملاحظات
-        </summary>
-        <div className="mt-4 space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1.5 block text-xs text-txt-2">خصم (مبلغ)</span>
-              <input
-                name="discountAmount"
-                type="number"
-                step="0.01"
-                dir="ltr"
-                value={docDiscount}
-                onChange={(e) => setDocDiscount(Number(e.target.value) || 0)}
-                className="erp-input py-2.5 text-start"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-xs text-txt-2">خصم %</span>
-              <input
-                name="discountPercent"
-                type="number"
-                step="0.01"
-                dir="ltr"
-                value={docDiscountPct}
-                onChange={(e) => setDocDiscountPct(Number(e.target.value) || 0)}
-                className="erp-input py-2.5 text-start"
-              />
-            </label>
+          {/* ٣. الإجمالي — كبير وواضح. */}
+          <div className="flex items-center justify-between rounded-xl border border-brand-line bg-brand-soft px-5 py-4">
+            <span className="text-sm text-txt-2">الإجمالي</span>
+            <span className="tnum text-2xl font-bold text-brand">{formatMoney(totals.total)}</span>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {/* تاريخ الفاتورة صار ظاهراً أعلى الفورم — هنا تاريخ الأمر/العرض وحده. */}
-            {!isInvoice && (
-              <Field name="orderDate" label={labels.dateA} type="date" dir="ltr" defaultValue={values?.dateA} />
-            )}
-            <Field name={labels.dateB === 'تاريخ الانتهاء' ? 'expiryDate' : 'requiredDeliveryDate'} label={labels.dateB} type="date" dir="ltr" defaultValue={values?.dateB} />
-          </div>
-          <TextArea name="notes" label="ملاحظات" defaultValue={values?.notes} rows={3} />
+          {shortLines.length > 0 && (
+            <p className="-mt-3 rounded-xl border border-warn bg-warn-soft px-4 py-2.5 text-[0.75rem] leading-[1.8] text-warn">
+              ⚠ {shortLines.length} مقاس بكمية أكبر من المتاح في المخزن — البيع مسموح
+              (ما سيُنتَج يُباع)، لكن رصيد هذه المقاسات سينزل تحت الصفر ويظهر أحمرَ
+              في «أرصدة المنتجات». سجّل الاستلام أوّلاً إن كانت البضاعة قد وصلت.
+            </p>
+          )}
+          {(hasDiscount || hasTax) && (
+            <p className="-mt-3 flex flex-wrap justify-end gap-x-4 text-xs text-txt-3">
+              <span>المجموع <span className="tnum">{formatMoney(totals.subtotal)}</span></span>
+              {hasDiscount && <span>الخصم <span className="tnum">-{formatMoney(totals.discountAmount)}</span></span>}
+              {hasTax && <span>الضريبة <span className="tnum">{formatMoney(totals.taxAmount)}</span></span>}
+            </p>
+          )}
+
+          {/* تاريخ الفاتورة — ظاهرٌ لا مطويّ (بطلب المالك): تلقائيٌّ باليوم، ويغيّره
+              البائع حين يخصّ الطلب يوماً آخر — طلبٌ بعد منتصف الليل يخصّ أمس مثلاً. */}
+          {isInvoice && (
+            <section className="rounded-xl border border-line bg-card p-4">
+              <Field
+                name="issueDate"
+                label="التاريخ والوقت"
+                type="datetime-local"
+                dir="ltr"
+                value={issueAt}
+                onChange={(e) => {
+                  setIssueAt(e.target.value);
+                  setIssueAtTouched(true);
+                }}
+                hint="الآن تلقائياً — غيّرهما فقط إن كان الطلب لوقتٍ آخر."
+                errors={state.fieldErrors}
+              />
+              {/* لم تُلمس الخانة: يُسجَّل وقت الحفظ نفسه لا وقت فتح الصفحة. */}
+              <input type="hidden" name="issueDateAuto" value={issueAtTouched ? '0' : '1'} />
+            </section>
+          )}
+
+          {/* ٣.٥ الدفع — للفاتورة المباشرة فقط: أزرارٌ ظاهرة لحالة الدفع (كامل/جزء/
+              مستحقات/مسودة) بدل خانة «إصدار وتحصيل فوري» وحدها. الخادم يُخصّص الرقم
+              المتسلسل ويسجّل الدفعة في معاملة واحدة. */}
+          {instantIssue && (
+            <section className="rounded-xl border border-line bg-card p-4">
+              <p className="mb-2.5 text-sm font-medium text-txt">الدفع</p>
+              <PayModePills
+                value={payMode}
+                onChange={(m) => {
+                  setPayMode(m);
+                  setPayAmount(0);
+                }}
+                modes={['FULL', 'PART', 'DUE', 'DRAFT']}
+              />
+              <input type="hidden" name="issueNow" value={payMode === 'DRAFT' ? '0' : '1'} />
+              <input type="hidden" name="paymentMode" value={payMode} />
+              {/* «المبلغ كامل» يحسبه الخادم من إجماليه — لا رقم المتصفّح. */}
+              <input type="hidden" name="paymentFull" value={payMode === 'FULL' ? '1' : '0'} />
+              {payMode !== 'PART' && <input type="hidden" name="paymentAmount" value={payValue} />}
+
+              {payMode === 'DRAFT' && (
+                <p className="mt-3 text-[0.7rem] leading-[1.8] text-txt-4">
+                  تُحفظ بلا رقم ولا دفعة ولا صرف من المخزن — وتُصدَر لاحقاً من صفحة الفاتورة.
+                </p>
+              )}
+              {payMode === 'DUE' && (
+                <p className="mt-3 rounded-lg border border-warn bg-warn-soft px-3 py-2 text-xs leading-[1.8] text-warn">
+                  تُصدَر الفاتورة والمبلغ كله (<span className="tnum font-semibold">{formatMoney(totals.total)}</span>)
+                  مستحقاتٌ على العميل — يظهر في «تقدّم الديون» حتى يُحصَّل.
+                </p>
+              )}
+
+              {(payMode === 'FULL' || payMode === 'PART') && (
+                <div className={`mt-4 grid gap-3 ${payMode === 'PART' ? '@md:grid-cols-3' : '@sm:grid-cols-2'}`}>
+                  {payMode === 'PART' ? (
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs text-txt-2">المبلغ المدفوع</span>
+                      <input
+                        name="paymentAmount"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        dir="ltr"
+                        placeholder="كم دفع؟"
+                        value={payAmount || ''}
+                        onChange={(e) => setPayAmount(Math.max(0, Number(e.target.value) || 0))}
+                        className="erp-input py-2.5 text-start"
+                      />
+                      <span className={`mt-1 block text-[0.7rem] ${state.fieldErrors?.paymentAmount ? 'text-bad' : 'text-txt-4'}`}>
+                        {state.fieldErrors?.paymentAmount ?? 'الباقي يُسجَّل مستحقاتٍ على العميل.'}
+                      </span>
+                    </label>
+                  ) : (
+                    <div className="block">
+                      <span className="mb-1.5 block text-xs text-txt-2">المبلغ المدفوع</span>
+                      <div className="tnum rounded-lg border border-line bg-card-2 px-3 py-2.5 text-sm font-bold text-ok">
+                        {formatMoney(totals.total)}
+                      </div>
+                      <span className="mt-1 block text-[0.7rem] text-txt-4">الإجمالي كاملاً.</span>
+                    </div>
+                  )}
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs text-txt-2">طريقة السداد</span>
+                    <select
+                      name="paymentMethod"
+                      value={payMethod}
+                      onChange={(e) => setPayMethod(e.target.value)}
+                      className="erp-input py-2.5"
+                    >
+                      {PAYMENT_METHODS.map((m) => (
+                        <option key={m} value={m}>
+                          {PAYMENT_METHOD_AR[m]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {payMode === 'PART' && (
+                    <div className="block">
+                      <span className="mb-1.5 block text-xs text-txt-2">المتبقّي على العميل</span>
+                      <div
+                        className={`tnum rounded-lg border border-line bg-card px-3 py-2.5 text-sm font-bold ${
+                          dec(totals.total).minus(payValue).lte(0) ? 'text-ok' : 'text-warn'
+                        }`}
+                      >
+                        {formatMoney(dec(totals.total).minus(payValue))}
+                      </div>
+                      {/* دفع أقلّ من الإجمالي: دينٌ عليه، أم سعرٌ اتُّفق عليه؟ كان الفرق
+                          يُسجَّل ديناً دائماً فتخرج فواتير «تحصيل فوري» مدفوعةً جزئياً. */}
+                      {dec(totals.total).minus(payValue).gt(0) && payValue > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDocDiscount((d) => d + dec(totals.total).minus(payValue).toNumber());
+                            setPayMode('FULL');
+                          }}
+                          className="mt-1 text-start text-[0.7rem] text-brand hover:underline"
+                        >
+                          اتفقتم على سعرٍ أقل؟ اجعل الفرق خصماً
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* ٤. اختياري ومطويّ: خصم وتواريخ وملاحظات — لا يراها من لا يحتاجها. */}
+          <details className="rounded-xl border border-line bg-card-2 px-4 py-3">
+            <summary className="cursor-pointer select-none text-sm font-medium text-txt-2">
+              خيارات إضافية — خصم، تواريخ، ملاحظات
+            </summary>
+            <div className="mt-4 space-y-4">
+              <div className="grid gap-3 @sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs text-txt-2">خصم (مبلغ)</span>
+                  <input
+                    name="discountAmount"
+                    type="number"
+                    step="0.01"
+                    dir="ltr"
+                    value={docDiscount}
+                    onChange={(e) => setDocDiscount(Number(e.target.value) || 0)}
+                    className="erp-input py-2.5 text-start"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs text-txt-2">خصم %</span>
+                  <input
+                    name="discountPercent"
+                    type="number"
+                    step="0.01"
+                    dir="ltr"
+                    value={docDiscountPct}
+                    onChange={(e) => setDocDiscountPct(Number(e.target.value) || 0)}
+                    className="erp-input py-2.5 text-start"
+                  />
+                </label>
+              </div>
+              <div className="grid gap-3 @sm:grid-cols-2">
+                {/* تاريخ الفاتورة صار ظاهراً أعلى الفورم — هنا تاريخ الأمر/العرض وحده. */}
+                {!isInvoice && (
+                  <Field name="orderDate" label={labels.dateA} type="date" dir="ltr" defaultValue={values?.dateA} />
+                )}
+                <Field name={labels.dateB === 'تاريخ الانتهاء' ? 'expiryDate' : 'requiredDeliveryDate'} label={labels.dateB} type="date" dir="ltr" defaultValue={values?.dateB} />
+              </div>
+              <TextArea name="notes" label="ملاحظات" defaultValue={values?.notes} rows={3} />
+            </div>
+          </details>
+
+          <SubmitButton
+            label={
+              !instantIssue
+                ? submitLabel
+                : payMode === 'FULL'
+                  ? 'إنشاء وإصدار وتحصيل'
+                  : payMode === 'PART'
+                    ? 'إنشاء وتحصيل جزئي — الباقي مستحقات'
+                    : payMode === 'DUE'
+                      ? 'إنشاء — المبلغ كله مستحقات'
+                      : 'حفظ مسودة'
+            }
+          />
         </div>
-      </details>
-
-      <SubmitButton
-        label={
-          !instantIssue
-            ? submitLabel
-            : payMode === 'FULL'
-              ? 'إنشاء وإصدار وتحصيل'
-              : payMode === 'PART'
-                ? 'إنشاء وتحصيل جزئي — الباقي مستحقات'
-                : payMode === 'DUE'
-                  ? 'إنشاء — المبلغ كله مستحقات'
-                  : 'حفظ مسودة'
-        }
-      />
+      </div>
     </form>
   );
 }

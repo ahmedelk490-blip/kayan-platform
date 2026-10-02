@@ -10,6 +10,7 @@ import { requirePermission } from '@/lib/guard';
 import { prisma, tenantTransaction } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
 import { normalizeDigits } from '@/lib/num';
+import { applyStockDelta } from '@/lib/stock';
 
 // libvips يفتح خيطاً لكل نواة عند معالجة الصورة — 64 على خادم النشر، والحساب
 // مشترك يتقاسم سقف الخيوط. رفعُ صورة منتجٍ لا يحتاج أكثر من خيطين.
@@ -640,6 +641,67 @@ export async function addColorToProduct(
 }
 
 /**
+ * رفع متغيّراتٍ من المنتج (لونٌ أو مقاس) — رصيدها يُشطب من المخزن، والفواتير
+ * والتقارير القديمة لا تتأثّر (بطلب المالك: «لو حذفت لون من المنتج بيتخصم
+ * المخزن، لاكن مش بياثر في الفواتير القديمة أو التقارير»).
+ *
+ * كان الرفع يُرفض ما دام في المخزن منه شيء، والرصيد السالب يبقى ظاهراً بعده.
+ * الآن يُصفَّر كل رصيدٍ بحركة «تسوية» مسجّلة بسببها — فيبقى أثرها في سجل
+ * الحركات وتُعكس منه إن لزم — ثم يُحذف المتغيّر حذفاً ليّناً: بنود الفواتير
+ * والحركات القديمة تشير إليه وتُقرأ بأوصافها المجمّدة كما هي.
+ *
+ * يُرجع مجموع ما شُطب (موجباً كان أو سالباً).
+ */
+async function retireVariants(
+  user: { id: string; tenantId: string },
+  productId: string,
+  variantIds: string[],
+  reason: string,
+): Promise<number> {
+  return tenantTransaction(async (tx) => {
+    const rows = await tx.stock.findMany({
+      where: { variantId: { in: variantIds }, onHand: { not: 0 } },
+      select: { variantId: true, warehouseId: true, locationId: true, onHand: true },
+    });
+    let pieces = 0;
+    for (const r of rows) {
+      const delta = dec(r.onHand).negated().toNumber();
+      await tx.stockMovement.create({
+        data: {
+          tenantId: user.tenantId,
+          productId,
+          variantId: r.variantId,
+          warehouseId: r.warehouseId,
+          locationId: r.locationId,
+          type: 'ADJUSTMENT',
+          quantity: delta,
+          reason,
+          userId: user.id,
+        },
+      });
+      await applyStockDelta(
+        tx,
+        { variantId: r.variantId, warehouseId: r.warehouseId, locationId: r.locationId },
+        'onHand',
+        delta,
+      );
+      pieces -= delta;
+    }
+    // حذفٌ ليّن: حركات المخزون وبنود الفواتير تشير إلى هذه الصفوف.
+    await tx.productVariant.updateMany({
+      where: { id: { in: variantIds }, product: { tenantId: user.tenantId } },
+      data: { isDeleted: true, deletedAt: new Date(), isActive: false },
+    });
+    return pieces;
+  });
+}
+
+/** «، وشُطب رصيده من المخزن (12 قطعة)» — أو لا شيء إن لم يكن له رصيد. */
+function writtenOffNote(pieces: number): string {
+  return pieces === 0 ? '' : `، وشُطب رصيده من المخزن (${pieces} قطعة)`;
+}
+
+/**
  * مقاسٌ واحد للموديل — يُضاف بضغطة عبر كل ألوانه أو يُرفع بضغطة.
  *
  * مرآةُ `toggleProductColor`، وهي لازمةٌ معها لا زينة: من يضيف ألواناً
@@ -675,21 +737,7 @@ export async function toggleProductSize(
     const ofSize = variants.filter((v) => v.sizeId === sizeId);
     if (ofSize.length === 0) return { ok: `«${size.code}» غير مضاف أصلاً.` };
 
-    const held = await prisma.stock.aggregate({
-      where: { variantId: { in: ofSize.map((v) => v.id) } },
-      _sum: { onHand: true },
-    });
-    const onHand = dec(held._sum.onHand ?? 0);
-    if (onHand.gt(0)) {
-      return {
-        error: `لا يُرفع «${size.code}» وفي المخزن منه ${onHand.toString()} قطعة. اصرفها أو سوّ الرصيد أوّلاً.`,
-      };
-    }
-
-    await prisma.productVariant.updateMany({
-      where: { id: { in: ofSize.map((v) => v.id) }, product: { tenantId: user.tenantId } },
-      data: { isDeleted: true, deletedAt: new Date(), isActive: false },
-    });
+    const pieces = await retireVariants(user, productId, ofSize.map((v) => v.id), `حذف المقاس «${size.code}» من المنتج`);
 
     await audit({
       tenantId: user.tenantId,
@@ -701,7 +749,8 @@ export async function toggleProductSize(
     });
 
     revalidatePath(`/catalog/products/${productId}`);
-    return { ok: `رُفِع «${size.code}» (${ofSize.length} لون).` };
+    revalidatePath('/inventory');
+    return { ok: `رُفِع «${size.code}» (${ofSize.length} لون)${writtenOffNote(pieces)}.` };
   }
 
   // ألوان هذا الموديل — أو لا لون، فيُنشأ متغيّرٌ بالمقاس وحده.
@@ -817,22 +866,7 @@ export async function toggleProductColor(
     const ofColor = variants.filter((v) => v.colorId === colorId);
     if (ofColor.length === 0) return { ok: `«${color.nameAr}» غير مضاف أصلاً.` };
 
-    const held = await prisma.stock.aggregate({
-      where: { variantId: { in: ofColor.map((v) => v.id) } },
-      _sum: { onHand: true },
-    });
-    const onHand = dec(held._sum.onHand ?? 0);
-    if (onHand.gt(0)) {
-      return {
-        error: `لا يُرفع «${color.nameAr}» وفي المخزن منه ${onHand.toString()} قطعة. اصرفها أو سوّ الرصيد أوّلاً.`,
-      };
-    }
-
-    // حذفٌ ليّن: حركات المخزون وبنود الفواتير تشير إلى هذه الصفوف.
-    await prisma.productVariant.updateMany({
-      where: { id: { in: ofColor.map((v) => v.id) }, product: { tenantId: user.tenantId } },
-      data: { isDeleted: true, deletedAt: new Date(), isActive: false },
-    });
+    const pieces = await retireVariants(user, productId, ofColor.map((v) => v.id), `حذف اللون «${color.nameAr}» من المنتج`);
 
     await audit({
       tenantId: user.tenantId,
@@ -844,7 +878,8 @@ export async function toggleProductColor(
     });
 
     revalidatePath(`/catalog/products/${productId}`);
-    return { ok: `رُفِع «${color.nameAr}» (${ofColor.length} مقاس).` };
+    revalidatePath('/inventory');
+    return { ok: `رُفِع «${color.nameAr}» (${ofColor.length} مقاس)${writtenOffNote(pieces)}.` };
   }
 
   // مقاسات هذا الموديل وحده، بلا تكرار.

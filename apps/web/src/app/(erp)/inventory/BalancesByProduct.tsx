@@ -28,8 +28,10 @@ import { MinStockCell } from './MinStockCell';
  */
 
 export interface BalanceCell {
-  /** معرّف صفّ الرصيد — مفتاح تحرير الحدّ الأدنى. */
+  /** مفتاح المربّع. */
   id: string;
+  /** صفّ الرصيد — مفتاح تحرير الحدّ الأدنى؛ null لمقاسٍ لم تدخله بضاعة بعد. */
+  stockId: string | null;
   sizeCode: string;
   sizeOrder: number;
   /** القطع رقماً — للعرض داخل المربّع وللفرز. */
@@ -45,7 +47,8 @@ export interface BalanceCell {
   valueText: string | null;
   minStock: number;
   minStockText: string;
-  state: 'out' | 'low' | 'ok';
+  /** none: مقاسٌ في المنتج لم تدخله بضاعة بعد — صفرٌ رماديّ لا نافذٌ يُطلب. */
+  state: 'out' | 'low' | 'ok' | 'none';
 }
 
 export interface ColorGroup {
@@ -83,6 +86,7 @@ const CELL_TONE: Record<BalanceCell['state'], string> = {
   out: 'border-bad bg-bad-soft text-bad',
   low: 'border-warn bg-warn-soft text-warn',
   ok: 'border-line-2 bg-card text-txt',
+  none: 'border-dashed border-line-2 bg-card-2 text-txt-4',
 };
 
 export function BalancesByProduct({
@@ -125,6 +129,10 @@ export function BalancesByProduct({
 
   const totalOut = groups.reduce((n, g) => n + g.out, 0);
   const totalLow = groups.reduce((n, g) => n + g.low, 0);
+  const totalNone = groups.reduce(
+    (n, g) => n + g.colors.reduce((m, c) => m + c.cells.filter((x) => x.state === 'none').length, 0),
+    0,
+  );
   // المجموع لكل المنتجات (بطلب المالك) — القطع والدست معاً.
   const totalPieces = groups.reduce((n, g) => n + g.pieces, 0);
   const totalDozens = groups.reduce((n, g) => n + g.dozens, 0);
@@ -169,6 +177,12 @@ export function BalancesByProduct({
         {totalOut > 0 && totalLow > 0 && ' · '}
         {totalLow > 0 && <span className="text-warn">{totalLow} قارب على النفاد</span>}
         {totalOut === 0 && totalLow === 0 && <span className="text-ok">كل الأصناف فوق حدّها</span>}
+        {totalNone > 0 && (
+          <span className="text-txt-3">
+            {' · '}
+            {totalNone} مقاس رمادي — مضاف في المنتج ولم تدخله بضاعة بعد
+          </span>
+        )}
       </p>
 
       {visible.length === 0 ? (
@@ -241,7 +255,11 @@ export function BalancesByProduct({
                             {c.cells.map((x) => (
                               <span
                                 key={x.id}
-                                title={`${x.sizeCode} — الرصيد ${x.onHandText}، المتاح ${x.availableText}، الحدّ ${x.minStockText}`}
+                                title={
+                                  x.state === 'none'
+                                    ? `${x.sizeCode} — لم تدخله بضاعة بعد`
+                                    : `${x.sizeCode} — الرصيد ${x.onHandText}، المتاح ${x.availableText}، الحدّ ${x.minStockText}`
+                                }
                                 className={`flex min-w-[3.25rem] flex-col items-center rounded-lg border px-2 py-1 ${CELL_TONE[x.state]}`}
                               >
                                 <span className="text-[0.6rem] leading-tight opacity-80">{x.sizeCode}</span>
@@ -308,8 +326,8 @@ export function BalancesByProduct({
                                   </td>
                                 )}
                                 <td className="tnum px-4 py-3">
-                                  {canWrite ? (
-                                    <MinStockCell stockId={x.id} value={x.minStock} />
+                                  {canWrite && x.stockId ? (
+                                    <MinStockCell stockId={x.stockId} value={x.minStock} />
                                   ) : x.state === 'low' || x.state === 'out' ? (
                                     <span className="text-bad">{x.minStockText}</span>
                                   ) : (

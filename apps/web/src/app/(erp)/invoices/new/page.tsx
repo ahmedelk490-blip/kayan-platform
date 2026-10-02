@@ -100,7 +100,7 @@ export default async function NewInvoicePage({
           </Link>
         }
       />
-      <div className="erp-card max-w-4xl p-6">
+      <div className="erp-card max-w-6xl p-6">
         <DocumentForm
           action={createSalesInvoice}
           customers={options.customers}

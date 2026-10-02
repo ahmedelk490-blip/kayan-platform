@@ -50,7 +50,11 @@ export default async function EditInvoicePage({
   if (!invoice) notFound();
   if (invoice.status === 'VOID') redirect(`/invoices/${id}`);
 
-  const options = await loadSalesOptions(user.tenantId);
+  // أصناف الفاتورة نفسها ولو حُذف لونها أو مقاسها من المنتج بعد بيعها.
+  const options = await loadSalesOptions(
+    user.tenantId,
+    invoice.lines.flatMap((l) => (l.variantId ? [l.variantId] : [])),
+  );
 
   // بنود الفاتورة → سطور الفورم. hydrate يملأ المنتج/اللون/المقاس من المتغيّر.
   // بند التوصيل (بلا متغيّر) لا يدخل السطور — تُدار قيمته من خانة 🚚 أدناه.

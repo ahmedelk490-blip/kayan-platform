@@ -247,8 +247,9 @@ export default async function InventoryPage({
   // ومن الجرد الكامل لا من مئة صفٍّ: موديل نافذ لم يتحرّك منذ شهر هو
   // بالضبط ما يجب أن يُرى، وكان يسقط من القائمة لأنه لم يتحرّك.
   const groupMap = new Map<string, ProductGroup & { colorOrder: Map<string, number> }>();
-  for (const st of fullStock) {
-    const prod = st.variant.product;
+  /** صفّ لون الموديل في بطاقته — تُنشأ البطاقة والصفّ عند أول مقاسٍ منهما. */
+  const colorRowOf = (v: (typeof variants)[number]) => {
+    const prod = v.product;
     let g = groupMap.get(prod.id);
     if (!g) {
       g = {
@@ -270,48 +271,97 @@ export default async function InventoryPage({
       };
       groupMap.set(prod.id, g);
     }
+    const colorKey = v.colorId ?? 'none';
+    if (!g.colorOrder.has(colorKey)) {
+      g.colorOrder.set(colorKey, v.color?.sortOrder ?? 0);
+      g.colors.push({ key: colorKey, name: v.color?.nameAr ?? 'بلا لون', hex: v.color?.hex ?? null, cells: [] });
+    }
+    return { g, row: g.colors.find((c) => c.key === colorKey)! };
+  };
+
+  // رصيدٌ صفرٌ لم تدخله حركةٌ قط: «لم تدخله بضاعة» رمادياً لا «نافذ» أحمر — إضافة
+  // لونٍ للمنتج تُنشئ صفوف رصيدٍ صفريّة، فكانت تظهر نافذةً قبل أن تدخلها قطعة.
+  const isBlank = (st: (typeof fullStock)[number]) =>
+    dec(st.onHand).isZero() && dec(st.reserved).isZero() && dec(st.damaged).isZero();
+  const blankIds = fullStock.filter(isBlank).map((st) => st.variantId);
+  const moved = new Set(
+    blankIds.length === 0
+      ? []
+      : (
+          await prisma.stockMovement.findMany({
+            where: { tenantId: user.tenantId, variantId: { in: blankIds } },
+            distinct: ['variantId'],
+            select: { variantId: true },
+          })
+        ).map((m) => m.variantId),
+  );
+
+  for (const st of fullStock) {
+    const { g, row } = colorRowOf(st.variant);
 
     // ما حُذف أو عُطّل لا يُعدّ نقصاً ولا يُلوَّن نافذاً: لا أحد يعيد طلبه.
-    const state = isLiveVariant(st.variant) ? stockState(st.onHand, st.minStock) : 'ok';
+    const state =
+      isBlank(st) && !moved.has(st.variantId)
+        ? 'none'
+        : isLiveVariant(st.variant)
+          ? stockState(st.onHand, st.minStock)
+          : 'ok';
     const atp = available(st.onHand, st.reserved);
-    const unitCost = st.variant.cost ?? prod.cost ?? null;
-    const colorKey = st.variant.colorId ?? 'none';
-
-    if (!g.colorOrder.has(colorKey)) {
-      g.colorOrder.set(colorKey, st.variant.color?.sortOrder ?? 0);
-      g.colors.push({
-        key: colorKey,
-        name: st.variant.color?.nameAr ?? 'بلا لون',
-        hex: st.variant.color?.hex ?? null,
-        cells: [],
-      });
-    }
-    g.colors
-      .find((c) => c.key === colorKey)!
-      .cells.push({
-        id: st.id,
-        sizeCode: st.variant.size?.code ?? 'موحّد',
-        sizeOrder: st.variant.size?.sortOrder ?? 0,
-        onHand: Math.trunc(dec(st.onHand).toNumber()),
-        onHandText: formatQty(st.onHand),
-        reservedText: formatQty(st.reserved),
-        availableText: formatQty(atp),
-        availableNeg: atp.lte(0),
-        damagedText: formatQty(st.damaged),
-        warehouse: st.warehouse.nameAr,
-        location: st.location?.code ?? '—',
-        // القيمة سعرُ جملة: ما لا يُرسل لا يُقرأ من الصفحة.
-        valueText:
-          !seeCosts || unitCost === null ? null : formatMoney(dec(st.onHand).times(dec(unitCost))),
-        minStock: Number(dec(st.minStock).toString()),
-        minStockText: formatQty(st.minStock),
-        state,
-      });
+    const unitCost = st.variant.cost ?? st.variant.product.cost ?? null;
+    row.cells.push({
+      id: st.id,
+      stockId: st.id,
+      sizeCode: st.variant.size?.code ?? 'موحّد',
+      sizeOrder: st.variant.size?.sortOrder ?? 0,
+      onHand: Math.trunc(dec(st.onHand).toNumber()),
+      onHandText: formatQty(st.onHand),
+      reservedText: formatQty(st.reserved),
+      availableText: formatQty(atp),
+      availableNeg: atp.lte(0),
+      damagedText: formatQty(st.damaged),
+      warehouse: st.warehouse.nameAr,
+      location: st.location?.code ?? '—',
+      // القيمة سعرُ جملة: ما لا يُرسل لا يُقرأ من الصفحة.
+      valueText:
+        !seeCosts || unitCost === null ? null : formatMoney(dec(st.onHand).times(dec(unitCost))),
+      minStock: Number(dec(st.minStock).toString()),
+      minStockText: formatQty(st.minStock),
+      state,
+    });
 
     g.pieces += Math.trunc(dec(st.onHand).toNumber());
     g.variants += 1;
     if (state === 'out') g.out += 1;
     else if (state === 'low') g.low += 1;
+  }
+
+  // ألوانٌ ومقاسات عُرّفت في المنتج ولم تدخلها بضاعة بعد: لا صفّ رصيدٍ لها،
+  // فكانت لا تظهر هنا أصلاً — يضيف المالك «أزرق» بمقاساته من صفحة المنتج فلا
+  // يجده في المخزن (بلاغه). تظهر الآن صفراً رمادياً «لم تدخله بضاعة»: لا تُعدّ
+  // نافذاً ولا ناقصاً، ويصير المربّع رصيداً عادياً بأول إدخال.
+  const stocked = new Set(fullStock.map((st) => st.variantId));
+  for (const v of variants) {
+    if (stocked.has(v.id) || !isLiveVariant(v)) continue;
+    const { g, row } = colorRowOf(v);
+    row.cells.push({
+      id: `v-${v.id}`,
+      stockId: null,
+      sizeCode: v.size?.code ?? 'موحّد',
+      sizeOrder: v.size?.sortOrder ?? 0,
+      onHand: 0,
+      onHandText: formatQty(0),
+      reservedText: formatQty(0),
+      availableText: formatQty(0),
+      availableNeg: false,
+      damagedText: formatQty(0),
+      warehouse: '—',
+      location: '—',
+      valueText: null,
+      minStock: 0,
+      minStockText: formatQty(0),
+      state: 'none',
+    });
+    g.variants += 1;
   }
 
   const balanceGroups: ProductGroup[] = [...groupMap.values()]

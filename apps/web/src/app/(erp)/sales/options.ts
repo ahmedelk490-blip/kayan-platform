@@ -5,8 +5,13 @@ import { prisma } from '@/lib/prisma';
 import type { VariantOption, BundleOption } from './DocumentForm';
 import { openDebtsByCustomer } from '@/lib/receivables';
 
-/** Customers and sellable variants, with available-to-promise per variant. */
-export async function loadSalesOptions(tenantId: string) {
+/**
+ * Customers and sellable variants, with available-to-promise per variant.
+ *
+ * `keepVariantIds`: أصناف فاتورةٍ قديمة تُعدَّل وقد حُذف لونها أو مقاسها من
+ * المنتج — تبقى ظاهرةً بأسمائها فيها، فحذف اللون لا يمسّ الفواتير القديمة.
+ */
+export async function loadSalesOptions(tenantId: string, keepVariantIds: string[] = []) {
   const [customers, variants, tiers, bundles] = await Promise.all([
     prisma.customer.findMany({
       where: { tenantId, isDeleted: false },
@@ -16,9 +21,10 @@ export async function loadSalesOptions(tenantId: string) {
     }),
     prisma.productVariant.findMany({
       where: {
-        isDeleted: false,
-        isActive: true,
-        product: { tenantId, isDeleted: false, status: 'ACTIVE' },
+        OR: [
+          { isDeleted: false, isActive: true, product: { tenantId, isDeleted: false, status: 'ACTIVE' } },
+          ...(keepVariantIds.length > 0 ? [{ id: { in: keepVariantIds }, product: { tenantId } }] : []),
+        ],
       },
       include: {
         product: { select: { id: true, nameAr: true, sellingPrice: true } },

@@ -203,7 +203,13 @@ export function CashierBoard({
       </div>
 
       {/* الفاتورة */}
-      <form id="cashier-cart" action={formAction} className="erp-card flex h-fit scroll-mt-24 flex-col gap-4 p-5 lg:sticky lg:top-6">
+      {/* ثابتٌ بجانب المنتجات، ويتمرّر من داخله إن طال — كان يثبت أطول من الشاشة
+          فيختفي زر البيع أسفلها ما دامت الصفحة لم تبلغ آخر المنتجات. */}
+      <form
+        id="cashier-cart"
+        action={formAction}
+        className="erp-card flex h-fit scroll-mt-24 flex-col gap-4 p-5 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto"
+      >
         <FormError message={state.error} />
         <input type="hidden" name="warehouseId" value={warehouseId} />
         {cart.map((l) => (
@@ -266,7 +272,7 @@ export function CashierBoard({
           )}
         </div>
 
-        <div className="max-h-[40vh] space-y-2 overflow-y-auto">
+        <div className="max-h-[40vh] space-y-2 overflow-y-auto lg:max-h-none lg:overflow-visible">
           {cart.length === 0 ? (
             <p className="py-6 text-center text-xs text-txt-4">اضغط منتجاً لإضافته.</p>
           ) : (
@@ -300,7 +306,7 @@ export function CashierBoard({
           )}
         </div>
 
-        <div className="block">
+        <div className="block border-t border-line pt-4">
           <span className="mb-1 flex items-center justify-between text-[0.7rem] text-txt-3">
             <span>العميل</span>
             <button
@@ -508,19 +514,20 @@ export function CashierBoard({
           </p>
         )}
 
-        <div className="flex items-center justify-between border-t border-line pt-3">
-          <span className="text-sm text-txt-2">الإجمالي</span>
-          <span className="text-end">
-            <span className="tnum block text-xl font-bold text-brand">{formatMoney(total)}</span>
-            {deliveryWho === 'CUSTOMER' && fee > 0 && (
-              <span className="tnum block text-[0.65rem] text-txt-4">منها توصيل {formatMoney(dec(fee))}</span>
-            )}
-          </span>
-        </div>
+        {/* الدفع كلّه في صندوقٍ واحد (بطلب المالك: «رتّب شكل الكاشير»): الإجمالي، ثم
+            حالة الدفع، ثم المبلغ والطريقة، ثم الوقت — بدل خاناتٍ متتالية بلا فواصل. */}
+        <div className="space-y-3 rounded-xl border border-line bg-card-2 p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-txt-2">الإجمالي</span>
+            <span className="text-end">
+              <span className="tnum block text-xl font-bold text-brand">{formatMoney(total)}</span>
+              {deliveryWho === 'CUSTOMER' && fee > 0 && (
+                <span className="tnum block text-[0.65rem] text-txt-4">منها توصيل {formatMoney(dec(fee))}</span>
+              )}
+            </span>
+          </div>
 
-        {/* حالة الدفع — أزرارٌ ظاهرة: كامل، أو جزء بمبلغٍ يُكتب، أو مستحقات كلها. */}
-        <div>
-          <span className="mb-1.5 block text-[0.7rem] text-txt-3">الدفع</span>
+          {/* حالة الدفع — أزرارٌ ظاهرة: كامل، أو جزء بمبلغٍ يُكتب، أو مستحقات كلها. */}
           <PayModePills
             value={payMode}
             onChange={(m) => {
@@ -530,70 +537,79 @@ export function CashierBoard({
             modes={['FULL', 'PART', 'DUE']}
           />
           <input type="hidden" name="paymentMode" value={payMode} />
-        </div>
-        {payMode === 'DUE' ? (
-          <>
-            <input type="hidden" name="paymentAmount" value={0} />
-            <p className="rounded-lg border border-warn bg-warn-soft px-3 py-2 text-[0.7rem] leading-[1.8] text-warn">
-              المبلغ كله يُسجَّل مستحقاتٍ على العميل — يظهر في «تقدّم الديون» حتى يُحصَّل.
-            </p>
-          </>
-        ) : (
-          <div className="grid grid-cols-2 gap-2">
-            {payMode === 'PART' ? (
-              <label className="block">
-                <span className="mb-1 block text-[0.7rem] text-txt-3">المدفوع</span>
-                <input
-                  name="paymentAmount"
-                  type="number"
-                  min="0"
-                  dir="ltr"
-                  placeholder="كم دفع؟"
-                  value={partAmount || ''}
-                  onChange={(e) => setPartAmount(Math.max(0, Number(e.target.value) || 0))}
-                  className="erp-input py-2 text-start"
-                />
-                {state.fieldErrors?.paymentAmount && (
-                  <span className="mt-0.5 block text-[0.7rem] text-bad">{state.fieldErrors.paymentAmount}</span>
-                )}
-              </label>
-            ) : (
-              <div className="block">
-                <span className="mb-1 block text-[0.7rem] text-txt-3">المدفوع</span>
-                {/* «كامل» يحسبه الخادم من إجماليه — هذا الرقم للعرض. */}
-                <input type="hidden" name="paymentAmount" value={paidValue} />
-                <div className="tnum rounded-lg border border-line bg-card-2 px-3 py-2 text-sm font-bold text-ok">
-                  {formatMoney(total)}
+
+          {payMode === 'DUE' ? (
+            <>
+              <input type="hidden" name="paymentAmount" value={0} />
+              <p className="rounded-lg border border-warn bg-warn-soft px-3 py-2 text-[0.7rem] leading-[1.8] text-warn">
+                المبلغ كله يُسجَّل مستحقاتٍ على العميل — يظهر في «تقدّم الديون» حتى يُحصَّل.
+              </p>
+            </>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              {payMode === 'PART' ? (
+                <label className="block">
+                  <span className="mb-1 block text-[0.7rem] text-txt-3">المدفوع</span>
+                  <input
+                    name="paymentAmount"
+                    type="number"
+                    min="0"
+                    dir="ltr"
+                    placeholder="كم دفع؟"
+                    value={partAmount || ''}
+                    onChange={(e) => setPartAmount(Math.max(0, Number(e.target.value) || 0))}
+                    className="erp-input py-2 text-start"
+                  />
+                  {state.fieldErrors?.paymentAmount && (
+                    <span className="mt-0.5 block text-[0.7rem] text-bad">{state.fieldErrors.paymentAmount}</span>
+                  )}
+                </label>
+              ) : (
+                <div className="block">
+                  <span className="mb-1 block text-[0.7rem] text-txt-3">المدفوع</span>
+                  {/* «كامل» يحسبه الخادم من إجماليه — هذا الرقم للعرض. */}
+                  <input type="hidden" name="paymentAmount" value={paidValue} />
+                  <div className="tnum rounded-lg border border-line bg-card px-3 py-2 text-sm font-bold text-ok">
+                    {formatMoney(total)}
+                  </div>
                 </div>
-              </div>
-            )}
-            <label className="block">
-              <span className="mb-1 block text-[0.7rem] text-txt-3">طريقة السداد</span>
-              <select name="paymentMethod" value={method} onChange={(e) => setMethod(e.target.value)} className="erp-input py-2">
-                {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{PAYMENT_METHOD_AR[m]}</option>)}
-              </select>
-            </label>
-          </div>
-        )}
-        <label className="block">
-          <span className="mb-1 block text-[0.7rem] text-txt-3">التاريخ والوقت</span>
-          <input
-            name="issueDate"
-            type="datetime-local"
-            dir="ltr"
-            value={issueAt}
-            onChange={(e) => {
-              setIssueAt(e.target.value);
-              setIssueAtTouched(true);
-            }}
-            className="erp-input py-2 text-start"
-          />
-          <input type="hidden" name="issueDateAuto" value={issueAtTouched ? '0' : '1'} />
-          <span className={`mt-0.5 block text-[0.7rem] ${state.fieldErrors?.issueDate ? 'text-bad' : 'text-txt-4'}`}>
-            {state.fieldErrors?.issueDate ?? 'الآن تلقائياً — غيّرهما فقط لطلبٍ بوقتٍ آخر'}
-          </span>
-        </label>
-        <p className="text-[0.7rem] text-txt-4">المتبقّي: <span className={`tnum font-semibold ${remaining.lte(0) ? 'text-ok' : 'text-warn'}`}>{formatMoney(remaining)}</span></p>
+              )}
+              <label className="block">
+                <span className="mb-1 block text-[0.7rem] text-txt-3">طريقة السداد</span>
+                <select name="paymentMethod" value={method} onChange={(e) => setMethod(e.target.value)} className="erp-input py-2">
+                  {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{PAYMENT_METHOD_AR[m]}</option>)}
+                </select>
+              </label>
+            </div>
+          )}
+
+          {payMode === 'PART' && (
+            <p className="text-[0.7rem] text-txt-3">
+              الباقي مستحقات على العميل:{' '}
+              <span className={`tnum font-semibold ${remaining.lte(0) ? 'text-ok' : 'text-warn'}`}>{formatMoney(remaining)}</span>
+            </p>
+          )}
+
+          {/* الوقت — الآن تلقائياً، ويُغيَّر لطلبٍ بوقتٍ آخر. */}
+          <label className="block border-t border-line pt-3">
+            <span className="mb-1 block text-[0.7rem] text-txt-3">التاريخ والوقت</span>
+            <input
+              name="issueDate"
+              type="datetime-local"
+              dir="ltr"
+              value={issueAt}
+              onChange={(e) => {
+                setIssueAt(e.target.value);
+                setIssueAtTouched(true);
+              }}
+              className="erp-input py-2 text-start"
+            />
+            <input type="hidden" name="issueDateAuto" value={issueAtTouched ? '0' : '1'} />
+            <span className={`mt-0.5 block text-[0.7rem] ${state.fieldErrors?.issueDate ? 'text-bad' : 'text-txt-4'}`}>
+              {state.fieldErrors?.issueDate ?? 'الآن تلقائياً — غيّرهما فقط لطلبٍ بوقتٍ آخر'}
+            </span>
+          </label>
+        </div>
 
         <CheckoutButton
           disabled={cart.length === 0 || !customerReady || (payMode === 'PART' && partAmount <= 0)}

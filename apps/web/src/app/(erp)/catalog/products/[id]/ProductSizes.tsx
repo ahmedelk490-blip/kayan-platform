@@ -34,6 +34,8 @@ export function ProductSizes({
   const [message, setMessage] = useState<{ ok?: string; error?: string }>({});
 
   function toggle(z: SizeChoice) {
+    // الرفع يشطب رصيده من المخزن — يُسأل قبله لا بعده.
+    if (z.variants > 0 && !window.confirm(`حذف المقاس «${z.code}» من الموديل؟\nرصيده في المخزن يُشطب، والفواتير والتقارير القديمة لا تتأثّر.`)) return;
     setBusyId(z.id);
     setMessage({});
     startTransition(async () => {
