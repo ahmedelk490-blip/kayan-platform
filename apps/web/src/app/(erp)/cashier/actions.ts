@@ -112,7 +112,14 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
   const deliveryOnUs = deliveryFee > 0 && deliveryOn === 'US';
   const total = deliveryOnCustomer ? merchandiseTotal.plus(dec(deliveryFee)) : merchandiseTotal;
 
-  const payAmount = dec(num(formData.get('paymentAmount')));
+  // حالة الدفع من أزرار الكاشير: «كامل» بإجمالي الخادم نفسه لا رقم المتصفّح،
+  // و«مستحقات» صفر، و«جزء» بما كُتب ولا يمرّ فارغاً (بطلب المالك).
+  const payMode = String(formData.get('paymentMode') ?? '');
+  const payAmount =
+    payMode === 'FULL' ? total : payMode === 'DUE' ? dec(0) : dec(num(formData.get('paymentAmount')));
+  if (payMode === 'PART' && !payAmount.gt(0)) {
+    return { fieldErrors: { paymentAmount: 'اكتب المبلغ الذي دفعه الزبون — أو اختر «مستحقات».' } };
+  }
   const payMethod = String(formData.get('paymentMethod') ?? 'CASH');
   const wantsPayment = payAmount.gt(0);
   if (wantsPayment) {

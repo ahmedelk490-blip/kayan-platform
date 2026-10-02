@@ -19,6 +19,7 @@ import { Field, TextArea, SubmitButton, FormError } from '@/components/crud/Form
 import { SearchableSelect } from '@/components/crud/SearchableSelect';
 import { DELIVERY_DEFAULT_FEE } from '@/lib/delivery';
 import type { FormState } from './shared';
+import { PayModePills, type PayMode } from './PayMode';
 
 /** شريحة سعر مبسّطة تعبر إلى العميل — أرقام لا Decimal. */
 export interface VariantTier {
@@ -232,13 +233,12 @@ export function DocumentForm({
   );
   const [docDiscount, setDocDiscount] = useState(values?.discountAmount ?? 0);
   const [docDiscountPct, setDocDiscountPct] = useState(values?.discountPercent ?? 0);
-  const [issueNow, setIssueNow] = useState(instantDefault);
+  // حالة الدفع أزرارٌ: مدفوع كامل، أو جزء، أو مستحقات، أو مسودة (بطلب المالك).
+  // «الكامل» هو الافتراضي: الزبون يدفع كاملاً عادةً، فلا يُكتب رقمٌ كل مرة.
+  const [payMode, setPayMode] = useState<PayMode>(instantDefault ? 'FULL' : 'DRAFT');
   const [payMethod, setPayMethod] = useState('CASH');
-  // المبلغ المدفوع يتبع الإجمالي ما لم يُكتب باليد: الأشيع أن يدفع
-  // الزبون كاملاً، فلا يُكتب الرقم كل مرة — ومع ذلك الخانة مفتوحة
-  // للدفعة الجزئية، وأوَّل حرف يُكتب يوقف المتابعة فلا يُداس على ما كُتب.
+  // مبلغ «مدفوع جزء» وحده يُكتب باليد.
   const [payAmount, setPayAmount] = useState(0);
-  const [payTouched, setPayTouched] = useState(false);
 
   // سعر التوصيل — ثلاث حالات لا خانة واحدة غامضة: بلا توصيل، أو على
   // الزبون (بند يرفع إجمالي الفاتورة)، أو علينا (الزبون لا يدفع شيئاً
@@ -547,7 +547,7 @@ export function DocumentForm({
   });
 
   // ما تعرضه الخانة وتُرسله — مشتقّ لا منسوخ: لا يتخلّف عن إجمالٍ تغيّر.
-  const payValue = payTouched ? payAmount : totals.total.toNumber();
+  const payValue = payMode === 'FULL' ? totals.total.toNumber() : payMode === 'PART' ? payAmount : 0;
 
   // الأصناف التي ستُباع بأكثر ممّا في المخزن. البيع لا يُمنع — المصنع
   // يبيع ما سيُنتَج ومنعُه يوقف بيعاً حقيقياً — لكنه يُقال قبل الحفظ لا
@@ -1216,62 +1216,67 @@ export function DocumentForm({
         </section>
       )}
 
-      {/* ٣.٥ إصدار وتحصيل فوري — للفاتورة المباشرة فقط. العميل الذي يدفع في
-          الحال يخرج بفاتورة مُصدَرة ومُحصَّلة بضغطة، بلا خطوتَي إصدار وتحصيل
-          منفصلتين. الخادم يُخصّص الرقم المتسلسل ويسجّل الدفعة في معاملة واحدة. */}
+      {/* ٣.٥ الدفع — للفاتورة المباشرة فقط: أزرارٌ ظاهرة لحالة الدفع (كامل/جزء/
+          مستحقات/مسودة) بدل خانة «إصدار وتحصيل فوري» وحدها. الخادم يُخصّص الرقم
+          المتسلسل ويسجّل الدفعة في معاملة واحدة. */}
       {instantIssue && (
         <section className="rounded-xl border border-line bg-card p-4">
-          <label className="flex cursor-pointer items-center gap-2.5">
-            <input
-              type="checkbox"
-              checked={issueNow}
-              onChange={(e) => {
-                setIssueNow(e.target.checked);
-                setPayTouched(false);
-              }}
-              className="h-4 w-4 accent-[var(--color-brand)]"
-            />
-            <span className="text-sm font-medium text-txt">إصدار وتحصيل فوري</span>
-          </label>
-          <p className="mt-1.5 text-[0.7rem] leading-[1.8] text-txt-4">
-            يُصدر الفاتورة (فيُخصَّص رقمها المتسلسل) ويسجّل الدفعة مباشرة — للعميل الذي
-            يدفع في الحال. اتركه فارغاً لحفظها كمسوّدة تُصدَّر لاحقاً.
-          </p>
-          <input type="hidden" name="issueNow" value={issueNow ? '1' : '0'} />
+          <p className="mb-2.5 text-sm font-medium text-txt">الدفع</p>
+          <PayModePills
+            value={payMode}
+            onChange={(m) => {
+              setPayMode(m);
+              setPayAmount(0);
+            }}
+            modes={['FULL', 'PART', 'DUE', 'DRAFT']}
+          />
+          <input type="hidden" name="issueNow" value={payMode === 'DRAFT' ? '0' : '1'} />
+          <input type="hidden" name="paymentMode" value={payMode} />
           {/* «المبلغ كامل» يحسبه الخادم من إجماليه — لا رقم المتصفّح. */}
-          <input type="hidden" name="paymentFull" value={payTouched ? '0' : '1'} />
+          <input type="hidden" name="paymentFull" value={payMode === 'FULL' ? '1' : '0'} />
+          {payMode !== 'PART' && <input type="hidden" name="paymentAmount" value={payValue} />}
 
-          {issueNow && (
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <label className="block">
-                <span className="mb-1.5 block text-xs text-txt-2">المبلغ المدفوع</span>
-                <input
-                  name="paymentAmount"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  dir="ltr"
-                  value={payValue}
-                  onChange={(e) => {
-                    setPayTouched(true);
-                    setPayAmount(Math.max(0, Number(e.target.value) || 0));
-                  }}
-                  className="erp-input py-2.5 text-start"
-                />
-                {payTouched ? (
-                  <button
-                    type="button"
-                    onClick={() => setPayTouched(false)}
-                    className="mt-1 text-[0.7rem] text-brand hover:underline"
-                  >
-                    المبلغ كامل ({formatMoney(totals.total)})
-                  </button>
-                ) : (
-                  <span className="mt-1 block text-[0.7rem] text-txt-4">
-                    المبلغ كامل تلقائياً — غيّره إن دفع جزءاً.
+          {payMode === 'DRAFT' && (
+            <p className="mt-3 text-[0.7rem] leading-[1.8] text-txt-4">
+              تُحفظ بلا رقم ولا دفعة ولا صرف من المخزن — وتُصدَر لاحقاً من صفحة الفاتورة.
+            </p>
+          )}
+          {payMode === 'DUE' && (
+            <p className="mt-3 rounded-lg border border-warn bg-warn-soft px-3 py-2 text-xs leading-[1.8] text-warn">
+              تُصدَر الفاتورة والمبلغ كله (<span className="tnum font-semibold">{formatMoney(totals.total)}</span>)
+              مستحقاتٌ على العميل — يظهر في «تقدّم الديون» حتى يُحصَّل.
+            </p>
+          )}
+
+          {(payMode === 'FULL' || payMode === 'PART') && (
+            <div className={`mt-4 grid gap-3 ${payMode === 'PART' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+              {payMode === 'PART' ? (
+                <label className="block">
+                  <span className="mb-1.5 block text-xs text-txt-2">المبلغ المدفوع</span>
+                  <input
+                    name="paymentAmount"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    dir="ltr"
+                    placeholder="كم دفع؟"
+                    value={payAmount || ''}
+                    onChange={(e) => setPayAmount(Math.max(0, Number(e.target.value) || 0))}
+                    className="erp-input py-2.5 text-start"
+                  />
+                  <span className={`mt-1 block text-[0.7rem] ${state.fieldErrors?.paymentAmount ? 'text-bad' : 'text-txt-4'}`}>
+                    {state.fieldErrors?.paymentAmount ?? 'الباقي يُسجَّل مستحقاتٍ على العميل.'}
                   </span>
-                )}
-              </label>
+                </label>
+              ) : (
+                <div className="block">
+                  <span className="mb-1.5 block text-xs text-txt-2">المبلغ المدفوع</span>
+                  <div className="tnum rounded-lg border border-line bg-card-2 px-3 py-2.5 text-sm font-bold text-ok">
+                    {formatMoney(totals.total)}
+                  </div>
+                  <span className="mt-1 block text-[0.7rem] text-txt-4">الإجمالي كاملاً.</span>
+                </div>
+              )}
               <label className="block">
                 <span className="mb-1.5 block text-xs text-txt-2">طريقة السداد</span>
                 <select
@@ -1287,30 +1292,32 @@ export function DocumentForm({
                   ))}
                 </select>
               </label>
-              <div className="block">
-                <span className="mb-1.5 block text-xs text-txt-2">المتبقّي على العميل</span>
-                <div
-                  className={`tnum rounded-lg border border-line bg-card px-3 py-2.5 text-sm font-bold ${
-                    dec(totals.total).minus(payValue).lte(0) ? 'text-ok' : 'text-warn'
-                  }`}
-                >
-                  {formatMoney(dec(totals.total).minus(payValue))}
-                </div>
-                {/* دفع أقلّ من الإجمالي: دينٌ عليه، أم سعرٌ اتُّفق عليه؟ كان الفرق
-                    يُسجَّل ديناً دائماً فتخرج فواتير «تحصيل فوري» مدفوعةً جزئياً. */}
-                {dec(totals.total).minus(payValue).gt(0) && payValue > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDocDiscount((d) => d + dec(totals.total).minus(payValue).toNumber());
-                      setPayTouched(false);
-                    }}
-                    className="mt-1 text-start text-[0.7rem] text-brand hover:underline"
+              {payMode === 'PART' && (
+                <div className="block">
+                  <span className="mb-1.5 block text-xs text-txt-2">المتبقّي على العميل</span>
+                  <div
+                    className={`tnum rounded-lg border border-line bg-card px-3 py-2.5 text-sm font-bold ${
+                      dec(totals.total).minus(payValue).lte(0) ? 'text-ok' : 'text-warn'
+                    }`}
                   >
-                    اتفقتم على سعرٍ أقل؟ اجعل الفرق خصماً
-                  </button>
-                )}
-              </div>
+                    {formatMoney(dec(totals.total).minus(payValue))}
+                  </div>
+                  {/* دفع أقلّ من الإجمالي: دينٌ عليه، أم سعرٌ اتُّفق عليه؟ كان الفرق
+                      يُسجَّل ديناً دائماً فتخرج فواتير «تحصيل فوري» مدفوعةً جزئياً. */}
+                  {dec(totals.total).minus(payValue).gt(0) && payValue > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDocDiscount((d) => d + dec(totals.total).minus(payValue).toNumber());
+                        setPayMode('FULL');
+                      }}
+                      className="mt-1 text-start text-[0.7rem] text-brand hover:underline"
+                    >
+                      اتفقتم على سعرٍ أقل؟ اجعل الفرق خصماً
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -1361,13 +1368,15 @@ export function DocumentForm({
 
       <SubmitButton
         label={
-          instantIssue && issueNow
-            ? payValue > 0
-              ? dec(totals.total).minus(payValue).gt(0)
-                ? 'إنشاء وإصدار وتحصيل جزئي (الباقي دين)'
-                : 'إنشاء وإصدار وتحصيل'
-              : 'إنشاء وإصدار'
-            : submitLabel
+          !instantIssue
+            ? submitLabel
+            : payMode === 'FULL'
+              ? 'إنشاء وإصدار وتحصيل'
+              : payMode === 'PART'
+                ? 'إنشاء وتحصيل جزئي — الباقي مستحقات'
+                : payMode === 'DUE'
+                  ? 'إنشاء — المبلغ كله مستحقات'
+                  : 'حفظ مسودة'
         }
       />
     </form>

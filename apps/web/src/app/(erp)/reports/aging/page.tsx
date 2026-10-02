@@ -17,6 +17,7 @@ import { prisma } from '@/lib/prisma';
 import { returnsByInvoice, netOwed } from '@/lib/receivables';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
+import { RowLink } from '@/components/crud/RowLink';
 import { Figure, Empty } from '../Shell';
 import { ReportTabs } from '../ReportTabs';
 
@@ -100,14 +101,18 @@ export default async function AgingReport() {
 
           <Table headers={['الفاتورة', 'العميل', 'تاريخ الاستحقاق', 'أيام التأخّر', 'المتبقّي', 'الفئة']} empty={false}>
             {rows.map((r) => (
-              <tr key={r.id}>
-                <td className="px-4 py-3 font-medium text-txt" dir="ltr">{r.number ?? '—'}</td>
+              <RowLink key={r.id} href={`/invoices/${r.id}`}>
+                <td className="px-4 py-3 font-medium" dir="ltr">
+                  <Link href={`/invoices/${r.id}`} className="text-brand hover:underline">
+                    {r.number ?? '—'}
+                  </Link>
+                </td>
                 <td className="px-4 py-3 text-txt-2">{r.name}</td>
                 <td className="px-4 py-3 text-txt-3">{r.due ? fmt.format(r.due) : '—'}</td>
                 <td className={`tnum px-4 py-3 ${r.days > 90 ? 'text-bad' : r.days > 0 ? 'text-warn' : 'text-txt-3'}`}>{r.days > 0 ? r.days : '—'}</td>
                 <td className="tnum px-4 py-3 font-medium text-brand">{formatMoney(r.outstanding)}</td>
                 <td className="px-4 py-3 text-txt-2">{AGEING_BUCKET_AR[r.bucket as AgeingBucket]}</td>
-              </tr>
+              </RowLink>
             ))}
           </Table>
         </>

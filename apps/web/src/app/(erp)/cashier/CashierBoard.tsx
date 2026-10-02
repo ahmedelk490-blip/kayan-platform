@@ -20,6 +20,7 @@ import { FormError } from '@/components/crud/Form';
 import { SearchableSelect } from '@/components/crud/SearchableSelect';
 import type { VariantOption } from '@/app/(erp)/sales/DocumentForm';
 import type { FormState } from '@/app/(erp)/invoices/shared';
+import { PayModePills, type PayMode } from '@/app/(erp)/sales/PayMode';
 import { cashierCheckout } from './actions';
 import { DELIVERY_DEFAULT_FEE } from '@/lib/delivery';
 
@@ -68,9 +69,9 @@ export function CashierBoard({
   const [picking, setPicking] = useState<string | null>(null); // productId being configured
   const [customerId, setCustomerId] = useState('');
   // المدفوع يتبع الإجمالي ما لم يُكتب باليد — زبون الكاشير يدفع كاملاً
-  // في العادة، والخانة تبقى مفتوحة للدفعة الجزئية.
-  const [paid, setPaid] = useState(0);
-  const [paidTouched, setPaidTouched] = useState(false);
+  // في العادة؛ أو جزءٌ يُكتب مبلغه، أو مستحقات كلها على العميل (بطلب المالك).
+  const [payMode, setPayMode] = useState<PayMode>('FULL');
+  const [partAmount, setPartAmount] = useState(0);
   const [method, setMethod] = useState('CASH');
 
   // التوصيل: مفتاح واحد يُشغّله بأجرةٍ افتراضية، ثم مَن يدفعها — على الزبون
@@ -139,7 +140,7 @@ export function CashierBoard({
     const v = variants.find((x) => x.value === l.variantId);
     return v ? l.quantity > v.available : false;
   });
-  const paidValue = paidTouched ? paid : total.toNumber();
+  const paidValue = payMode === 'FULL' ? total.toNumber() : payMode === 'PART' ? partAmount : 0;
   const remaining = total.minus(paidValue);
 
   // إضافة عدة سطور دفعة واحدة (كمية لكل مقاس)، مع دمج المتكرّر بالمتغيّر.
@@ -517,23 +518,63 @@ export function CashierBoard({
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <label className="block">
-            <span className="mb-1 block text-[0.7rem] text-txt-3">المدفوع</span>
-            <input name="paymentAmount" type="number" value={paidValue} dir="ltr" onChange={(e) => { setPaidTouched(true); setPaid(Math.max(0, Number(e.target.value) || 0)); }} className="erp-input py-2 text-start" />
-            {paidTouched ? (
-              <button type="button" onClick={() => setPaidTouched(false)} className="mt-0.5 text-[0.7rem] text-brand hover:underline">المبلغ كامل</button>
-            ) : (
-              <span className="mt-0.5 block text-[0.7rem] text-txt-4">المبلغ كامل تلقائياً</span>
-            )}
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-[0.7rem] text-txt-3">طريقة السداد</span>
-            <select name="paymentMethod" value={method} onChange={(e) => setMethod(e.target.value)} className="erp-input py-2">
-              {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{PAYMENT_METHOD_AR[m]}</option>)}
-            </select>
-          </label>
+        {/* حالة الدفع — أزرارٌ ظاهرة: كامل، أو جزء بمبلغٍ يُكتب، أو مستحقات كلها. */}
+        <div>
+          <span className="mb-1.5 block text-[0.7rem] text-txt-3">الدفع</span>
+          <PayModePills
+            value={payMode}
+            onChange={(m) => {
+              setPayMode(m);
+              setPartAmount(0);
+            }}
+            modes={['FULL', 'PART', 'DUE']}
+          />
+          <input type="hidden" name="paymentMode" value={payMode} />
         </div>
+        {payMode === 'DUE' ? (
+          <>
+            <input type="hidden" name="paymentAmount" value={0} />
+            <p className="rounded-lg border border-warn bg-warn-soft px-3 py-2 text-[0.7rem] leading-[1.8] text-warn">
+              المبلغ كله يُسجَّل مستحقاتٍ على العميل — يظهر في «تقدّم الديون» حتى يُحصَّل.
+            </p>
+          </>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            {payMode === 'PART' ? (
+              <label className="block">
+                <span className="mb-1 block text-[0.7rem] text-txt-3">المدفوع</span>
+                <input
+                  name="paymentAmount"
+                  type="number"
+                  min="0"
+                  dir="ltr"
+                  placeholder="كم دفع؟"
+                  value={partAmount || ''}
+                  onChange={(e) => setPartAmount(Math.max(0, Number(e.target.value) || 0))}
+                  className="erp-input py-2 text-start"
+                />
+                {state.fieldErrors?.paymentAmount && (
+                  <span className="mt-0.5 block text-[0.7rem] text-bad">{state.fieldErrors.paymentAmount}</span>
+                )}
+              </label>
+            ) : (
+              <div className="block">
+                <span className="mb-1 block text-[0.7rem] text-txt-3">المدفوع</span>
+                {/* «كامل» يحسبه الخادم من إجماليه — هذا الرقم للعرض. */}
+                <input type="hidden" name="paymentAmount" value={paidValue} />
+                <div className="tnum rounded-lg border border-line bg-card-2 px-3 py-2 text-sm font-bold text-ok">
+                  {formatMoney(total)}
+                </div>
+              </div>
+            )}
+            <label className="block">
+              <span className="mb-1 block text-[0.7rem] text-txt-3">طريقة السداد</span>
+              <select name="paymentMethod" value={method} onChange={(e) => setMethod(e.target.value)} className="erp-input py-2">
+                {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{PAYMENT_METHOD_AR[m]}</option>)}
+              </select>
+            </label>
+          </div>
+        )}
         <label className="block">
           <span className="mb-1 block text-[0.7rem] text-txt-3">التاريخ والوقت</span>
           <input
@@ -554,7 +595,10 @@ export function CashierBoard({
         </label>
         <p className="text-[0.7rem] text-txt-4">المتبقّي: <span className={`tnum font-semibold ${remaining.lte(0) ? 'text-ok' : 'text-warn'}`}>{formatMoney(remaining)}</span></p>
 
-        <CheckoutButton disabled={cart.length === 0 || !customerReady} />
+        <CheckoutButton
+          disabled={cart.length === 0 || !customerReady || (payMode === 'PART' && partAmount <= 0)}
+          label={payMode === 'FULL' ? 'بيع وتحصيل' : payMode === 'PART' ? 'بيع وتحصيل جزئي' : 'بيع — المبلغ كله مستحقات'}
+        />
       </form>
 
       {picking && (
@@ -717,7 +761,7 @@ function VariantPicker({
 }
 
 /** زر الإتمام: يتعطّل أثناء الإرسال — لمستان سريعتان لا تصنعان فاتورتين. */
-function CheckoutButton({ disabled }: { disabled: boolean }) {
+function CheckoutButton({ disabled, label }: { disabled: boolean; label: string }) {
   const { pending } = useFormStatus();
   return (
     <button
@@ -725,7 +769,7 @@ function CheckoutButton({ disabled }: { disabled: boolean }) {
       disabled={disabled || pending}
       className="erp-btn py-3.5 text-base disabled:opacity-40"
     >
-      {pending ? 'جارٍ إتمام البيع…' : 'بيع وتحصيل'}
+      {pending ? 'جارٍ إتمام البيع…' : label}
     </button>
   );
 }

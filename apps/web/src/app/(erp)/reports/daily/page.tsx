@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
+import { RowLink } from '@/components/crud/RowLink';
 import { categoryOf } from '@/app/(erp)/returns/category';
 
 export const metadata: Metadata = { title: 'يومية اليوم' };
@@ -238,12 +239,12 @@ export default async function DailyPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-        {/* فواتير اليوم — مختصرة، والرقم يفتح الفاتورة. */}
+        {/* فواتير اليوم — مختصرة، والصف كله يفتح الفاتورة. */}
         <section>
           <h3 className="mb-3 text-sm font-semibold text-brand">فواتير اليوم</h3>
           <Table headers={['الرقم', 'العميل', 'المصدر', 'الإجمالي', 'المدفوع']} empty={invoices.length === 0}>
             {invoices.map((inv) => (
-              <tr key={inv.id} className="hover:bg-card-2">
+              <RowLink key={inv.id} href={`/invoices/${inv.id}`}>
                 <td className="tnum px-4 py-3">
                   <Link href={`/invoices/${inv.id}`} className="text-brand hover:underline">
                     {inv.number ?? '—'}
@@ -257,7 +258,7 @@ export default async function DailyPage() {
                 </td>
                 <td className="tnum px-4 py-3 font-medium text-brand">{formatMoney(inv.total)}</td>
                 <td className="tnum px-4 py-3 text-txt-2">{formatMoney(inv.paidAmount)}</td>
-              </tr>
+              </RowLink>
             ))}
           </Table>
         </section>

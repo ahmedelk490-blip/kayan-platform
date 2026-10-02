@@ -268,8 +268,15 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
 
     // «المبلغ كامل» يُحسب هنا لا في المتصفّح: إجمالي الخادم هو المرجع، فلا يفترق
     // المدفوع عن الإجمالي بفرق حسابٍ أو بسطرٍ أُضيف بعد كتابة المبلغ.
-    const payFull = String(formData.get('paymentFull') ?? '') === '1';
-    const payAmount = payFull ? dec(totals.total) : dec(decimal(formData.get('paymentAmount')));
+    // وحالة الدفع من أزرار الفورم: «مستحقات» صفرٌ مهما كان في الخانة، و«جزء» لا
+    // يمرّ بلا مبلغ — وإلا صدرت آجلةً والبائع يظنّ أن جزءاً دُفع.
+    const payMode = String(formData.get('paymentMode') ?? '');
+    const payFull = payMode === 'FULL' || String(formData.get('paymentFull') ?? '') === '1';
+    const payAmount =
+      payMode === 'DUE' ? dec(0) : payFull ? dec(totals.total) : dec(decimal(formData.get('paymentAmount')));
+    if (payMode === 'PART' && !payAmount.gt(0)) {
+      return { fieldErrors: { paymentAmount: 'اكتب المبلغ الذي دفعه الزبون — أو اختر «مستحقات».' } };
+    }
     const payMethodRaw = String(formData.get('paymentMethod') ?? 'CASH');
     const wantsPayment = payAmount.gt(0);
 

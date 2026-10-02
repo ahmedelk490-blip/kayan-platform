@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
+import { RowLink } from '@/components/crud/RowLink';
 import type { SearchParams } from '@/lib/query';
 import { ReportFilter, Figure, Empty } from '../Shell';
 import { resolveRange } from '../range';
@@ -143,8 +144,12 @@ export default async function SingleClientReport({ searchParams }: { searchParam
           <h3 className="mb-3 text-sm font-semibold text-brand">كل فواتير العميل</h3>
           <Table headers={['رقم الفاتورة', 'التاريخ', 'الإجمالي', 'المدفوع', 'المتبقّي', 'الحالة']} empty={selected.invoices.length === 0}>
             {selected.invoices.map((inv) => (
-              <tr key={inv.id}>
-                <td className="px-4 py-3 font-medium text-txt" dir="ltr">{inv.number ?? '—'}</td>
+              <RowLink key={inv.id} href={`/invoices/${inv.id}`}>
+                <td className="px-4 py-3 font-medium" dir="ltr">
+                  <Link href={`/invoices/${inv.id}`} className="text-brand hover:underline">
+                    {inv.number ?? '—'}
+                  </Link>
+                </td>
                 <td className="px-4 py-3 text-txt-3">{inv.issueDate ? fmt.format(inv.issueDate) : '—'}</td>
                 <td className="tnum px-4 py-3 text-txt-2">{formatMoney(inv.total)}</td>
                 <td className="tnum px-4 py-3 text-ok">{formatMoney(inv.paidAmount)}</td>
@@ -163,7 +168,7 @@ export default async function SingleClientReport({ searchParams }: { searchParam
                     {(INVOICE_STATUS_AR as Record<string, string>)[inv.status] ?? inv.status}
                   </Badge>
                 </td>
-              </tr>
+              </RowLink>
             ))}
           </Table>
         </>
