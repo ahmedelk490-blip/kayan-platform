@@ -1046,6 +1046,12 @@ export async function cancelInvoice(
   }
   if (order) revalidatePath(`/sales/orders/${order.id}`);
 
+  // «إلغاء وحذف» بخطوةٍ واحدة: الإلغاء أعاد كل شيءٍ لمكانه، والحذف يُخفيه.
+  if (String(formData.get('deleteAfter') ?? '') === '1') {
+    await hideCancelledInvoice(user, id, invoice.number);
+    redirect('/invoices');
+  }
+
   return {
     ok: [
       'تم إلغاء الطلب.',
@@ -1059,6 +1065,52 @@ export async function cancelInvoice(
       .filter(Boolean)
       .join(' '),
   };
+}
+
+/**
+ * حذف الطلب الملغى من القوائم (بطلب المالك: «تضيف لنا حذف للطلب اللي نلغيه،
+ * وكل حاجة في السيستم تتحسب صح»).
+ *
+ * الحذف بعد الإلغاء وحده: الإلغاء هو الذي يُرجع كل شيءٍ لمكانه — يردّ المدفوع،
+ * ويُعيد البضاعة، ويُسقط المرتجعات ومصروف التوصيل، ويُخرجها من المبيعات والربح.
+ * فلا يبقى للحذف إلا الإخفاء: تختفي من الفواتير وكشوف العملاء والتقارير، وتخرج
+ * دفعتها وردُّها معاً من حسابات الصندوق — مجموعهما صفر، فلا يتغيّر رصيدُ مدةٍ
+ * تضمّهما. والحذف ليّن: الرقم يبقى محجوزاً في التسلسل، والسجلّ يحفظ من حذف ومتى.
+ */
+export async function deleteCancelledInvoice(id: string): Promise<void> {
+  const user = await requirePermission('invoices.issue');
+  const invoice = await prisma.invoice.findFirst({
+    where: { id, tenantId: user.tenantId, isDeleted: false },
+    select: { number: true, status: true },
+  });
+  if (!invoice) redirect('/invoices');
+  if (invoice.status !== 'VOID') redirect(`/invoices/${id}`);
+
+  await hideCancelledInvoice(user, id, invoice.number);
+  redirect('/invoices');
+}
+
+async function hideCancelledInvoice(
+  user: { id: string; tenantId: string },
+  id: string,
+  number: string | null,
+): Promise<void> {
+  // VOID وحدها: فاتورةٌ قائمة لا تُخفى قبل أن يُردّ مالها وتعود بضاعتها.
+  await prisma.invoice.updateMany({
+    where: { id, tenantId: user.tenantId, status: 'VOID', isDeleted: false },
+    data: { isDeleted: true, deletedAt: new Date() },
+  });
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'invoice.delete',
+    entityType: 'Invoice',
+    entityId: id,
+    detail: number ?? 'draft',
+  });
+  for (const path of ['/invoices', '/dashboard', '/sales', '/customers', '/reports/daily', '/reports/cashflow']) {
+    revalidatePath(path);
+  }
 }
 
 // ── Payments ────────────────────────────────────────────────

@@ -115,6 +115,11 @@ export function VoidForm({
         onChange={(e) => setReason(e.target.value)}
         errors={state.fieldErrors}
       />
+      {/* «إلغاء وحذف» بخطوة: الإلغاء يُرجع المال والبضاعة، والحذف يُخفيه من القوائم. */}
+      <label className="flex cursor-pointer items-center gap-2 text-xs text-txt-2">
+        <input type="checkbox" name="deleteAfter" value="1" className="h-4 w-4 accent-[var(--color-bad)]" />
+        واحذف الطلب من القوائم بعد إلغائه
+      </label>
       <button
         type="submit"
         onClick={(e) => {

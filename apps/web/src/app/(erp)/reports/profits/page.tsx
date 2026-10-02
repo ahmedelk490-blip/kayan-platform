@@ -39,7 +39,7 @@ export default async function ProfitsPage({ searchParams }: { searchParams: Prom
     realProfit(user.tenantId, from, to),
     // ما دخل الصندوق فعلاً في المدة — الدفعات العاكسة سالبة فتُخصم وحدها.
     prisma.payment.aggregate({
-      where: { tenantId: user.tenantId, paidAt: { gte: from, lte: to } },
+      where: { tenantId: user.tenantId, paidAt: { gte: from, lte: to }, invoice: { isDeleted: false } },
       _sum: { amount: true },
     }),
     prisma.invoice.findMany({

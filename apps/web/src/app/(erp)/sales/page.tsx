@@ -85,7 +85,7 @@ export default async function SalesDashboard() {
         : null,
       seeMoney
         ? prisma.payment.aggregate({
-            where: { tenantId, paidAt: { gte: dayStart }, ...(seeAll ? {} : { recordedById: user.id }) },
+            where: { tenantId, paidAt: { gte: dayStart }, invoice: { isDeleted: false }, ...(seeAll ? {} : { recordedById: user.id }) },
             _sum: { amount: true },
           })
         : null,

@@ -24,7 +24,7 @@ export default async function CashflowReport({ searchParams }: { searchParams: P
 
   const [payments, expenses] = await Promise.all([
     prisma.payment.findMany({
-      where: { tenantId: user.tenantId, paidAt: { gte: from, lte: to } },
+      where: { tenantId: user.tenantId, paidAt: { gte: from, lte: to }, invoice: { isDeleted: false } },
       select: { amount: true, paidAt: true },
     }),
     prisma.secondaryExpense.findMany({

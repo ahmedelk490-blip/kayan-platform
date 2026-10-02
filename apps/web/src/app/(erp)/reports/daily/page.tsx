@@ -62,7 +62,7 @@ export default async function DailyPage() {
       },
     }),
     prisma.payment.findMany({
-      where: { tenantId: user.tenantId, paidAt: window },
+      where: { tenantId: user.tenantId, paidAt: window, invoice: { isDeleted: false } },
       select: { amount: true, method: true },
     }),
     prisma.salesReturn.findMany({

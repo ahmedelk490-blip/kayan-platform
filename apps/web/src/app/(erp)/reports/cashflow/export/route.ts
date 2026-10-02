@@ -14,7 +14,7 @@ export async function GET(request: Request) {
 
   const [payments, expenses] = await withTenant(user.tenantId, (tx) =>
     Promise.all([
-      tx.payment.findMany({ where: { tenantId: user.tenantId, paidAt: { gte: from, lte: to } }, select: { amount: true, paidAt: true } }),
+      tx.payment.findMany({ where: { tenantId: user.tenantId, paidAt: { gte: from, lte: to }, invoice: { isDeleted: false } }, select: { amount: true, paidAt: true } }),
       tx.secondaryExpense.findMany({
         where: { tenantId: user.tenantId, isDeleted: false, status: 'APPROVED', expenseDate: { gte: from, lte: to } },
         select: { amount: true, expenseDate: true },

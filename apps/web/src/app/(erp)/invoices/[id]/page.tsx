@@ -27,7 +27,15 @@ import { dateInput } from '@/lib/ops';
 import type { SearchParams } from '@/lib/query';
 import { waLink } from '@/lib/wa';
 import { PaymentForm, VoidForm } from '../PaymentForm';
-import { issueInvoice, cancelInvoice, recordPayment, reversePayment, duplicateInvoice, discountRemaining } from '../actions';
+import {
+  issueInvoice,
+  cancelInvoice,
+  deleteCancelledInvoice,
+  recordPayment,
+  reversePayment,
+  duplicateInvoice,
+  discountRemaining,
+} from '../actions';
 
 export const metadata: Metadata = { title: 'الفاتورة' };
 
@@ -218,10 +226,20 @@ export default async function InvoicePage({
           ))}
       </div>
 
-      {status === 'VOID' && invoice.voidReason && (
-        <p className="mb-6 rounded-lg border border-bad bg-bad-soft px-4 py-3 text-xs text-bad">
-          فاتورة ملغاة — {invoice.voidReason}
-        </p>
+      {status === 'VOID' && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-bad bg-bad-soft px-4 py-3 text-xs text-bad">
+          <span>فاتورة ملغاة{invoice.voidReason ? ` — ${invoice.voidReason}` : ''}</span>
+          {/* ملغاة: مالها رُدّ وبضاعتها عادت — فحذفها لا يغيّر مخزوناً ولا ربحاً. */}
+          {canIssue && (
+            <form action={deleteCancelledInvoice.bind(null, invoice.id)}>
+              <ConfirmButton
+                label="حذف الطلب"
+                message="حذف هذا الطلب الملغى من القوائم؟ ماله رُدّ وبضاعته عادت عند الإلغاء، فلا يتغيّر مخزون ولا ربح — يختفي من الفواتير والتقارير وحسابات الصندوق."
+                className="rounded-lg border border-bad bg-card px-3 py-1.5 text-xs font-medium text-bad hover:bg-bad-soft disabled:opacity-50"
+              />
+            </form>
+          )}
+        </div>
       )}
 
       <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">

@@ -93,7 +93,7 @@ export default async function ManagerDashboard() {
         : null,
       seeMoney
         ? prisma.payment.aggregate({
-            where: { tenantId, paidAt: { gte: dayStart } },
+            where: { tenantId, paidAt: { gte: dayStart }, invoice: { isDeleted: false } },
             _sum: { amount: true },
           })
         : null,
