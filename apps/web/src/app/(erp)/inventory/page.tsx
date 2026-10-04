@@ -19,7 +19,7 @@ import { ShareShortages } from './ShareShortages';
 import { StocktakeTable, type StocktakeRow } from './StocktakeTable';
 import { BalancesByProduct, type ProductGroup } from './BalancesByProduct';
 import { ConfirmButton } from '@/components/crud/ConfirmButton';
-import { reverseMovement, deleteMovement } from './actions';
+import { reverseMovement, deleteMovement, writeOffRetiredStock } from './actions';
 import { TYPE_LABELS, isManualMovement } from './types';
 
 export const metadata: Metadata = { title: 'المخزون' };
@@ -364,6 +364,18 @@ export default async function InventoryPage({
     g.variants += 1;
   }
 
+  // أرصدةٌ لأصنافٍ رُفعت من منتجٍ قائم قبل أن يصير الرفع يشطبها: تظهر وتُحسب
+  // في المجاميع ولا صنف لها — يُعرض شطبها بضغطة (انظر writeOffRetiredStock).
+  const retired = fullStock.filter(
+    (st) =>
+      !st.variant.product.isDeleted &&
+      (st.variant.isDeleted || !st.variant.isActive) &&
+      !dec(st.onHand).isZero(),
+  );
+  const retiredSample = retired[0]
+    ? `${retired[0].variant.product.nameAr} · ${retired[0].variant.color?.nameAr ?? 'بلا لون'} · ${retired[0].variant.size?.code ?? 'موحّد'} (${formatQty(retired[0].onHand)})`
+    : '';
+
   const balanceGroups: ProductGroup[] = [...groupMap.values()]
     .map(({ colorOrder, ...g }) => {
       const pieces = Math.max(0, g.pieces);
@@ -494,7 +506,23 @@ export default async function InventoryPage({
             label: '📋 الأرصدة',
             badge: lowStock.length + outOfStock.length,
             content: (
-              <BalancesByProduct groups={balanceGroups} canWrite={canWrite} seeCosts={seeCosts} />
+              <>
+                {canWrite && retired.length > 0 && (
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warn bg-warn-soft px-4 py-3 text-xs leading-[1.8] text-warn">
+                    <span>
+                      ⚠ {retired.length} رصيد لأصنافٍ حُذفت من منتجاتها وما زال يظهر ويُحسب — مثل «{retiredSample}».
+                    </span>
+                    <form action={writeOffRetiredStock}>
+                      <ConfirmButton
+                        label="شطب أرصدة المحذوف"
+                        message={`تصفير ${retired.length} رصيد لأصنافٍ محذوفة بحركة «تسوية» مسجّلة؟ الفواتير والتقارير القديمة لا تتأثّر.`}
+                        className="rounded-lg border border-warn bg-card px-3 py-1.5 text-xs font-medium text-warn hover:bg-warn-soft disabled:opacity-50"
+                      />
+                    </form>
+                  </div>
+                )}
+                <BalancesByProduct groups={balanceGroups} canWrite={canWrite} seeCosts={seeCosts} />
+              </>
             ),
           },
           {

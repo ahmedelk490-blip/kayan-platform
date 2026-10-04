@@ -418,6 +418,68 @@ export async function setLevels(_prev: FormState, formData: FormData): Promise<F
 }
 
 /**
+ * شطب أرصدة الأصناف المحذوفة أو المعطّلة من منتجاتها (بطلب المالك: «هذه ما
+ * راحت» — «ازوق · موحّد −18»). صنفٌ رُفع من المنتج قبل أن يصير الرفعُ يشطب رصيده
+ * بقي رصيده يظهر في المخزون ويُحسب في مجاميعه. كلُّ رصيدٍ منها يُصفَّر بحركة
+ * «تسوية» مسجّلة بسببها؛ والمنتج المحذوف كلّه لا يُمسّ — بضاعته على الرفّ تبقى
+ * ظاهرةً موسومة «(محذوف)» عمداً.
+ */
+export async function writeOffRetiredStock(): Promise<void> {
+  const user = await requirePermission('inventory.write');
+  const count = await tenantTransaction(async (tx) => {
+    const rows = await tx.stock.findMany({
+      where: {
+        onHand: { not: 0 },
+        variant: {
+          product: { tenantId: user.tenantId, isDeleted: false },
+          OR: [{ isDeleted: true }, { isActive: false }],
+        },
+      },
+      select: {
+        variantId: true,
+        warehouseId: true,
+        locationId: true,
+        onHand: true,
+        variant: { select: { productId: true } },
+      },
+    });
+    for (const r of rows) {
+      const delta = dec(r.onHand).negated().toNumber();
+      await tx.stockMovement.create({
+        data: {
+          tenantId: user.tenantId,
+          productId: r.variant.productId,
+          variantId: r.variantId,
+          warehouseId: r.warehouseId,
+          locationId: r.locationId,
+          type: 'ADJUSTMENT',
+          quantity: delta,
+          reason: 'شطب رصيد صنفٍ محذوف من منتجه',
+          userId: user.id,
+        },
+      });
+      await applyStockDelta(
+        tx,
+        { variantId: r.variantId, warehouseId: r.warehouseId, locationId: r.locationId },
+        'onHand',
+        delta,
+      );
+    }
+    return rows.length;
+  });
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'stock.writeOffRetired',
+    entityType: 'Stock',
+    entityId: null,
+    detail: `${count} رصيد`,
+  });
+  revalidatePath('/inventory');
+}
+
+/**
  * تحديد الحدّ الأدنى (حدّ إعادة الطلب) لرصيد منتج — عند بلوغه أو النزول تحته
  * يظهر الصنف في «نواقص وإعادة الطلب» لتوفيره. صفر = بلا تنبيه بحدّ.
  */

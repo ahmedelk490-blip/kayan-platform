@@ -72,13 +72,14 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
     returnLines,
     returnsAgg,
     expensesAgg,
-    staff,
+    allStaff,
     recurring,
     firstInvoice,
     bonusesAgg,
     damageAgg,
     penaltiesAgg,
     salaryPayments,
+    deactivations,
   ] = await Promise.all([
     prisma.invoice.aggregate({
       where: { ...issued, issueDate: period },
@@ -118,9 +119,11 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
       _sum: { amount: true },
       _count: { _all: true },
     }),
+    // النشطون ومن عُطّل: راتب المعطَّل يُحسب حتى يوم تعطيله ويقف بعده (بطلب
+    // المالك). كان يُسقَط من كل المدد فيرتفع ربح الأشهر التي عمل فيها فعلاً.
     prisma.user.findMany({
-      where: { tenantId, isActive: true, monthlySalary: { gt: 0 } },
-      select: { id: true, monthlySalary: true, createdAt: true },
+      where: { tenantId, monthlySalary: { gt: 0 } },
+      select: { id: true, monthlySalary: true, createdAt: true, isActive: true },
     }),
     prisma.recurringExpense.findMany({
       where: { tenantId, isActive: true },
@@ -155,7 +158,21 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
       where: { tenantId, isDeleted: false, kind: 'SALARY', paidAt: period },
       select: { employeeId: true, amount: true },
     }),
+    // يوم تعطيل كل موظف — من سجلّ التدقيق، الأحدث أولاً.
+    prisma.auditLog.findMany({
+      where: { tenantId, action: 'user.deactivate', entityType: 'User' },
+      orderBy: { createdAt: 'desc' },
+      select: { entityId: true, createdAt: true },
+    }),
   ]);
+
+  // آخر تعطيلٍ لكل موظف معطَّل. المعطَّل بلا تاريخٍ مسجَّل يبقى خارج الحساب كما
+  // كان — لا يُخمَّن له يوم.
+  const stoppedAt = new Map<string, number>();
+  for (const d of deactivations) {
+    if (d.entityId && !stoppedAt.has(d.entityId)) stoppedAt.set(d.entityId, d.createdAt.getTime());
+  }
+  const staff = allStaff.filter((u) => u.isActive || stoppedAt.has(u.id));
 
   // ── المبيعات وتكلفة البضاعة ──
   const invoiced = dec(invoiceAgg._sum.total ?? 0);
@@ -218,13 +235,20 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
   const live = winStart !== null && winStart < winEnd;
   const months = live ? monthsBetween(new Date(winStart), new Date(winEnd)) : 0;
 
-  const salariesMonthly = staff.reduce((s, u) => s.plus(dec(u.monthlySalary ?? 0)), dec(0));
+  // فاتورة الرواتب الشهرية: النشطون وحدهم — المعطَّل لا راتب له من الآن.
+  const salariesMonthly = staff
+    .filter((u) => u.isActive)
+    .reduce((s, u) => s.plus(dec(u.monthlySalary ?? 0)), dec(0));
   let salaries = dec(0);
+  let staffCount = 0;
   if (live) {
     for (const u of staff) {
       const start = Math.max(winStart, u.createdAt.getTime());
-      if (start < winEnd) {
-        salaries = salaries.plus(dec(u.monthlySalary ?? 0).times(monthsBetween(new Date(start), new Date(winEnd))));
+      // المعطَّل حتى يوم تعطيله: راتبه يقف من يومها، ولا يُمحى ما قبله.
+      const end = u.isActive ? winEnd : Math.min(winEnd, stoppedAt.get(u.id) ?? winStart);
+      if (start < end) {
+        staffCount += 1;
+        salaries = salaries.plus(dec(u.monthlySalary ?? 0).times(monthsBetween(new Date(start), new Date(end))));
       }
     }
   }
@@ -274,7 +298,7 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
     expensesCount: expensesAgg._count._all,
     salaries: salariesShare,
     salariesMonthly,
-    staffCount: staff.length,
+    staffCount,
     fixed,
     fixedMonthly,
     fixedNames: recurring.map((r) => r.nameAr),
