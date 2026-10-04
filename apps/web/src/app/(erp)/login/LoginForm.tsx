@@ -1,24 +1,29 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useEffect } from 'react';
 import { useFormStatus } from 'react-dom';
 import { loginAction, type LoginState } from './actions';
 
-function SubmitButton() {
+function SubmitButton({ entering }: { entering: boolean }) {
   const { pending } = useFormStatus();
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || entering}
       className="w-full rounded-lg bg-brand px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-60"
     >
-      {pending ? 'جارٍ الدخول…' : 'تسجيل الدخول'}
+      {pending || entering ? 'جارٍ الدخول…' : 'تسجيل الدخول'}
     </button>
   );
 }
 
 export function LoginForm() {
   const [state, formAction] = useActionState<LoginState, FormData>(loginAction, {});
+
+  // دخولٌ ناجح: تحميلٌ كامل للوجهة — لا رجوع لصفحة الدخول بزرّ «رجوع».
+  useEffect(() => {
+    if (state.to) window.location.replace(state.to);
+  }, [state.to]);
 
   return (
     <form action={formAction} className="space-y-5" noValidate>
@@ -76,7 +81,7 @@ export function LoginForm() {
         </p>
       )}
 
-      <SubmitButton />
+      <SubmitButton entering={Boolean(state.to)} />
     </form>
   );
 }

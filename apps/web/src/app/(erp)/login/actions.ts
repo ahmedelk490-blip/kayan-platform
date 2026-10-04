@@ -19,6 +19,8 @@ const LoginSchema = z.object({
 export interface LoginState {
   error?: string;
   fieldErrors?: Record<string, string>;
+  /** وجهة الدخول الناجح — ينتقل إليها المتصفح نفسه (انظر آخر loginAction). */
+  to?: string;
 }
 
 /**
@@ -124,7 +126,13 @@ export async function loginAction(
   });
 
   // Role decides the destination — the whole point of the single login page.
-  redirect(landingPathFor(user.role.key));
+  //
+  // تُرجَع الوجهة ويفتحها المتصفح بنفسه، لا redirect() من هنا: بعد redirect في
+  // server action يجلب Next صفحة الوجهة من الخادم إلى نفسه عبر النطاق العام
+  // (بلا مهلة) ليضمّها للردّ — وعلى الاستضافة يتعثّر ذلك («failed to get redirect
+  // response»)، فيبقى زرّ «جارٍ الدخول…» معلّقاً (بلاغ المالك). والتحميل الكامل
+  // للوجهة يجلب أحدث نسخة من الموقع بعد كل نشر.
+  return { to: landingPathFor(user.role.key) };
 }
 
 export async function logoutAction(): Promise<void> {
