@@ -94,9 +94,18 @@ export default async function ExpensesPage({
     };
   }
 
+  // مصروفات المالك خاصّةٌ به (بطلبه: «المصروفات اللي أدخلها أنا محدّ يشوفها
+  // غيري»): ما سجّله حسابٌ مالك — المدير أو مدير النظام — لا يظهر لغيرهما، لا في
+  // القائمة ولا في المجاميع ولا في الرسم. والاعتماد والحذف لهما أصلاً.
+  const owner = isOwnerRole(user.role);
+  const privacy: Prisma.SecondaryExpenseWhereInput = owner
+    ? {}
+    : { NOT: { createdBy: { role: { key: { in: ['ADMIN', 'MANAGER'] } } } } };
+
   const where: Prisma.SecondaryExpenseWhereInput = {
     tenantId: user.tenantId,
     isDeleted: false,
+    ...privacy,
     expenseDate: { gte: range.from, lte: range.to },
     ...(statusFilter ? { status: statusFilter } : {}),
     ...(query.q ? { OR: [{ number: { contains: query.q } }, { notes: { contains: query.q } }] } : {}),
@@ -125,6 +134,7 @@ export default async function ExpensesPage({
       where: {
         tenantId: user.tenantId,
         isDeleted: false,
+        ...privacy,
         status: 'APPROVED',
         expenseDate: { gte: range.from, lte: range.to },
       },
@@ -153,6 +163,7 @@ export default async function ExpensesPage({
       where: {
         tenantId: user.tenantId,
         isDeleted: false,
+        ...privacy,
         status: 'APPROVED',
         expenseDate: { gte: range.from, lte: range.to },
       },
@@ -163,6 +174,7 @@ export default async function ExpensesPage({
       where: {
         tenantId: user.tenantId,
         isDeleted: false,
+        ...privacy,
         status: 'APPROVED',
         expenseDate: { gte: range.from, lte: range.to },
       },
@@ -174,6 +186,7 @@ export default async function ExpensesPage({
       where: {
         tenantId: user.tenantId,
         isDeleted: false,
+        ...privacy,
         status: 'APPROVED',
         expenseDate: { gte: range.from, lte: range.to },
       },
@@ -184,6 +197,7 @@ export default async function ExpensesPage({
       where: {
         tenantId: user.tenantId,
         isDeleted: false,
+        ...privacy,
         status: 'PENDING',
         expenseDate: { gte: range.from, lte: range.to },
       },
@@ -199,7 +213,6 @@ export default async function ExpensesPage({
 
   const canWrite = allows(user, 'expenses.write');
   const canApprove = allows(user, 'expenses.approve');
-  const owner = isOwnerRole(user.role);
 
   // مصاريف توصيلٍ على الزبون سُجّلت قبل التصحيح — تُعرض على المدير ليحذفها.
   const customerDelivery = canApprove ? await customerPaidDeliveryExpenses(user.tenantId) : [];
@@ -232,7 +245,7 @@ export default async function ExpensesPage({
 
   // مصروفات بمبالغ غير منطقية (فوق مليار) — تُفسد كل التقارير حتى تُحذف.
   const suspicious = await prisma.secondaryExpense.findMany({
-    where: { tenantId: user.tenantId, isDeleted: false, amount: { gt: 1_000_000_000 } },
+    where: { tenantId: user.tenantId, isDeleted: false, ...privacy, amount: { gt: 1_000_000_000 } },
     select: { number: true, amount: true },
     take: 3,
   });
