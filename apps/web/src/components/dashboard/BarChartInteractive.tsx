@@ -16,6 +16,12 @@ export interface ChartPoint {
  * ليبقى الحزمة صغيرة والبناء سريعاً على الاستضافة المحدودة الموارد.
  * الأشهر الفارغة تظهر بعمود ضئيل لا صفر مخفيّ — الفجوة تُرى.
  */
+/**
+ * تسمية المحور: الشهر وحده من «2026-09» — اثنا عشر «2026-09» لا تتّسع لعرض
+ * جوال فكانت تدفع الصفحة كلها خارج الشاشة. التلميح يبقى بالتسمية كاملة.
+ */
+const axisLabel = (label: string) => (/^\d{4}-\d{2}$/.test(label) ? label.slice(5) : label);
+
 export function BarChartInteractive({ points }: { points: ChartPoint[] }) {
   const [active, setActive] = useState<number | null>(null);
   const max = Math.max(...points.map((p) => p.value), 1);
@@ -34,7 +40,7 @@ export function BarChartInteractive({ points }: { points: ChartPoint[] }) {
               onMouseLeave={() => setActive(null)}
               onFocus={() => setActive(i)}
               onBlur={() => setActive(null)}
-              className="group relative flex h-full flex-1 cursor-default flex-col items-center justify-end"
+              className="group relative flex h-full min-w-0 flex-1 cursor-default flex-col items-center justify-end"
               aria-label={`${p.label}: ${p.display ?? p.value}`}
             >
               {on && (
@@ -54,8 +60,8 @@ export function BarChartInteractive({ points }: { points: ChartPoint[] }) {
       </div>
       <div className="mt-2 flex gap-1.5">
         {points.map((p, i) => (
-          <span key={i} className={`flex-1 text-center text-[0.62rem] ${active === i ? 'text-brand' : 'text-txt-4'}`}>
-            {p.label}
+          <span key={i} className={`min-w-0 flex-1 text-center text-[0.62rem] ${active === i ? 'text-brand' : 'text-txt-4'}`}>
+            {axisLabel(p.label)}
           </span>
         ))}
       </div>

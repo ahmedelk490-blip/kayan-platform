@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { dec, formatMoney, PAYMENT_METHOD_AR, ORDER_SOURCE_AR } from '@erp/domain';
-import { requirePermission } from '@/lib/guard';
+import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { realProfit } from '@/lib/profit';
+import type { SearchParams } from '@/lib/query';
 import { isDeliveryDesc } from '@/lib/delivery';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table } from '@/components/crud/Shell';
@@ -11,17 +13,37 @@ import { categoryOf } from '@/app/(erp)/returns/category';
 
 export const metadata: Metadata = { title: 'يومية اليوم' };
 
-/** يوم العراق (UTC+3): من منتصف ليل بغداد إلى منتصف الليل التالي. */
-function iraqDayWindow(): { start: Date; end: Date; label: string } {
-  const OFFSET = 3 * 60 * 60 * 1000;
-  const nowIraq = new Date(Date.now() + OFFSET);
-  const start = new Date(
-    Date.UTC(nowIraq.getUTCFullYear(), nowIraq.getUTCMonth(), nowIraq.getUTCDate()) - OFFSET,
-  );
+const OFFSET = 3 * 60 * 60 * 1000;
+const DAY = 24 * 60 * 60 * 1000;
+const keyOf = (ms: number) => new Date(ms + OFFSET).toISOString().slice(0, 10);
+
+/**
+ * يوم العراق (UTC+3) المختار — أو اليوم إن لم يُختر (بطلب المالك: «أريد أحدّد
+ * تاريخ اليوم حتى أعرف تفاصيل الفواتير وعدد القطع ونوعهن»). من منتصف ليل
+ * بغداد إلى التالي. يومٌ بعد اليوم لا يومية له فيُردّ إلى اليوم.
+ */
+function dayWindow(raw: string | undefined) {
+  const today = keyOf(Date.now());
+  const key = /^\d{4}-\d{2}-\d{2}$/.test(raw ?? '') && raw! <= today ? raw! : today;
+  const [y, m, d] = key.split('-').map(Number);
+  const start = new Date(Date.UTC(y, m - 1, d) - OFFSET);
   return {
     start,
-    end: new Date(start.getTime() + 24 * 60 * 60 * 1000),
-    label: nowIraq.toLocaleDateString('ar-EG', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }),
+    end: new Date(start.getTime() + DAY),
+    key,
+    isToday: key === today,
+    prev: keyOf(start.getTime() - DAY),
+    next: keyOf(start.getTime() + DAY),
+    // أول الشهر وعدد أيامه — للشهر الذي فيه اليوم المختار لا الشهر الجاري.
+    monthStart: new Date(Date.UTC(y, m - 1, 1) - OFFSET),
+    daysInMonth: new Date(Date.UTC(y, m, 0)).getUTCDate(),
+    label: new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('ar-EG', {
+      timeZone: 'UTC',
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      ...(key.slice(0, 4) === today.slice(0, 4) ? {} : { year: 'numeric' }),
+    }),
   };
 }
 
@@ -30,19 +52,16 @@ function iraqDayWindow(): { start: Date; end: Date; label: string } {
  * قبضنا وبأي طريقة، كم رجع، كم صرفنا، وما أفضل صنف. كل الأرقام ليوم العراق
  * الحالي، حيّة من قاعدة البيانات.
  */
-export default async function DailyPage() {
+export default async function DailyPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const user = await requirePermission('reports.view');
-  const { start, end, label } = iraqDayWindow();
+  const rawDate = (await searchParams).date;
+  const day = dayWindow(Array.isArray(rawDate) ? rawDate[0] : rawDate);
+  const { start, end, label, monthStart, daysInMonth } = day;
   const window = { gte: start, lt: end };
+  // ربح اليوم فيه تكلفة البضاعة — شأن المالك وحده (cost.view) كصفحة الأرباح.
+  const seeProfit = allows(user, 'cost.view');
 
-  // أول الشهر بتوقيت بغداد — لمبيعات الشهر حسب النوع.
-  const monthStart = (() => {
-    const OFFSET = 3 * 60 * 60 * 1000;
-    const ref = new Date(Date.now() + OFFSET);
-    return new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), 1) - OFFSET);
-  })();
-
-  const [invoices, payments, returns, expenses, monthLines, staff, recurring] = await Promise.all([
+  const [invoices, payments, returns, expenses, monthLines, staff, recurring, rp] = await Promise.all([
     prisma.invoice.findMany({
       where: {
         tenantId: user.tenantId,
@@ -86,7 +105,8 @@ export default async function DailyPage() {
           tenantId: user.tenantId,
           isDeleted: false,
           status: { notIn: ['DRAFT', 'VOID'] },
-          issueDate: { gte: monthStart },
+          // من أول شهر اليوم المختار حتى نهايته — لا ما بعده.
+          issueDate: { gte: monthStart, lt: end },
         },
       },
       select: { description: true, quantity: true, lineTotal: true },
@@ -100,6 +120,8 @@ export default async function DailyPage() {
       where: { tenantId: user.tenantId, isActive: true },
       select: { amount: true },
     }),
+    // ربح اليوم من مصدر صفحة الأرباح نفسه — فلا يخرج للّيوم رقمان.
+    seeProfit ? realProfit(user.tenantId, start, new Date(end.getTime() - 1)) : Promise.resolve(null),
   ]);
 
   // ── الالتزامات الثابتة، مقسومةً على أيام الشهر ─────────────
@@ -110,11 +132,6 @@ export default async function DailyPage() {
   //
   // والقسمة على أيام الشهر الجاري لا على ثلاثين ثابتة: شباط تسعةٌ وعشرون
   // يوماً والراتب نفسه، فحصّة يومه أكبر فعلاً.
-  const daysInMonth = (() => {
-    const OFFSET = 3 * 60 * 60 * 1000;
-    const ref = new Date(Date.now() + OFFSET);
-    return new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth() + 1, 0)).getUTCDate();
-  })();
   const salariesMonthly = staff.reduce((s, e) => s.plus(dec(e.monthlySalary ?? 0)), dec(0));
   const recurringMonthly = recurring.reduce((s, r) => s.plus(dec(r.amount)), dec(0));
   const salariesDaily = salariesMonthly.dividedBy(daysInMonth);
@@ -177,12 +194,62 @@ export default async function DailyPage() {
   const obligationsToday = approvedExpenses.plus(fixedDaily);
   const cashNet = (byMethod.get('CASH') ?? dec(0)).minus(approvedExpenses).minus(fixedDaily);
 
+  // سطر «كيف خرج ربح اليوم» — البنود غير الصفرية وحدها.
+  const profitLine = rp
+    ? [
+        `مبيعات ${formatMoney(rp.sales)}`,
+        rp.returns.gt(0) ? `مرتجعات ${formatMoney(rp.returns)}` : null,
+        `تكلفة البضاعة ${formatMoney(rp.cogs)}`,
+        rp.expenses.gt(0) ? `مصاريف معتمدة ${formatMoney(rp.expenses)}` : null,
+        `حصّة اليوم من الرواتب والثابت ${formatMoney(rp.salaries.plus(rp.fixed))}`,
+        rp.bonuses.gt(0) ? `مكافآت ${formatMoney(rp.bonuses)}` : null,
+        rp.damage.gt(0) ? `هالك ${formatMoney(rp.damage)}` : null,
+      ]
+        .filter(Boolean)
+        .join(' − ') + (rp.penalties.gt(0) ? ` + جزاءات ${formatMoney(rp.penalties)}` : '')
+    : '';
+
   return (
     <AppShell user={user} title="يومية اليوم">
       <ModuleHeader
-        title={`يومية اليوم — ${label}`}
+        title={`${day.isToday ? 'يومية اليوم' : 'يومية'} — ${label}`}
         action={<Link href="/reports" className="erp-btn-ghost">كل التقارير</Link>}
       />
+
+      {/* اختيار اليوم — ليُرى أيُّ يومٍ مضى بفواتيره وقطعه وأنواعها (بطلب المالك). */}
+      <form
+        method="get"
+        action="/reports/daily"
+        className="mb-5 flex flex-wrap items-end gap-2 rounded-xl border border-line bg-card-2 p-3"
+      >
+        <label className="block">
+          <span className="mb-1 block text-[0.7rem] text-txt-3">التاريخ</span>
+          <input
+            type="date"
+            name="date"
+            defaultValue={day.key}
+            max={keyOf(Date.now())}
+            dir="ltr"
+            className="erp-input w-44 py-2 text-start"
+          />
+        </label>
+        <button type="submit" className="erp-btn py-2">
+          عرض
+        </button>
+        <Link href={`/reports/daily?date=${day.prev}`} className="erp-btn-ghost py-2">
+          اليوم السابق
+        </Link>
+        {!day.isToday && (
+          <>
+            <Link href={`/reports/daily?date=${day.next}`} className="erp-btn-ghost py-2">
+              اليوم التالي
+            </Link>
+            <Link href="/reports/daily" className="erp-btn-ghost py-2">
+              اليوم
+            </Link>
+          </>
+        )}
+      </form>
 
       {/* الأرقام الأربعة التي يُقفل بها اليوم. */}
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
@@ -237,6 +304,33 @@ export default async function DailyPage() {
           {formatMoney(cashNet)}
         </p>
       </div>
+
+      {/* ربح اليوم (بطلب المالك) — من lib/profit كصفحة الأرباح، فلا يخرج لليوم ربحان:
+          مبيعاته ناقص تكلفة بضاعتها ومصاريفه المعتمدة وحصّته من الرواتب والثابت. */}
+      {rp && (
+        <div
+          className={`erp-card mb-6 flex flex-wrap items-center justify-between gap-3 border-s-4 p-5 ${
+            rp.net.lt(0) ? 'border-s-bad' : 'border-s-ok'
+          }`}
+        >
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-txt">ربح اليوم</p>
+            <p className="tnum mt-0.5 text-[0.7rem] leading-[1.8] text-txt-4">{profitLine}</p>
+            {rp.missingCost.pieces > 0 && (
+              <p className="mt-1 text-[0.7rem] leading-[1.8] text-warn">
+                ⚠ {rp.missingCost.pieces} قطعة بيعت بلا تكلفة مسجّلة — الربح أعلى من حقيقته حتى تُسجَّل في{' '}
+                <Link href="/catalog/costs" className="font-semibold underline">
+                  «الأسعار والتكاليف»
+                </Link>
+                .
+              </p>
+            )}
+          </div>
+          <p className={`tnum text-2xl font-bold ${rp.net.lt(0) ? 'text-bad' : 'text-ok'}`}>
+            {formatMoney(rp.net)}
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
         {/* فواتير اليوم — مختصرة، والصف كله يفتح الفاتورة. */}

@@ -48,7 +48,9 @@ export function DonutChartInteractive({ points }: { points: ChartPoint[] }) {
           />
         ))}
       </svg>
-      <ul className="flex-1 space-y-1.5">
+      {/* w-full: في العمود (الجوال) كان items-center يجعل القائمة بعرض محتواها
+          فتخرج عن الشاشة؛ min-w-0: في الصفّ تنكمش فتُقصّ التسميات لا الصفحة. */}
+      <ul className="w-full min-w-0 flex-1 space-y-1.5">
         {segs.map((s) => (
           <li
             key={s.i}

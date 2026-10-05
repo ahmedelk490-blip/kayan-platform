@@ -53,11 +53,11 @@ export function ReportFilter({
       <form method="get" action={basePath} className="flex flex-wrap items-end gap-2 rounded-xl border border-line bg-card-2 p-3">
         <label className="block">
           <span className="mb-1 block text-[0.7rem] text-txt-3">من</span>
-          <input type="date" name="from" defaultValue={from} dir="ltr" className="erp-input py-2 text-start" />
+          <input type="date" name="from" defaultValue={from} dir="ltr" className="erp-input w-44 py-2 text-start" />
         </label>
         <label className="block">
           <span className="mb-1 block text-[0.7rem] text-txt-3">إلى</span>
-          <input type="date" name="to" defaultValue={to} dir="ltr" className="erp-input py-2 text-start" />
+          <input type="date" name="to" defaultValue={to} dir="ltr" className="erp-input w-44 py-2 text-start" />
         </label>
         <button type="submit" className="erp-btn py-2">تطبيق المدى</button>
         {period === null && (

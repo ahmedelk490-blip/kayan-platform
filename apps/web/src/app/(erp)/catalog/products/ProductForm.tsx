@@ -225,13 +225,15 @@ function DozenSection({ values, seeCosts }: { values?: ProductValues; seeCosts: 
   const totalPrice = dozens * dozenPrice;
 
   return (
-    <div className="rounded-xl border border-brand/30 bg-brand-soft/40 p-4">
+    <div className="@container rounded-xl border border-brand/30 bg-brand-soft/40 p-4">
       <h3 className="mb-1 text-sm font-semibold text-brand">نظام الدستة</h3>
       <p className="mb-4 text-[0.7rem] leading-[1.8] text-txt-4">
         كل منتج قد تختلف دستته: اكتب كم قطعة في الدستة{seeCosts ? '، وتكلفة الدستة وسعرها' : ' وسعرها'} — وتُحسب
         تكلفة/سعر القطعة تلقائياً. المخزون يُعرض بالدست والقطعة على هذا الأساس.
       </p>
-      <div className={`grid gap-4 ${seeCosts ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+      {/* بعرض القسم لا الشاشة: في صفحة المنتج عمودٌ بجانب جدول، فأربع خانات
+          بعرض الشاشة كانت تقصّ «108000» داخل خانة ٩٠px. */}
+      <div className={`grid gap-4 @sm:grid-cols-2 ${seeCosts ? '@xl:grid-cols-4' : '@lg:grid-cols-3'}`}>
         <label className="block">
           <span className="mb-1.5 block text-xs text-txt-2">عدد الدست</span>
           <input type="number" min="0" step="1" dir="ltr" value={dozens}

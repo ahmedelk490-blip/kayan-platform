@@ -316,11 +316,11 @@ export default async function ExpensesPage({
         {statusFilter && <input type="hidden" name="status" value={statusFilter} />}
         <label className="block">
           <span className="mb-1 block text-[0.7rem] text-txt-3">من</span>
-          <input type="date" name="from" defaultValue={rawFrom} dir="ltr" className="erp-input py-2 text-start" />
+          <input type="date" name="from" defaultValue={rawFrom} dir="ltr" className="erp-input w-44 py-2 text-start" />
         </label>
         <label className="block">
           <span className="mb-1 block text-[0.7rem] text-txt-3">إلى</span>
-          <input type="date" name="to" defaultValue={rawTo} dir="ltr" className="erp-input py-2 text-start" />
+          <input type="date" name="to" defaultValue={rawTo} dir="ltr" className="erp-input w-44 py-2 text-start" />
         </label>
         <button type="submit" className="erp-btn py-2">تطبيق</button>
         <Link href="/expenses" className="erp-btn-ghost py-2">مسح</Link>

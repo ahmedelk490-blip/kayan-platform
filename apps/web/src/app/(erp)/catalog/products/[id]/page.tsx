@@ -199,7 +199,9 @@ export default async function ProductDetailPage({
         </section>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_1fr]">
+      {/* minmax(0,…): عمودٌ فيه جدولٌ عريض كان يفرض عرضه فيعصر فورم البيانات
+          إلى ٩٢px — الجدول يتمرّر داخل بطاقته بدل ذلك. */}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         <section className="erp-card p-6">
           <h3 className="mb-5 text-sm font-semibold text-brand">البيانات</h3>
           <ProductForm

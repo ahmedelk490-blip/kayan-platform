@@ -31,6 +31,13 @@ type Amount = Parameters<typeof dec>[0];
  */
 
 const BAGHDAD = 3 * 60 * 60 * 1000;
+const DAY = 86_400_000;
+
+/** منتصف ليل بغداد لليوم الذي تقع فيه اللحظة. */
+function dayStart(ms: number): number {
+  const b = new Date(ms + BAGHDAD);
+  return Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), b.getUTCDate()) - BAGHDAD;
+}
 
 /** كم شهراً (بكسوره) بين لحظتين — كل شهرٍ بعدد أيامه، كيومية اليوم. */
 export function monthsBetween(start: Date, end: Date): number {
@@ -229,9 +236,13 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
   // من أول يوم عملٍ مسجَّل (أو بداية المدى إن كانت بعده) حتى نهاية المدى أو
   // اليوم أيّهما أسبق: سنةٌ كاملة لا تُحمَّل رواتب أشهرٍ لم تأتِ، ولا أشهرٍ قبل
   // أن يُستعمل النظام. وراتب الموظف من يوم إضافة حسابه.
+  //
+  // بأيامٍ كاملة بتقويم بغداد، واليوم الجاري يومٌ كامل: كانت الحصّة تُحسب حتى
+  // الدقيقة الحالية، فيُحمَّل «اليوم» عند السابعة مساءً ٠٫٧٨ منه — ١٬٥٣٠٬٠٠٠ ÷ ٣١
+  // = ٤٩٬٣٥٥ ظهرت ٣٨٬٨٥٧ (بلاغ المالك)، ويومية اليوم تقسم على أيام الشهر كاملة.
   const firstDay = firstInvoice?.issueDate?.getTime() ?? null;
-  const winStart = firstDay === null ? null : Math.max(from.getTime(), firstDay);
-  const winEnd = Math.min(to.getTime(), Date.now());
+  const winStart = firstDay === null ? null : Math.max(from.getTime(), dayStart(firstDay));
+  const winEnd = Math.min(to.getTime(), dayStart(Date.now()) + DAY);
   const live = winStart !== null && winStart < winEnd;
   const months = live ? monthsBetween(new Date(winStart), new Date(winEnd)) : 0;
 
@@ -243,9 +254,10 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
   let staffCount = 0;
   if (live) {
     for (const u of staff) {
-      const start = Math.max(winStart, u.createdAt.getTime());
-      // المعطَّل حتى يوم تعطيله: راتبه يقف من يومها، ولا يُمحى ما قبله.
-      const end = u.isActive ? winEnd : Math.min(winEnd, stoppedAt.get(u.id) ?? winStart);
+      const start = Math.max(winStart, dayStart(u.createdAt.getTime()));
+      // المعطَّل حتى آخر يوم تعطيله: راتبه يقف من اليوم التالي، ولا يُمحى ما قبله.
+      const stop = stoppedAt.get(u.id);
+      const end = u.isActive ? winEnd : Math.min(winEnd, stop === undefined ? winStart : dayStart(stop) + DAY);
       if (start < end) {
         staffCount += 1;
         salaries = salaries.plus(dec(u.monthlySalary ?? 0).times(monthsBetween(new Date(start), new Date(end))));
@@ -304,7 +316,8 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
     fixedNames: recurring.map((r) => r.nameAr),
     months,
     obligationsFrom: live ? new Date(winStart) : null,
-    obligationsTo: live ? new Date(winEnd) : null,
+    // آخر لحظةٍ من آخر يوم — نهاية المدى حصريّة، فلا يُعرض اليوم التالي.
+    obligationsTo: live ? new Date(winEnd - 1) : null,
     bonuses,
     bonusesCount: bonusesAgg._count._all,
     damage,
