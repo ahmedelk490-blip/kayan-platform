@@ -166,6 +166,8 @@ export const ROLE_PERMISSIONS: Record<RoleKey, PermissionKey[]> = {
 
   MANAGER: [
     'dashboard.view',
+    // كل صلاحيات مدير النظام — صاحب المصنع يرى ما يراه (بطلبه).
+    'portal.view',
     // صاحب المصنع هو «المدير» في هذا النظام أحاديّ الشركة: حجبُ صفحة إدارة
     // النظام عنه كان يحجب عنه نسخه الاحتياطية وبياناته هو — ولا يملك أن
     // يمنح نفسه الصلاحية (المستخدم لا يعدّل صلاحيات نفسه، عمداً).
@@ -374,7 +376,9 @@ export function userCan(
   overrides: PermissionOverrides | undefined,
   permission: PermissionKey,
 ): boolean {
-  if (overrides?.deny?.includes(permission)) return false;
+  // المالك (المدير ومدير النظام) لا يُسحب منه شيء (بطلب المالك: «كل الصلاحيات
+  // تظهر زي صاحب النظام») — منعٌ وُضع على حسابه كان يُخفي عنه أرباحه ومصروفاته.
+  if (overrides?.deny?.includes(permission) && !isOwnerRole(role)) return false;
   if (can(role, permission)) return true;
   return overrides?.grant?.includes(permission) ?? false;
 }
@@ -386,7 +390,7 @@ export function effectivePermissions(
 ): PermissionKey[] {
   const set = new Set<PermissionKey>(role ? ROLE_PERMISSIONS[role] : []);
   for (const g of overrides?.grant ?? []) set.add(g);
-  for (const d of overrides?.deny ?? []) set.delete(d);
+  if (!isOwnerRole(role)) for (const d of overrides?.deny ?? []) set.delete(d);
   return [...set];
 }
 
