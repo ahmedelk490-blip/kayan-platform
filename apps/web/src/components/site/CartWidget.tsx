@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { subscribe, getSnapshot, setQty, removeItem, clearCart, type CartItem } from '@/lib/cart';
-import { track, priceFromText } from '@/lib/meta-pixel';
+import { track, priceFromText, toMetaValue, META_CURRENCY } from '@/lib/meta-pixel';
 
 /** محتوى السلّة بصيغة أحداث Meta — المعرّفات والقطع وقيمةٌ تقريبية. */
 function cartParams(items: CartItem[]) {
@@ -12,8 +12,8 @@ function cartParams(items: CartItem[]) {
     content_ids: [...new Set(items.map((i) => i.productId))],
     content_type: 'product',
     num_items: pieces,
-    value: items.reduce((s, i) => s + priceFromText(i.priceText) * i.quantity, 0),
-    currency: 'IQD',
+    value: toMetaValue(items.reduce((s, i) => s + priceFromText(i.priceText) * i.quantity, 0)),
+    currency: META_CURRENCY,
   };
 }
 

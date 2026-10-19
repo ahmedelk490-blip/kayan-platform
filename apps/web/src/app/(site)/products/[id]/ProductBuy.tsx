@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { addToCart, itemKey, openCart } from '@/lib/cart';
-import { track, priceFromText } from '@/lib/meta-pixel';
+import { track, priceFromText, toMetaValue, META_CURRENCY } from '@/lib/meta-pixel';
 
 interface Tier {
   service: string;
@@ -109,8 +109,8 @@ export function ProductBuy({
       content_name: productName,
       content_type: 'product',
       num_items: pieces,
-      value: priceFromText(priceText) * pieces,
-      currency: 'IQD',
+      value: toMetaValue(priceFromText(priceText) * pieces),
+      currency: META_CURRENCY,
     });
     if (openAfter) openCart();
     else {

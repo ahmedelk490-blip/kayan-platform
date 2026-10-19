@@ -24,6 +24,16 @@ export function track(event: string, params?: Record<string, unknown>, eventId?:
   fbq?.('track', event, params, eventId ? { eventID: eventId } : undefined);
 }
 
+/**
+ * Meta لا تقبل الدينار العراقي (IQD) عملةً — يُرفض Purchase بلا عملةٍ صالحة.
+ * فالقيمة تُرسَل بالدولار بسعر البنك المركزي الرسمي (1,310 دينار).
+ */
+export const META_CURRENCY = "USD";
+export const IQD_PER_USD = 1310;
+export function toMetaValue(iqd: number): number {
+  return iqd > 0 ? Math.round((iqd / IQD_PER_USD) * 100) / 100 : 0;
+}
+
 /** أول رقمٍ في نص السعر («تطريز 15,000 IQD · …») — قيمةٌ تقريبية للإعلانات. */
 export function priceFromText(text: string | undefined): number {
   const m = /(\d[\d,]*)/.exec(text ?? '');

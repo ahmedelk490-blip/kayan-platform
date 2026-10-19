@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createWebOrder, type WebOrderItem } from '@/lib/orders';
 import { sendCapiEvents } from '@/lib/meta-capi';
+import { META_CURRENCY } from '@/lib/meta-pixel';
 
 export const runtime = 'nodejs';
 
@@ -128,8 +129,8 @@ export async function POST(request: Request) {
     const eventId = `order-${created.number}`;
     const raw = body as { value?: unknown };
     const custom = {
-      currency: 'IQD',
-      value: Number(raw.value) > 0 ? Math.round(Number(raw.value)) : 0,
+      currency: META_CURRENCY,
+      value: Number(raw.value) > 0 ? Number(raw.value) : 0,
       content_ids: [...new Set(result.value.items.map((i) => i.productId))],
       content_type: 'product',
       num_items: result.value.items.reduce((s, i) => s + i.quantity, 0),
