@@ -49,7 +49,7 @@ export function ProductImages({
                 <Image src={img.src} alt="" fill sizes="120px" className="object-cover" unoptimized={img.isUploaded} />
               </div>
               {img.isPrimary && (
-                <span className="absolute right-1 top-1 rounded bg-brand px-1.5 py-0.5 text-[0.6rem] text-white">
+                <span className="absolute right-1 top-1 rounded bg-brand px-1.5 py-0.5 text-xs text-white">
                   الأساسية
                 </span>
               )}
@@ -57,23 +57,23 @@ export function ProductImages({
               <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/55 p-1 opacity-0 transition-opacity group-hover:opacity-100">
                 {!img.isPrimary && (
                   <form action={setPrimary.bind(null, img.id)}>
-                    <button type="submit" title="تعيين كأساسية" className="rounded px-1.5 py-0.5 text-[0.6rem] text-white hover:text-brand">
+                    <button type="submit" title="تعيين كأساسية" className="rounded px-1.5 py-0.5 text-xs text-white hover:text-brand">
                       ★
                     </button>
                   </form>
                 )}
                 <form action={move.bind(null, img.id, 'up')}>
-                  <button type="submit" disabled={i === 0} title="لليمين" className="rounded px-1 text-[0.7rem] text-white hover:text-brand disabled:opacity-30">
+                  <button type="submit" disabled={i === 0} title="لليمين" className="rounded px-1 text-xs text-white hover:text-brand disabled:opacity-30">
                     ›
                   </button>
                 </form>
                 <form action={move.bind(null, img.id, 'down')}>
-                  <button type="submit" disabled={i === images.length - 1} title="لليسار" className="rounded px-1 text-[0.7rem] text-white hover:text-brand disabled:opacity-30">
+                  <button type="submit" disabled={i === images.length - 1} title="لليسار" className="rounded px-1 text-xs text-white hover:text-brand disabled:opacity-30">
                     ‹
                   </button>
                 </form>
                 <form action={remove.bind(null, img.id)}>
-                  <button type="submit" title="حذف" className="rounded px-1.5 py-0.5 text-[0.6rem] text-white hover:text-bad">
+                  <button type="submit" title="حذف" className="rounded px-1.5 py-0.5 text-xs text-white hover:text-bad">
                     حذف
                   </button>
                 </form>
@@ -101,15 +101,30 @@ export function ProductImages({
             type="file"
             name="image"
             accept="image/jpeg,image/png,image/webp,image/avif"
-            required
             onChange={(e) => {
               const f = e.target.files?.[0];
               setPreview(f ? URL.createObjectURL(f) : null);
             }}
             className="block w-full text-xs text-txt-3 file:me-3 file:rounded-md file:border-0 file:bg-brand-fill file:px-4 file:py-2 file:text-xs file:text-on-brand hover:file:opacity-90"
           />
-          <p className="mt-1 text-[0.7rem] text-txt-4">JPG أو PNG أو WebP حتى 8 ميجابايت. تُصغَّر تلقائياً.</p>
-          {state.fieldErrors?.image && <p className="mt-1 text-[0.7rem] text-bad">{state.fieldErrors.image}</p>}
+          <p className="mt-1 text-xs text-txt-4">JPG أو PNG أو WebP حتى 8 ميجابايت. تُصغَّر تلقائياً.</p>
+          {state.fieldErrors?.image && <p className="mt-1 text-xs text-bad">{state.fieldErrors.image}</p>}
+        </div>
+        {/* أو روابط من Google Drive — رابط في كل سطر، حتى 20 صورة دفعة واحدة. */}
+        <div>
+          <label htmlFor="imageUrls" className="mb-1.5 block text-xs text-txt-2">
+            أو روابط صور من Google Drive (رابط في كل سطر)
+          </label>
+          <textarea
+            id="imageUrls"
+            name="imageUrls"
+            rows={3}
+            dir="ltr"
+            placeholder="https://drive.google.com/file/d/…/view"
+            className="erp-input py-2.5 text-start text-xs"
+          />
+          <p className="mt-1 text-xs text-txt-4">الملف يكون مشارَكاً لـ«أي شخص لديه الرابط».</p>
+          {state.fieldErrors?.imageUrls && <p className="mt-1 text-xs text-bad">{state.fieldErrors.imageUrls}</p>}
         </div>
         {preview && (
           <div className="overflow-hidden rounded-lg border border-line bg-card-2">
@@ -118,7 +133,7 @@ export function ProductImages({
           </div>
         )}
         <div className="flex items-center gap-3">
-          <SubmitButton label="ارفع الصورة" />
+          <SubmitButton label="ارفع الصور" />
           {state.ok && <span className="text-xs text-ok">{state.ok}</span>}
         </div>
       </form>

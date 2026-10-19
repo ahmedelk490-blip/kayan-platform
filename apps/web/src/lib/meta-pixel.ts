@@ -18,10 +18,16 @@ type Fbq = (
  * يرسل حدثاً معيارياً إن كان البكسل محمّلاً — وإلا لا شيء. eventId يطابق ما
  * يرسله الخادم بواجهة التحويلات للحدث نفسه، فتعدّه Meta مرة واحدة.
  */
-export function track(event: string, params?: Record<string, unknown>, eventId?: string): void {
+export function track(event: string, params?: Record<string, unknown>, eventId?: string, attempt = 0): void {
   if (typeof window === 'undefined' || !META_PIXEL_ID) return;
   const fbq = (window as unknown as { fbq?: Fbq }).fbq;
-  fbq?.('track', event, params, eventId ? { eventID: eventId } : undefined);
+  // ViewContent يُطلق عند فتح الصفحة، قبل أن يُحمَّل سكربت البكسل (afterInteractive)،
+  // فكان يضيع. ننتظره قليلاً بدل إسقاط الحدث (حتى ~8 ثوانٍ).
+  if (!fbq) {
+    if (attempt < 20) setTimeout(() => track(event, params, eventId, attempt + 1), 400);
+    return;
+  }
+  fbq('track', event, params, eventId ? { eventID: eventId } : undefined);
 }
 
 /**

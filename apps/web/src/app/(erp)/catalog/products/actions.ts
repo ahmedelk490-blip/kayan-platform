@@ -1109,8 +1109,26 @@ export async function uploadProductImage(
   });
   if (!product) return { error: 'المنتج غير موجود.' };
 
-  const img = await processProductImage(formData.get('image'));
-  if ('error' in img) return { fieldErrors: { image: img.error } };
+  // ملف من الجهاز، و/أو روابط Google Drive (رابط في كل سطر) — كلها تُعالَج
+  // وتُتحقّق قبل حفظ أيّ صورة، فلا يُحفظ نصف الدفعة ثم يفشل الباقي.
+  const sources: unknown[] = [];
+  const file = formData.get('image');
+  if (file instanceof File && file.size > 0) sources.push(file);
+  const links = String(formData.get('imageUrls') ?? '').split(/\s+/).filter(Boolean);
+  if (links.length > MAX_DRIVE_LINKS) return { fieldErrors: { imageUrls: `حتى ${MAX_DRIVE_LINKS} رابطاً في المرة.` } };
+  for (const link of links) {
+    const fetched = await fetchDriveImage(link);
+    if ('error' in fetched) return { fieldErrors: { imageUrls: fetched.error } };
+    sources.push(fetched.file);
+  }
+  if (sources.length === 0) return { fieldErrors: { image: 'اختر صورة أو ألصق رابط Google Drive.' } };
+
+  const processed = [];
+  for (const source of sources) {
+    const img = await processProductImage(source);
+    if ('error' in img) return { fieldErrors: { [source === file ? 'image' : 'imageUrls']: img.error } };
+    processed.push(img);
+  }
 
   const last = await prisma.productImage.findFirst({
     where: { productId },
@@ -1118,41 +1136,83 @@ export async function uploadProductImage(
     select: { sortOrder: true },
   });
 
-  // أول صورة للمنتج تصير الأساسية تلقائياً.
-  const isPrimary = product._count.images === 0;
+  let sortOrder = last?.sortOrder ?? 0;
+  for (const [i, img] of processed.entries()) {
+    sortOrder += 1;
+    const created = await prisma.productImage.create({
+      data: {
+        productId,
+        // المسار يشير إلى مسار البايتات؛ يُحدَّث بالمعرّف بعد الإنشاء.
+        path: 'pending',
+        data: img.bytes,
+        mimeType: 'image/webp',
+        width: img.width,
+        height: img.height,
+        bytes: img.bytes.byteLength,
+        // أول صورة للمنتج تصير الأساسية تلقائياً.
+        isPrimary: product._count.images === 0 && i === 0,
+        sortOrder,
+      },
+      select: { id: true },
+    });
+    await prisma.productImage.update({
+      where: { id: created.id },
+      data: { path: `/product-img/${created.id}` },
+    });
 
-  const created = await prisma.productImage.create({
-    data: {
-      productId,
-      // المسار يشير إلى مسار البايتات؛ يُحدَّث بالمعرّف بعد الإنشاء.
-      path: 'pending',
-      data: img.bytes,
-      mimeType: 'image/webp',
-      width: img.width,
-      height: img.height,
-      bytes: img.bytes.byteLength,
-      isPrimary,
-      sortOrder: (last?.sortOrder ?? 0) + 1,
-    },
-    select: { id: true },
-  });
-  await prisma.productImage.update({
-    where: { id: created.id },
-    data: { path: `/product-img/${created.id}` },
-  });
-
-  await audit({
-    tenantId: user.tenantId,
-    userId: user.id,
-    action: 'product.update',
-    entityType: 'ProductImage',
-    entityId: created.id,
-    detail: 'رفع صورة',
-  });
+    await audit({
+      tenantId: user.tenantId,
+      userId: user.id,
+      action: 'product.update',
+      entityType: 'ProductImage',
+      entityId: created.id,
+      detail: 'رفع صورة',
+    });
+  }
 
   revalidatePath(`/catalog/products/${productId}`);
+  revalidatePath('/sales/site-products');
+  revalidatePath('/products');
   revalidatePath('/');
-  return { ok: 'أُضيفت الصورة. ظاهرة على المنتج الآن.' };
+  return {
+    ok: processed.length === 1 ? 'أُضيفت الصورة. ظاهرة على المنتج الآن.' : `أُضيفت ${processed.length} صور. ظاهرة على المنتج الآن.`,
+  };
+}
+
+const MAX_DRIVE_LINKS = 20;
+
+/**
+ * يجلب صورة من رابط Google Drive مشارَك («أي شخص لديه الرابط»).
+ *
+ * بطلب المالك: صور الموديلات على Drive، ورفعها من الجهاز صورةً صورة بطيء.
+ * لا نجلب أيّ رابط يُلصق: نستخرج معرّف الملف فقط ونبني رابط التنزيل من
+ * نطاق Google بأنفسنا، فلا يصير الخادم أداةً لطلب عناوين داخلية.
+ */
+async function fetchDriveImage(link: string): Promise<{ file: File } | { error: string }> {
+  let id: string | undefined;
+  try {
+    const url = new URL(link);
+    if (!/(^|\.)google\.com$/.test(url.hostname)) return { error: 'الرابط ليس من Google Drive.' };
+    id = /\/d\/([\w-]{20,})/.exec(url.pathname)?.[1] ?? url.searchParams.get('id') ?? undefined;
+  } catch {
+    return { error: 'رابط غير صالح.' };
+  }
+  if (!id || !/^[\w-]{20,}$/.test(id)) return { error: 'ما قدرنا نقرأ معرّف الملف من الرابط.' };
+
+  try {
+    const res = await fetch(`https://drive.usercontent.google.com/download?id=${id}&export=download`, {
+      signal: AbortSignal.timeout(20_000),
+    });
+    const type = res.headers.get('content-type')?.split(';')[0] ?? '';
+    if (!res.ok || !IMAGE_ACCEPTED.has(type)) {
+      return { error: 'تعذّر تنزيل الصورة — تأكد أن الملف صورة ومشارَك لـ«أي شخص لديه الرابط».' };
+    }
+    const buf = await res.arrayBuffer();
+    if (buf.byteLength > MAX_IMAGE_UPLOAD) return { error: 'صورة في الروابط أكبر من 8 ميجابايت.' };
+    return { file: new File([buf], `${id}.img`, { type }) };
+  } catch {
+    return { error: 'تعذّر الوصول إلى Google Drive. حاول مرة ثانية.' };
+  }
 }
 
 export async function deleteProductImage(productId: string, imageId: string): Promise<void> {
