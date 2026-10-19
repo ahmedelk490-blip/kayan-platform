@@ -33,7 +33,7 @@ export function SiteFooter() {
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
             {FOOTER_GROUPS.map((group) => (
               <nav key={group.title} aria-label={group.title}>
-                <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-body-subtle">
+                <h2 className="text-[0.7rem] font-semibold text-body-subtle">
                   {group.title}
                 </h2>
                 <ul className="mt-4 space-y-2.5">
@@ -61,6 +61,7 @@ export function SiteFooter() {
         <p
           aria-hidden="true"
           style={{ color: 'var(--wordmark-color)' }}
+          // design-guard-ignore: Latin brand wordmark (BRAND.name), not Arabic text
           className="mt-20 select-none font-display text-[clamp(3rem,14vw,11rem)] leading-none tracking-tight"
         >
           {BRAND.name}
@@ -72,6 +73,15 @@ export function SiteFooter() {
           <span>{BRAND.nameAr} — مصنع الزي الموحد والطباعة والتطريز</span>
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span>© {new Date().getFullYear()} · جميع الحقوق محفوظة</span>
+            <span className="text-body-subtle/70">·</span>
+            {/* صفحات السياسة ظاهرة لكل زائر — إعلانات Meta تشترطها على صفحة الوجهة. */}
+            <Link href="/legal/privacy" className="transition-colors hover:text-body-muted">
+              سياسة الخصوصية
+            </Link>
+            <span className="text-body-subtle/70">·</span>
+            <Link href="/legal/terms" className="transition-colors hover:text-body-muted">
+              الشروط والأحكام
+            </Link>
             <span className="text-body-subtle/70">·</span>
             <a
               href="https://qmarketingeg.com/ar"

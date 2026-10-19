@@ -5,6 +5,7 @@ import { motion } from 'motion/react';
 import { EASE } from '@erp/motion';
 import { SectionShell } from '@erp/ui-market';
 import { QUOTE_SERVICES } from '@/site';
+import { track } from '@/lib/meta-pixel';
 
 /**
  * اطلب عرض سعر.
@@ -29,7 +30,8 @@ export function QuoteForm() {
     setErrors({});
     setFailure('');
 
-    const form = new FormData(event.currentTarget);
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
     const service = String(form.get('service') ?? '');
 
     const response = await fetch('/api/leads', {
@@ -51,8 +53,12 @@ export function QuoteForm() {
     }
 
     if (response.ok) {
+      // إعلانات Meta: طلب عرض سعرٍ أُرسل.
+      const { eventId } = (await response.json().catch(() => ({}))) as { eventId?: string };
+      track('CompleteRegistration', { content_name: 'quote_form' }, eventId);
+      track('Lead', { content_name: 'quote_form' }, eventId);
       setStatus('sent');
-      event.currentTarget.reset();
+      formEl.reset();
       return;
     }
 

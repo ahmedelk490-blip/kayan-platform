@@ -3,6 +3,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { SectionShell } from '@erp/ui-market';
 import { PageHero } from '@/components/site/PageHero';
+import { FavoriteButton } from '@/components/site/FavoriteButton';
+import { ProductCardMeta } from '@/components/site/ProductCardMeta';
 import { publicProducts } from '@/lib/catalog';
 
 export const metadata: Metadata = {
@@ -49,8 +51,8 @@ export default async function ProductsPage() {
           // على الأكبر — شبكة تُقرأ كمجموعة واحدة متّسقة.
           <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
             {products.map((p) => (
+              <div key={p.id} className="relative">
               <Link
-                key={p.id}
                 href={`/products/${p.id}`}
                 aria-label={`تفاصيل ${p.nameAr}`}
                 className="group relative block overflow-hidden rounded-2xl border border-edge-strong bg-panel/70 transition-all duration-300 hover:border-brand/50 hover:shadow-[0_24px_50px_-28px_rgba(0,0,0,0.7)]"
@@ -71,13 +73,16 @@ export default async function ProductsPage() {
                   )}
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent p-4 pt-12">
                     <h2 className="text-base font-semibold text-white">{p.nameAr}</h2>
-                    <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-white/85">
-                      شوف التفاصيل
-                      <span aria-hidden className="transition-transform duration-300 group-hover:-translate-x-1">←</span>
-                    </span>
+                    <ProductCardMeta product={p} />
                   </div>
                 </div>
               </Link>
+              {/* قلب المفضلة بجانب الرابط لا داخله. */}
+              <FavoriteButton
+                item={{ productId: p.id, productName: p.nameAr, image: p.image }}
+                className="absolute end-2 top-2 z-10"
+              />
+              </div>
             ))}
           </div>
         )}

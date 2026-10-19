@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
+import { track } from '@/lib/meta-pixel';
 
 /**
  * زر التواصل عبر واتساب.
@@ -35,6 +36,7 @@ export function WhatsAppButton({ href }: { href: string | null }) {
       target="_blank"
       rel="noopener noreferrer"
       aria-label="تواصل معنا عبر واتساب"
+      onClick={() => track('Contact', { method: 'whatsapp' })}
       initial={false}
       animate={
         shown

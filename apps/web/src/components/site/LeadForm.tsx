@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { cn } from '@erp/utils';
+import { track } from '@/lib/meta-pixel';
 import { PRODUCTS } from '@/site';
 
 type Status = 'idle' | 'submitting' | 'success' | 'error';
@@ -41,6 +42,10 @@ export function LeadForm() {
       });
 
       if (response.ok) {
+        // إعلانات Meta: طلب عرض سعرٍ أُرسل.
+        const { eventId } = (await response.json().catch(() => ({}))) as { eventId?: string };
+        track('CompleteRegistration', { content_name: 'lead_form' }, eventId);
+        track('Lead', { content_name: 'lead_form' }, eventId);
         setStatus('success');
         return;
       }
@@ -97,7 +102,7 @@ export function LeadForm() {
     children: React.ReactNode;
     optional?: boolean;
   }) => (
-    <label htmlFor={htmlFor} className="mb-2 block text-xs tracking-[0.1em] text-body-muted">
+    <label htmlFor={htmlFor} className="mb-2 block text-xs text-body-muted">
       {children}
       {optional && <span className="ms-2 text-body-subtle">اختياري</span>}
     </label>
@@ -181,7 +186,7 @@ export function LeadForm() {
       </div>
 
       <fieldset>
-        <legend className="mb-3 text-xs tracking-[0.1em] text-neutral-400">
+        <legend className="mb-3 text-xs text-neutral-400">
           ما الذي تحتاجه؟
           <span className="ms-2 text-neutral-600">اختياري</span>
         </legend>

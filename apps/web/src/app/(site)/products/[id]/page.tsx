@@ -4,6 +4,8 @@ import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { publicProduct, publicColors, siteWhatsApp } from '@/lib/catalog';
 import { ProductBuy } from './ProductBuy';
+import { TrackViewContent } from '@/components/site/MetaPixel';
+import { FavoriteButton } from '@/components/site/FavoriteButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -121,9 +123,16 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               منتجات كيان
             </span>
 
-            <h1 className="mt-5 font-display text-[clamp(2.2rem,5vw,3.6rem)] font-bold leading-[1.12] text-body">
-              {product.nameAr}
-            </h1>
+            <TrackViewContent id={product.id} name={product.nameAr} />
+            <div className="mt-5 flex items-start justify-between gap-4">
+              <h1 className="font-display text-[clamp(2.2rem,5vw,3.6rem)] font-bold leading-[1.12] text-body">
+                {product.nameAr}
+              </h1>
+              <FavoriteButton
+                item={{ productId: product.id, productName: product.nameAr, image: cover }}
+                className="mt-2 shrink-0"
+              />
+            </div>
 
             {product.materials.length > 0 && (
               <div className="mt-5 flex flex-wrap gap-2">

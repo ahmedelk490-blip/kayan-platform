@@ -41,6 +41,10 @@ export interface PublicProduct {
   variantCount: number;
   /** شرائح السعر النشطة — الخدمة والكمية والسعر. */
   tiers: { service: string; minQty: number; maxQty: number | null; price: string; currency: string }[];
+  /** «يبدأ من»: أقلّ سعرٍ مضبوط في النظام (الشرائح وسعر البيع)، أو null بلا سعر. */
+  priceFrom: number | null;
+  /** عيّنات الألوان باسمها وكودها — من ألوان المنتج في النظام. */
+  swatches: { name: string; hex: string | null }[];
 }
 
 /**
@@ -84,7 +88,7 @@ async function queryProducts(): Promise<PublicProduct[]> {
       variants: {
         where: { isDeleted: false },
         select: {
-          color: { select: { nameAr: true } },
+          color: { select: { nameAr: true, hex: true } },
           size: { select: { code: true } },
         },
       },
@@ -119,6 +123,15 @@ async function queryProducts(): Promise<PublicProduct[]> {
       price: t.price.toString(),
       currency: t.currency,
     })),
+    priceFrom: (() => {
+      const prices = [...p.priceTiers.map((t) => Number(t.price)), Number(p.sellingPrice ?? 0)].filter((n) => n > 0);
+      return prices.length ? Math.min(...prices) : null;
+    })(),
+    swatches: [
+      ...new Map(
+        p.variants.filter((v) => v.color).map((v) => [v.color!.nameAr, { name: v.color!.nameAr, hex: v.color!.hex }]),
+      ).values(),
+    ],
   }));
 }
 

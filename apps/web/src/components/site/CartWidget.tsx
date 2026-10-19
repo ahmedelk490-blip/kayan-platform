@@ -3,6 +3,19 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { subscribe, getSnapshot, setQty, removeItem, clearCart, type CartItem } from '@/lib/cart';
+import { track, priceFromText } from '@/lib/meta-pixel';
+
+/** محتوى السلّة بصيغة أحداث Meta — المعرّفات والقطع وقيمةٌ تقريبية. */
+function cartParams(items: CartItem[]) {
+  const pieces = items.reduce((s, i) => s + i.quantity, 0);
+  return {
+    content_ids: [...new Set(items.map((i) => i.productId))],
+    content_type: 'product',
+    num_items: pieces,
+    value: items.reduce((s, i) => s + priceFromText(i.priceText) * i.quantity, 0),
+    currency: 'IQD',
+  };
+}
 
 /**
  * أيقونة السلة العائمة فوق زرّ الواتساب + لوحة السلة والدفع.
@@ -59,6 +72,11 @@ type Status = 'idle' | 'sending' | 'sent' | 'error';
 
 function CartDrawer({ items, onClose }: { items: CartItem[]; onClose: () => void }) {
   const [status, setStatus] = useState<Status>('idle');
+  // إعلانات Meta: فتح السلّة لإتمام الطلب — مرة عند الفتح.
+  useEffect(() => {
+    if (items.length > 0) track('InitiateCheckout', cartParams(items));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [failure, setFailure] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [orderNo, setOrderNo] = useState('');
@@ -70,6 +88,8 @@ function CartDrawer({ items, onClose }: { items: CartItem[]; onClose: () => void
     setErrors({});
     setFailure('');
     const form = new FormData(e.currentTarget);
+    // إعلانات Meta: كتب بياناته وأرسل — الدفع نفسه يُتّفق عليه مع المندوب.
+    track('AddPaymentInfo', cartParams(items));
 
     const res = await fetch('/api/orders', {
       method: 'POST',
@@ -79,6 +99,8 @@ function CartDrawer({ items, onClose }: { items: CartItem[]; onClose: () => void
         phone: String(form.get('phone') ?? ''),
         company: String(form.get('company') ?? ''),
         note: String(form.get('note') ?? ''),
+        // قيمة تقريبية لإعلانات Meta فقط — التسعير الرسمي في الفاتورة.
+        value: cartParams(items).value,
         items: items.map((i) => ({
           productId: i.productId,
           color: i.colorLabel || undefined,
@@ -95,6 +117,12 @@ function CartDrawer({ items, onClose }: { items: CartItem[]; onClose: () => void
     }
     if (res.ok) {
       const body = await res.json().catch(() => null);
+      // إعلانات Meta: طلبٌ تمّ — Purchase للتحسين على الشراء، وLead لأن الدفع
+      // والسعر النهائي يُتّفق عليهما بعده مع المندوب.
+      const params = cartParams(items);
+      // نفس معرّف حدث الخادم (واجهة التحويلات) — فتعدّه Meta مرة واحدة.
+      track('Purchase', params, body?.eventId);
+      track('Lead', params, body?.eventId);
       setOrderNo(body?.number ?? '');
       setStatus('sent');
       clearCart();

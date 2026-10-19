@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createWebOrder, type WebOrderItem } from '@/lib/orders';
+import { sendCapiEvents } from '@/lib/meta-capi';
 
 export const runtime = 'nodejs';
 
@@ -122,7 +123,22 @@ export async function POST(request: Request) {
     if (!created.ok) {
       return NextResponse.json({ ok: false, errors: [{ field: 'items', reason: 'No valid products.' }] }, { status: 422 });
     }
-    return NextResponse.json({ ok: true, number: created.number }, { status: 201 });
+    // إعلانات Meta من الخادم (واجهة التحويلات) — بنفس معرّف حدث المتصفح، ولا
+    // ننتظرها: الطلب لا يتأخّر بسبب Meta.
+    const eventId = `order-${created.number}`;
+    const raw = body as { value?: unknown };
+    const custom = {
+      currency: 'IQD',
+      value: Number(raw.value) > 0 ? Math.round(Number(raw.value)) : 0,
+      content_ids: [...new Set(result.value.items.map((i) => i.productId))],
+      content_type: 'product',
+      num_items: result.value.items.reduce((s, i) => s + i.quantity, 0),
+    };
+    void sendCapiEvents(request, [
+      { name: 'Purchase', eventId, phone: result.value.phone, custom },
+      { name: 'Lead', eventId, phone: result.value.phone, custom },
+    ]);
+    return NextResponse.json({ ok: true, number: created.number, eventId }, { status: 201 });
   } catch (error) {
     console.error('[orders] failed to persist order', error);
     return NextResponse.json(

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
+import { subscribeFavorites, getFavoritesSnapshot, NO_FAVORITES } from '@/lib/favorites';
 import { usePathname } from 'next/navigation';
 import { motion, useMotionValueEvent, useScroll } from 'motion/react';
 import { BRAND } from '@erp/brand';
@@ -11,6 +12,27 @@ import { MagneticButton } from '@erp/ui-market';
 import { cn } from '@erp/utils';
 import { NAV_LINKS } from '@/site';
 import { ThemeToggle } from './ThemeToggle';
+
+/** رابط «المفضلة» بقلبٍ وعدّاد — يظهر العدد حين تحوي منتجات. */
+function FavoritesLink() {
+  const count = useSyncExternalStore(subscribeFavorites, getFavoritesSnapshot, () => NO_FAVORITES).length;
+  return (
+    <Link
+      href="/favorites"
+      aria-label={count > 0 ? `المفضلة (${count})` : 'المفضلة'}
+      className="relative flex h-9 w-9 items-center justify-center rounded-full border border-edge-strong text-body-muted transition-colors hover:text-body"
+    >
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M12 20.5s-7.5-4.6-9.3-9.2C1.5 8.1 3.6 4.5 7.2 4.5c2 0 3.6 1.1 4.8 2.8 1.2-1.7 2.8-2.8 4.8-2.8 3.6 0 5.7 3.6 4.5 6.8-1.8 4.6-9.3 9.2-9.3 9.2z" strokeLinejoin="round" />
+      </svg>
+      {count > 0 && (
+        <span className="tnum absolute -end-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-fill px-1 text-xs font-bold text-on-brand">
+          {count}
+        </span>
+      )}
+    </Link>
+  );
+}
 
 /**
  * Sticky header — full-bleed bar condensing into a floating pill.
@@ -81,6 +103,7 @@ export function Navigation() {
         </div>
 
         <div className="hidden items-center gap-3 md:flex">
+          <FavoritesLink />
           <ThemeToggle />
           {/* رابط دخول النظام أُزيل من الشريط بطلب المالك — لا يظهر للزبون.
               مدخل الموظفين انتقل إلى أسفل التذييل بشكل خافت. */}
@@ -97,6 +120,7 @@ export function Navigation() {
             الثيم إلى منتصف الشريط بينهما. جمعهما في حاوية واحدة يُبقيهما
             متجاورين جنب القائمة، حيث يتوقّعهما المستخدم. */}
         <div className="flex items-center gap-2 md:hidden">
+          <FavoritesLink />
           <ThemeToggle />
           <button
             type="button"

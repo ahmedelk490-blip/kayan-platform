@@ -9,6 +9,7 @@ import { SectionShell } from '@erp/ui-market';
 import { SectionHeading } from '@/components/site/SectionHeading';
 import { ImageReveal } from '@/components/site/Parallax';
 import type { PublicProduct } from '@/lib/catalog';
+import { ProductCardMeta } from '@/components/site/ProductCardMeta';
 
 /**
  * المنتجات — معرض سينمائيّ.
@@ -103,10 +104,8 @@ function ProductCard({ product, index }: { product: PublicProduct; index: number
             {/* خطّ يمتدّ تحت الاسم عند المرور. */}
             <span className="mt-1 block h-px w-0 bg-brand-fill/80 transition-all duration-500 ease-out group-hover/prod:w-10" />
           </h3>
-          <span className="mt-2 inline-flex items-center gap-1.5 text-xs text-white/85">
-            شوف التفاصيل
-            <span aria-hidden className="transition-transform duration-300 group-hover/prod:-translate-x-1">←</span>
-          </span>
+          {/* السعر والألوان والمقاسات من النظام — تتغيّر من صفحة المنتج هناك. */}
+          <ProductCardMeta product={product} />
         </div>
 
         {/* زرّ سهم دائري يظهر أعلى البداية عند المرور. */}

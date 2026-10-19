@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
 import { createLead } from '@/lib/leads';
+import { sendCapiEvents } from '@/lib/meta-capi';
 
 export const runtime = 'nodejs';
 
@@ -186,5 +188,11 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true }, { status: 201 });
+  // إعلانات Meta من الخادم — بنفس معرّف حدث المتصفح (يرجع في الرد).
+  const eventId = `lead-${randomUUID()}`;
+  void sendCapiEvents(request, [
+    { name: 'Lead', eventId, phone: result.lead.phone },
+    { name: 'CompleteRegistration', eventId, phone: result.lead.phone },
+  ]);
+  return NextResponse.json({ ok: true, eventId }, { status: 201 });
 }

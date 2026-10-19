@@ -6,6 +6,7 @@ import { Navigation } from '@/components/site/Navigation';
 import { SiteFooter } from '@/components/site/SiteFooter';
 import { WhatsAppButton } from '@/components/site/WhatsAppButton';
 import { CartWidget } from '@/components/site/CartWidget';
+import { MetaPixel } from '@/components/site/MetaPixel';
 import { SITE_URL, whatsappHref } from '@/site';
 import { siteWhatsApp } from '@/lib/catalog';
 import './site.css';
@@ -137,6 +138,8 @@ document.documentElement.setAttribute('data-theme', stored || system);
           {/* سلّة الطلب العائمة — فوق زرّ الواتساب، تظهر حين تحوي أصنافاً. */}
           <CartWidget />
         </SmoothScroller>
+        {/* Meta Pixel لإعلانات فيسبوك وإنستغرام — لا يُحمَّل ما لم يُضبط معرّفه. */}
+        <MetaPixel />
       </body>
     </html>
   );

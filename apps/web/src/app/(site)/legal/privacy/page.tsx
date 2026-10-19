@@ -1,58 +1,84 @@
 import type { Metadata } from 'next';
 import { PageHero } from '@/components/site/PageHero';
-import { LegalBody, LegalNotice } from '@/components/site/LegalBody';
+import { LegalBody } from '@/components/site/LegalBody';
 
 export const metadata: Metadata = {
-  title: 'Privacy',
-  description: 'What this site collects, why, and how long it is kept.',
+  title: 'سياسة الخصوصية',
+  description: 'ما يجمعه موقع كيان من بيانات، ولماذا، وكيف نستخدم أدوات قياس الإعلانات.',
   alternates: { canonical: '/legal/privacy' },
 };
 
+/**
+ * سياسة الخصوصية — بالعربية ولمصنع كيان. كانت نصّاً إنجليزياً من قالب برمجيات
+ * («نموذج طلب عرض توضيحي») لا يخصّ المصنع، وإعلانات Meta تشترط سياسةً واضحة
+ * على صفحة الوجهة تذكر أدوات القياس.
+ */
 export default function PrivacyPage() {
   return (
     <>
       <PageHero
-        eyebrow="Legal"
-        title="Privacy."
-        lead="A factual description of what this website collects and what happens to it."
+        eyebrow="سياسة الخصوصية"
+        title="خصوصيتك."
+        lead="ما نجمعه عنك عبر هذا الموقع، ولماذا، وما الذي يحدث له."
       />
       <LegalBody>
-        <LegalNotice />
-
-        <h2>What we collect</h2>
+        <h2>من نحن</h2>
         <p>
-          Only what you type into the demo request form: your name, company, work email, and
-          optionally your phone number, the product types you selected, and your message.
-        </p>
-        <p>
-          This site sets no advertising cookies, runs no third-party analytics, and does not
-          track you across other websites. Fonts are served from this site rather than a third
-          party, so loading a page does not disclose your visit to anyone else.
+          هذا موقع مصنع كيان للزي الموحّد والطباعة والتطريز. للتواصل بخصوص بياناتك استعمل
+          واتساب أو أرقام صفحة «تواصل معنا».
         </p>
 
-        <h2>Why we collect it</h2>
+        <h2>ما الذي نجمعه</h2>
         <p>
-          To reply to your enquiry and to prepare a demonstration. We do not sell it, share it
-          with third parties for their own purposes, or add you to a marketing sequence.
+          حين ترسل طلباً من السلّة أو تطلب عرض سعر نحفظ ما تكتبه فقط: الاسم، ورقم الهاتف، واسم
+          الشركة إن كتبته، وملاحظاتك، والأصناف والكميات التي اخترتها. لا نطلب على الموقع أي
+          بيانات دفع أو بطاقات.
+        </p>
+        <p>
+          السلّة والمفضلة وإعداد المظهر تُحفَظ على جهازك في متصفحك فقط، ولا تصل إلينا إلا حين
+          ترسل الطلب بنفسك.
         </p>
 
-        <h2>How long we keep it</h2>
+        <h2>الإعلانات وقياسها (Meta Pixel)</h2>
         <p>
-          For as long as we are in contact about your enquiry, and for a reasonable period
-          afterwards for our records. Ask us to delete it and we will.
+          نستخدم أداة Meta Pixel من شركة Meta (فيسبوك وإنستغرام) لنعرف أيّ إعلاناتنا تفيد
+          زبائننا. ترسل الأداة إلى Meta أحداثاً عن استعمال الموقع: زيارة صفحة، مشاهدة منتج،
+          الإضافة إلى السلّة أو المفضلة، وإتمام طلب — مع رقم المنتج والكمية وقيمة تقريبية. لا
+          نرسل إليها اسمك. عند إتمام طلب أو طلب عرض سعر يرسل خادمنا إلى Meta رقم هاتفك مشفّراً
+          تشفيراً لا يُعكس (SHA-256) لمطابقة الإعلان فقط، ولا يصلها الرقم نفسه.
+        </p>
+        <p>
+          قد تستعمل Meta ملفات تعريف الارتباط (الكوكيز) وفق سياستها الخاصة. يمكنك التحكّم بما
+          تراه من إعلانات من «تفضيلات الإعلانات» في حسابك على فيسبوك أو إنستغرام، أو منع ملفات
+          تعريف الارتباط من إعدادات متصفحك.
         </p>
 
-        <h2>Your rights</h2>
+        <h2>لماذا نجمعه</h2>
         <p>
-          You can ask what we hold about you, ask for it to be corrected, or ask for it to be
-          deleted. Contact us using the details on the demo request page and we will action it.
+          لننفّذ طلبك ونتواصل معك بخصوصه، ولنحسّن إعلاناتنا. لا نبيع بياناتك ولا نشاركها مع أحد
+          لأغراضه الخاصة.
         </p>
 
-        <h2>Security</h2>
+        <h2>كم نحتفظ به</h2>
         <p>
-          Submissions are transmitted over an encrypted connection. Access is limited to the
-          people handling your enquiry.
+          ما دمنا نتعامل معك بخصوص طلبك، ومدّةً معقولة بعدها لسجلّاتنا والفواتير. اطلب حذف بياناتك
+          ونحذفها، إلا ما يلزم حفظه للفواتير.
         </p>
+
+        <h2>حقوقك</h2>
+        <p>
+          يحقّ لك أن تسأل عمّا نحتفظ به عنك، وأن تطلب تصحيحه أو حذفه. راسلنا عبر واتساب أو صفحة
+          «تواصل معنا» ونتولّى الأمر.
+        </p>
+
+        <h2>حماية البيانات</h2>
+        <p>
+          تُرسَل البيانات عبر اتصال مشفّر (HTTPS)، والاطّلاع عليها مقصور على الموظفين الذين
+          يتابعون طلبك.
+        </p>
+
+        <h2>تحديث هذه السياسة</h2>
+        <p>آخر تحديث: أكتوبر 2026. أي تغيير مهمّ نكتبه في هذه الصفحة.</p>
       </LegalBody>
     </>
   );

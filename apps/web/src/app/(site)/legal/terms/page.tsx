@@ -1,55 +1,58 @@
 import type { Metadata } from 'next';
 import { PageHero } from '@/components/site/PageHero';
-import { LegalBody, LegalNotice } from '@/components/site/LegalBody';
+import { LegalBody } from '@/components/site/LegalBody';
 
 export const metadata: Metadata = {
-  title: 'Terms',
-  description: 'Terms governing use of this website.',
+  title: 'الشروط والأحكام',
+  description: 'كيف تعمل الطلبات من موقع كيان: التأكيد، الأسعار، التصنيع، والتوصيل.',
   alternates: { canonical: '/legal/terms' },
 };
 
+/**
+ * الشروط — بالعربية ولمصنع كيان (كانت نصّ قالب برمجيات بالإنجليزية). عامّةٌ عن
+ * طريقة الطلب؛ وسياسة الإرجاع والاستبدال يكتبها المالك بنفسه حين يقرّرها.
+ */
 export default function TermsPage() {
   return (
     <>
       <PageHero
-        eyebrow="Legal"
-        title="Terms."
-        lead="Terms governing your use of this website. Software licensing is covered by a separate agreement."
+        eyebrow="الشروط والأحكام"
+        title="كيف يعمل الطلب."
+        lead="شروط استعمال هذا الموقع والطلب منه."
       />
       <LegalBody>
-        <LegalNotice />
-
-        <h2>Scope</h2>
+        <h2>الطلب من الموقع</h2>
         <p>
-          These terms cover this website only. Use of the ERP platform itself is governed by a
-          separate written agreement between us and the licensing company.
+          إرسال الطلب من السلّة طلبٌ مبدئي لا عقد شراء. يتواصل معك مندوب المبيعات ليؤكّد الأصناف
+          والألوان والمقاسات والكميات والخدمة (تطريز أو طباعة)، ولا يبدأ التنفيذ قبل هذا التأكيد.
         </p>
 
-        <h2>Accuracy</h2>
+        <h2>الأسعار</h2>
         <p>
-          We describe the platform as accurately as we can, including which capabilities are
-          built and which are planned. Descriptions of planned functionality are statements of
-          intent, not commitments, and do not form part of any contract.
+          الأسعار المعروضة على الموقع استرشادية وتتغيّر بالكمية ونوع الخدمة. السعر الملزم هو
+          المكتوب في الفاتورة بعد التأكيد مع المندوب.
         </p>
 
-        <h2>Figures shown on this site</h2>
+        <h2>التصنيع حسب الطلب</h2>
         <p>
-          Costing examples, including the cost sheet shown on the platform page, are worked
-          illustrations using representative figures. They demonstrate how the calculation is
-          structured and traced. They are not a quotation and not a performance guarantee.
+          القطع المطرّزة أو المطبوعة بشعارك تُصنع خصيصاً لك؛ لذلك تُراجَع معك العيّنة أو التصميم
+          قبل تنفيذ الكمية كلّها، ويُتّفق على موعد التسليم عند التأكيد.
         </p>
 
-        <h2>Intellectual property</h2>
+        <h2>الدفع والتوصيل</h2>
         <p>
-          The content, design, and code of this site belong to us. Standards referenced on this
-          site, such as EN ISO 20471, belong to their respective bodies.
+          تُتّفق طريقة الدفع والعربون وأجرة التوصيل مع المندوب وتُكتب في الفاتورة. لا يُطلب أي دفع
+          إلكتروني على هذا الموقع.
         </p>
 
-        <h2>Availability</h2>
+        <h2>الصور والمحتوى</h2>
         <p>
-          We aim to keep the site available but do not guarantee uninterrupted access, and may
-          change or withdraw content at any time.
+          صور المنتجات حقيقية من المصنع، وقد يختلف اللون قليلاً بحسب الشاشة. محتوى الموقع وتصميمه
+          ملكٌ لمصنع كيان.
         </p>
+
+        <h2>التواصل</h2>
+        <p>لأي استفسار عن طلبك راسلنا عبر واتساب أو صفحة «تواصل معنا».</p>
       </LegalBody>
     </>
   );

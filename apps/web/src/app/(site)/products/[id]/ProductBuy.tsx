@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { addToCart, itemKey, openCart } from '@/lib/cart';
+import { track, priceFromText } from '@/lib/meta-pixel';
 
 interface Tier {
   service: string;
@@ -101,6 +102,16 @@ export function ProductBuy({
         priceText: priceText || undefined,
       });
     }
+    // إعلانات Meta: إضافةٌ للسلّة — بقيمةٍ تقريبية من أول سعرٍ معروض.
+    const pieces = needsSize ? sizes.reduce((n, s) => n + (qtyBySize[s] || 0), 0) : singleQty;
+    track('AddToCart', {
+      content_ids: [productId],
+      content_name: productName,
+      content_type: 'product',
+      num_items: pieces,
+      value: priceFromText(priceText) * pieces,
+      currency: 'IQD',
+    });
     if (openAfter) openCart();
     else {
       setAdded(true);
