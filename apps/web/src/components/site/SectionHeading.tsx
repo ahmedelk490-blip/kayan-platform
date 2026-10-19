@@ -25,7 +25,7 @@ export function SectionHeading({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-80px' }}
       transition={{ duration: 0.8, ease: EASE.outExpo }}
-      className="mb-10 flex flex-col items-start text-start md:mb-14"
+      className="mb-8 flex flex-col items-start text-start md:mb-10"
     >
       {/* الشارة النبيتيّة: أكبر وأوضح، تظهر جيداً على الموبايل. */}
       <span className="mb-6 inline-flex items-center gap-2.5 rounded-full bg-brand-fill/15 px-5 py-2.5 text-base font-bold text-brand shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-brand-fill)_30%,transparent)] md:text-lg">

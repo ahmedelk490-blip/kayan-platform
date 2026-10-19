@@ -1,184 +1,128 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import Image from 'next/image';
 import { motion } from 'motion/react';
-import { EASE, usePrefersReducedMotion } from '@erp/motion';
+import { EASE } from '@erp/motion';
 import { SectionShell } from '@erp/ui-market';
-import { SectionHeading } from '@/components/site/SectionHeading';
 import { WHY_KAYAN } from '@/site';
 
-/** رقم عربي-هندي بخانتين: ٠١، ٠٢ … — للفهرس الفاخر. */
-const idx = (n: number) =>
-  new Intl.NumberFormat('ar-EG', { minimumIntegerDigits: 2 }).format(n);
-
 /**
- * ليش كيان — «سِجِلّ الضوء».
+ * ليش كيان — «لوحة الأسباب».
  *
- * ليست قائمة خطوط بعد الآن. كل سبب صفٌّ زجاجيّ؛ الصفّ النشط يتفتّح فيكبر رقمه
- * (أرقام نبيتيّة معدنية) ويتوهّج خلفه ضوء نبيتيّ، وبقيّة الصفوف تنكمش إلى
- * أشرطة رفيعة — إيقاع أوبرالي لا جدول. وضوءٌ نبيتيّ يتبع المؤشّر عبر القسم
- * كلّه. اللون النبيتيّ وحده — لا ذهب (سُحب بتوجيه العلامة).
- *
- * على سطح المكتب: المرور يفعّل الصفّ. على الجوال: التمرير يفعّله واحداً تلو
- * الآخر. ومع «تقليل الحركة» تنفتح كل الأسباب بلا حركة.
+ * بطلب المالك تغيّر القسم كلياً: كان صفوفاً تتفتّح واحداً واحداً بأرقام ضخمة،
+ * فلا يُقرأ إلا سبب في المرة. الآن: صورة حقيقية من المعمل ثابتة على جنب،
+ * وبجانبها الأسباب الخمسة كلها ظاهرة — أيقونة صغيرة وعنوان وسطر — تُقرأ بنظرة.
+ * الحركة تشتغل وحدها: الصورة تنكشف، والأسباب تظهر واحداً بعد الآخر.
  */
+
+/** أيقونات خطّية صغيرة بلون العلامة — واحدة لكل سبب. */
+const ICONS: Record<string, React.ReactNode> = {
+  // مقصّ: الخياطة والطباعة والتطريز بمعملنا
+  inhouse: (
+    <>
+      <circle cx="6" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12" />
+    </>
+  ),
+  // عين: تشوف العيّنة قبل الكمية
+  sample: (
+    <>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  // درع: خامات مجرّبة تتحمّل
+  materials: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />,
+  // سهم نازل: السعر ينزل مع الكمية
+  volume: (
+    <>
+      <path d="M3 7l6 6 4-4 8 8" />
+      <path d="M21 11v6h-6" />
+    </>
+  ),
+  // تقويم: التزام بالموعد
+  delivery: (
+    <>
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18M9 16l2 2 4-4" />
+    </>
+  ),
+};
+
 export function WhyKayan({ t }: { t: Record<string, string> }) {
-  const [active, setActive] = useState(0);
-  const reduced = usePrefersReducedMotion();
-  const ref = useRef<HTMLDivElement>(null);
-
-  const onMove = (e: React.MouseEvent) => {
-    const el = ref.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    el.style.setProperty('--mx', `${e.clientX - r.left}px`);
-    el.style.setProperty('--my', `${e.clientY - r.top}px`);
-  };
-
   return (
     <SectionShell size="tall">
-      <div id="why" className="mx-auto w-full max-w-[1400px]">
-        <SectionHeading eyebrow="ليش كيان" title="خمسة أسباب تخليك ترتاح للطلب." />
+      <div id="why" className="mx-auto grid w-full max-w-[1200px] gap-10 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)] lg:items-start lg:gap-16">
+        {/* الصورة + العنوان — ثابتة بجانب الأسباب على الكمبيوتر. */}
+        <div className="lg:sticky lg:top-28">
+          <span className="mb-5 inline-flex items-center gap-2.5 rounded-full bg-brand-fill/15 px-4 py-2 text-sm font-bold text-brand md:text-base">
+            <span className="h-2 w-2 rounded-full bg-brand-fill" />
+            ليش كيان
+          </span>
+          <h2
+            className="font-display font-semibold text-body"
+            style={{ fontSize: 'clamp(1.9rem, 3.6vw, 2.8rem)', lineHeight: 1.3, maxWidth: '18ch', textWrap: 'balance' }}
+          >
+            خمسة أسباب تخليك ترتاح للطلب.
+          </h2>
 
-        <div
-          ref={ref}
-          onMouseMove={onMove}
-          className="group/why relative mt-14 md:mt-20"
-        >
-          {/* ضوء نبيتيّ يتبع المؤشّر — يظهر فقط عند المرور فوق القسم. */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 -z-10 rounded-[40px] opacity-0 transition-opacity duration-700 group-hover/why:opacity-100"
-            style={{
-              background:
-                'radial-gradient(360px 360px at var(--mx, 50%) var(--my, 30%), color-mix(in srgb, var(--color-brand-fill) 26%, transparent), transparent 68%)',
-            }}
-          />
-
-          <ol className="relative flex flex-col gap-3 md:gap-4">
-            {WHY_KAYAN.map((item, i) => {
-              const on = i === active;
-              const open = reduced || on;
-              return (
-                <motion.li
-                  key={item.id}
-                  layout
-                  onMouseEnter={() => setActive(i)}
-                  onViewportEnter={() => setActive(i)}
-                  viewport={{ amount: 0.8 }}
-                  onClick={() => setActive(i)}
-                  onFocus={() => setActive(i)}
-                  tabIndex={0}
-                  transition={{ layout: { duration: 0.6, ease: EASE.outExpo } }}
-                  className={[
-                    'group/row relative cursor-default overflow-hidden rounded-[28px] border px-6 py-6 outline-none transition-[border-color,background-color,box-shadow] duration-500 md:px-10 md:py-8',
-                    on
-                      ? 'border-[color-mix(in_srgb,var(--color-brand-fill)_42%,transparent)] shadow-[0_40px_90px_-46px_rgba(92,35,52,0.85)]'
-                      : 'border-edge hover:border-edge-strong',
-                  ].join(' ')}
-                  style={
-                    on
-                      ? {
-                          background:
-                            'linear-gradient(110deg, color-mix(in srgb, var(--color-brand-fill) 16%, transparent), color-mix(in srgb, var(--color-brand-fill) 4%, transparent) 55%, transparent)',
-                        }
-                      : { background: 'color-mix(in srgb, var(--color-panel) 55%, transparent)' }
-                  }
-                >
-                  {/* هالة نبيتيّة خلف الرقم في الصفّ النشط. */}
-                  <div
-                    aria-hidden
-                    className={`pointer-events-none absolute -top-10 bottom-0 end-0 w-[42%] transition-opacity duration-700 ${on ? 'opacity-100' : 'opacity-0'}`}
-                    style={{
-                      background:
-                        'radial-gradient(60% 70% at 78% 40%, color-mix(in srgb, var(--color-brand-fill) 30%, transparent), transparent 70%)',
-                    }}
-                  />
-                  {/* شريط ضوئيّ رفيع على حافّة البداية يرتفع مع التفعيل. */}
-                  <motion.span
-                    aria-hidden
-                    initial={false}
-                    animate={{ scaleY: on ? 1 : 0 }}
-                    transition={{ duration: 0.6, ease: EASE.outExpo }}
-                    className="absolute inset-y-4 end-0 w-[3px] origin-top rounded-full"
-                    style={{
-                      background:
-                        'linear-gradient(to bottom, transparent, var(--color-brand-fill), transparent)',
-                    }}
-                  />
-
-                  <div className="relative flex items-start gap-5 md:gap-9">
-                    {/* الرقم: مُفرَّغ حين ساكن، ممتلئ بتدرّج نبيتيّ معدنيّ حين نشط. */}
-                    <motion.span
-                      aria-hidden
-                      layout
-                      animate={{ scale: on ? 1 : 0.82, opacity: on ? 1 : 0.5 }}
-                      transition={{ duration: 0.6, ease: EASE.outExpo }}
-                      className="shrink-0 select-none font-display font-bold leading-[0.8] tracking-tight rtl:tracking-normal"
-                      style={{
-                        fontSize: 'clamp(2.6rem, 8vw, 6rem)',
-                        WebkitTextStroke: on
-                          ? '0'
-                          : '1.4px color-mix(in srgb, var(--color-brand-fill) 55%, transparent)',
-                        color: on ? 'transparent' : 'transparent',
-                        backgroundImage: on
-                          ? 'linear-gradient(160deg, var(--color-primary-300), var(--color-brand-fill) 55%, var(--color-primary-800))'
-                          : 'none',
-                        WebkitBackgroundClip: on ? 'text' : 'border-box',
-                        backgroundClip: on ? 'text' : 'border-box',
-                        filter: on
-                          ? 'drop-shadow(0 12px 34px rgba(92,35,52,0.55))'
-                          : 'none',
-                      }}
-                    >
-                      {idx(i + 1)}
-                    </motion.span>
-
-                    <div className="flex-1 pt-1 md:pt-3">
-                      <motion.h3
-                        layout="position"
-                        className={`font-display font-bold leading-[1.15] transition-colors duration-500 ${
-                          on ? 'text-body' : 'text-body-muted'
-                        }`}
-                        style={{ fontSize: on ? 'clamp(1.5rem, 3.4vw, 2.35rem)' : 'clamp(1.15rem, 2.4vw, 1.55rem)' }}
-                      >
-                        {t[`why.${item.id}.title`]}
-                      </motion.h3>
-
-                      {/* الجسد: يتفتّح للصفّ النشط فقط (أكورديون). */}
-                      <motion.div
-                        initial={false}
-                        animate={{ height: open ? 'auto' : 0, opacity: open ? 1 : 0 }}
-                        transition={{ duration: 0.55, ease: EASE.outExpo }}
-                        className="overflow-hidden"
-                      >
-                        <p className="mt-3 max-w-[60ch] text-[0.95rem] leading-[2] text-body-muted md:mt-4 md:text-base">
-                          {t[`why.${item.id}.body`]}
-                        </p>
-                      </motion.div>
-                    </div>
-                  </div>
-                </motion.li>
-              );
-            })}
-          </ol>
-
-          {/* مؤشّر تقدّم: خمس نقاط تضيء مع الصفّ النشط. */}
-          <div className="mt-8 flex items-center justify-center gap-2.5" aria-hidden>
-            {WHY_KAYAN.map((item, i) => (
-              <motion.span
-                key={item.id}
-                animate={{
-                  width: i === active ? 26 : 7,
-                  opacity: i === active ? 1 : 0.35,
-                }}
-                transition={{ duration: 0.5, ease: EASE.outExpo }}
-                className="h-[7px] rounded-full"
-                style={{ backgroundColor: 'var(--color-brand-fill)' }}
-              />
-            ))}
-          </div>
+          <motion.div
+            initial={{ opacity: 0, clipPath: 'inset(12% 0 12% 0 round 24px)' }}
+            whileInView={{ opacity: 1, clipPath: 'inset(0% 0 0% 0 round 24px)' }}
+            viewport={{ once: true, margin: '-60px' }}
+            transition={{ duration: 0.9, ease: EASE.outExpo }}
+            className="relative mt-7 aspect-[4/3] overflow-hidden rounded-[24px] border border-edge-strong bg-panel-2"
+          >
+            <Image
+              src="/why/vests.webp"
+              alt="يلكات من إنتاج معمل كيان بثلاثة ألوان"
+              fill
+              sizes="(max-width: 1024px) 100vw, 520px"
+              className="object-cover"
+            />
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-5">
+              <p className="text-sm font-semibold text-white">خياطة وطباعة وتطريز — كلها بمعملنا.</p>
+            </div>
+          </motion.div>
         </div>
+
+        {/* الأسباب الخمسة — كلها ظاهرة، تُقرأ بنظرة. */}
+        <ul className="divide-y divide-edge rounded-[24px] border border-edge-strong bg-panel/60 px-5 md:px-8">
+          {WHY_KAYAN.map((item, i) => (
+            <motion.li
+              key={item.id}
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-40px' }}
+              transition={{ duration: 0.6, ease: EASE.outExpo, delay: i * 0.08 }}
+              className="flex items-start gap-4 py-6 md:gap-5 md:py-7"
+            >
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-fill/12 text-brand">
+                <svg
+                  aria-hidden
+                  viewBox="0 0 24 24"
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  {ICONS[item.id]}
+                </svg>
+              </span>
+              <div className="min-w-0">
+                <h3 className="font-display text-lg font-semibold leading-[1.4] text-body md:text-xl">
+                  {t[`why.${item.id}.title`] ?? item.title}
+                </h3>
+                <p className="mt-1.5 text-sm leading-[1.9] text-body-muted md:text-[0.95rem]">
+                  {t[`why.${item.id}.body`] ?? item.body}
+                </p>
+              </div>
+            </motion.li>
+          ))}
+        </ul>
       </div>
     </SectionShell>
   );

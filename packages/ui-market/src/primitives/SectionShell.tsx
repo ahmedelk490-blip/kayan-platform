@@ -37,7 +37,7 @@ export function SectionShell({
       className={cn(
         'relative w-full px-6 md:px-10 lg:px-16',
         // بطلب المالك: المسافات الفاضية بين الأقسام كانت كبيرة (حتى ١٩٢px فوق وتحت).
-        size === 'tall' ? 'py-16 md:py-24' : 'py-14 md:py-20',
+        size === 'tall' ? 'py-10 md:py-14' : 'py-8 md:py-12',
         className,
       )}
     >
