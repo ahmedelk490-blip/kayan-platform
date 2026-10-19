@@ -1262,6 +1262,7 @@ export async function setShowOnSite(productId: string, show: boolean): Promise<v
   revalidatePath('/catalog/review');
   revalidatePath('/catalog/products');
   revalidatePath(`/catalog/products/${productId}`);
+  revalidatePath('/sales/site-products');
   revalidatePath('/products');
   revalidatePath('/');
 }

@@ -6,6 +6,7 @@ import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import { Note } from '@/components/crud/Note';
 import { rejectWebOrder } from './actions';
+import { SiteTabs } from '../SiteTabs';
 
 export const metadata: Metadata = { title: 'طلبات الموقع' };
 
@@ -37,6 +38,7 @@ export default async function WebOrdersPage() {
 
   return (
     <AppShell user={user} title="طلبات الموقع">
+      <SiteTabs active="/sales/web-orders" />
       <ModuleHeader title="طلبات الموقع" count={pending} />
 
       <Note>
