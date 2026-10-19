@@ -25,7 +25,7 @@ export function SectionHeading({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-80px' }}
       transition={{ duration: 0.8, ease: EASE.outExpo }}
-      className="mb-12 flex flex-col items-start text-start md:mb-20"
+      className="mb-10 flex flex-col items-start text-start md:mb-14"
     >
       {/* الشارة النبيتيّة: أكبر وأوضح، تظهر جيداً على الموبايل. */}
       <span className="mb-6 inline-flex items-center gap-2.5 rounded-full bg-brand-fill/15 px-5 py-2.5 text-base font-bold text-brand shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-brand-fill)_30%,transparent)] md:text-lg">
@@ -38,13 +38,14 @@ export function SectionHeading({
       <h2
         className="font-display font-bold text-body"
         style={{
-          fontSize: 'clamp(2.4rem, 7vw, 4.5rem)',
-          lineHeight: 1.14,
+          // كان ضخماً على الكمبيوتر (حتى 72px) فيأكل الشاشة — حجم عنوان قسم متّزن.
+          fontSize: 'clamp(2rem, 4.2vw, 3.25rem)',
+          lineHeight: 1.3,
           letterSpacing: 'normal',
           wordSpacing: 'normal',
           overflowWrap: 'normal',
           wordBreak: 'normal',
-          maxWidth: '20ch',
+          maxWidth: '24ch',
           textWrap: 'balance',
         }}
       >

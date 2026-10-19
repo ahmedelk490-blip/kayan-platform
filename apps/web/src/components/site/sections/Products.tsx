@@ -59,7 +59,7 @@ function ProductCard({ product, index }: { product: PublicProduct; index: number
       viewport={{ once: true, margin: '-60px' }}
       transition={{ duration: 0.75, ease: EASE.outExpo, delay: (index % 4) * 0.08 }}
       whileHover={{ y: -8, transition: { type: 'spring', stiffness: 320, damping: 24 } }}
-      className="group/prod relative overflow-hidden rounded-[22px] border border-white/10 bg-panel/60 shadow-[0_0_0_rgba(0,0,0,0)] transition-[box-shadow,border-color] duration-300 ease-out hover:border-[color-mix(in_srgb,var(--color-brand-fill)_50%,transparent)] hover:shadow-[0_30px_70px_-32px_rgba(92,35,52,0.75)]"
+      className="group/prod relative overflow-hidden rounded-[22px] border border-edge-strong bg-panel/60 shadow-[0_0_0_rgba(0,0,0,0)] transition-[box-shadow,border-color] duration-300 ease-out hover:border-[color-mix(in_srgb,var(--color-brand-fill)_50%,transparent)] hover:shadow-[0_30px_70px_-32px_rgba(92,35,52,0.75)]"
     >
       {/* البطاقة كلها رابط لصفحة المنتج. */}
       <Link href={`/products/${product.id}`} aria-label={`تفاصيل ${product.nameAr}`} className="absolute inset-0 z-20" />

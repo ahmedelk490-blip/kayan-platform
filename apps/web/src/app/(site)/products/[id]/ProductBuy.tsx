@@ -171,12 +171,15 @@ export function ProductBuy({
         <p className="text-sm font-semibold text-body">{priceText || 'السعر حسب الطلب — نرجع لك بالتسعيرة'}</p>
       </div>
 
-      <div className="mt-7 flex flex-wrap gap-3">
+      <p className="mt-2 text-xs text-body-subtle">اللون والمقاس اختياريان — والكمية تحددها في السلّة.</p>
+
+      {/* أزرار الشراء: عمودان متساويان، وتحتها صفّ عرض السعر وواتساب بنفس المقاس. */}
+      <div className="mt-6 grid grid-cols-2 gap-3">
         <button
           type="button"
           onClick={() => add(true)}
           disabled={!ready}
-          className="inline-flex items-center rounded-full bg-brand-fill px-8 py-4 text-sm font-bold text-on-brand shadow-[0_18px_40px_-16px_rgba(92,35,52,0.9)] disabled:opacity-40"
+          className="inline-flex w-full items-center justify-center rounded-full bg-brand-fill px-4 py-3.5 text-sm font-bold text-on-brand shadow-[0_18px_40px_-16px_rgba(92,35,52,0.9)] disabled:opacity-40"
         >
           اشترِ الآن
         </button>
@@ -184,12 +187,11 @@ export function ProductBuy({
           type="button"
           onClick={() => add(false)}
           disabled={!ready}
-          className="inline-flex items-center gap-2 rounded-full border border-edge-strong px-8 py-4 text-sm font-medium text-body disabled:opacity-40"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-edge-strong px-4 py-3.5 text-sm font-medium text-body disabled:opacity-40"
         >
           {added ? '✓ أُضيف للسلّة' : 'أضف للسلّة'}
         </button>
       </div>
-      <p className="mt-2 text-xs text-body-subtle">اللون والمقاس اختياريان — والكمية تحددها في السلّة.</p>
     </div>
   );
 }

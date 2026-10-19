@@ -74,7 +74,7 @@ export function WhyKayan({ t }: { t: Record<string, string> }) {
                     'group/row relative cursor-default overflow-hidden rounded-[28px] border px-6 py-6 outline-none transition-[border-color,background-color,box-shadow] duration-500 md:px-10 md:py-8',
                     on
                       ? 'border-[color-mix(in_srgb,var(--color-brand-fill)_42%,transparent)] shadow-[0_40px_90px_-46px_rgba(92,35,52,0.85)]'
-                      : 'border-white/[0.06] hover:border-white/[0.12]',
+                      : 'border-edge hover:border-edge-strong',
                   ].join(' ')}
                   style={
                     on
@@ -82,7 +82,7 @@ export function WhyKayan({ t }: { t: Record<string, string> }) {
                           background:
                             'linear-gradient(110deg, color-mix(in srgb, var(--color-brand-fill) 16%, transparent), color-mix(in srgb, var(--color-brand-fill) 4%, transparent) 55%, transparent)',
                         }
-                      : { background: 'rgba(255,255,255,0.014)' }
+                      : { background: 'color-mix(in srgb, var(--color-panel) 55%, transparent)' }
                   }
                 >
                   {/* هالة نبيتيّة خلف الرقم في الصفّ النشط. */}
@@ -114,7 +114,7 @@ export function WhyKayan({ t }: { t: Record<string, string> }) {
                       layout
                       animate={{ scale: on ? 1 : 0.82, opacity: on ? 1 : 0.5 }}
                       transition={{ duration: 0.6, ease: EASE.outExpo }}
-                      className="shrink-0 select-none font-display font-bold leading-[0.8] tracking-tight"
+                      className="shrink-0 select-none font-display font-bold leading-[0.8] tracking-tight rtl:tracking-normal"
                       style={{
                         fontSize: 'clamp(2.6rem, 8vw, 6rem)',
                         WebkitTextStroke: on

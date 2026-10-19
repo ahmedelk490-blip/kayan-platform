@@ -129,29 +129,26 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               }))}
             />
 
-            {/* عرض سعر بالكمية لهذا المنتج — يفتح الصفحة الكاملة والمنتج مختار. */}
-            <div className="mt-6 flex flex-wrap gap-3">
+            {/* صفّ ثانٍ بنفس مقاس أزرار الشراء: عرض سعر بالكمية (يفتح الصفحة الكاملة
+                والمنتج مختار) + واتساب. */}
+            <div className={`mt-3 grid gap-3 ${waHref ? 'grid-cols-2' : 'grid-cols-1'}`}>
               <Link
                 href={`/quote?product=${product.id}`}
-                className="inline-flex items-center gap-2 rounded-full border border-brand px-7 py-3 text-sm font-semibold text-brand"
+                className="inline-flex w-full items-center justify-center rounded-full border border-brand px-4 py-3.5 text-center text-sm font-semibold text-brand"
               >
                 اطلب عرض سعر بالكمية
               </Link>
-            </div>
-
-            {/* تواصل مباشر بديل — لمن يفضّل الواتساب. */}
-            {waHref && (
-              <div className="mt-3">
+              {waHref && (
                 <a
                   href={waHref}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-full border border-edge-strong px-7 py-3 text-sm font-medium text-body transition-colors hover:border-brand hover:text-brand"
+                  className="inline-flex w-full items-center justify-center rounded-full border border-edge-strong px-4 py-3.5 text-center text-sm font-medium text-body"
                 >
-                  أو اسأل على واتساب
+                  اسأل على واتساب
                 </a>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* الأسعار — أسفل, للمهتمّ. عمود «اللون» يظهر فقط حين يختلف السعر
                 حسب اللون، فلا نُثقل الجدول بعمود «كل الألوان» بلا داعٍ. */}

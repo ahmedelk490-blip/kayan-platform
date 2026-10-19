@@ -215,7 +215,7 @@ function CartDrawer({ items, onClose }: { items: CartItem[]; onClose: () => void
                   <Field name="company" label="اسم الشركة (اختياري)" error={errors.company} />
                   <label className="block">
                     <span className="mb-1.5 block text-xs text-body-muted">ملاحظات (المقاسات، مكان الشعار…)</span>
-                    <textarea name="note" rows={2} className="w-full resize-y rounded-xl border border-white/10 bg-white/[0.02] px-3.5 py-2.5 text-sm text-body outline-none focus:border-brand focus:ring-2 focus:ring-brand-fill/20" />
+                    <textarea name="note" rows={2} className="w-full resize-y rounded-xl border border-edge-strong bg-panel px-3.5 py-2.5 text-sm text-body outline-none focus:border-brand focus:ring-2 focus:ring-brand-fill/20" />
                   </label>
                 </div>
                 {status === 'error' && failure && <p role="alert" className="mt-2 text-xs text-red-400">{failure}</p>}
@@ -242,9 +242,9 @@ function Field({ name, label, required, type = 'text', dir, error }: { name: str
         name={name}
         type={type}
         dir={dir}
-        className={`w-full rounded-xl border bg-white/[0.02] px-3.5 py-2.5 text-sm text-body outline-none focus:border-brand focus:ring-2 focus:ring-brand-fill/20 ${error ? 'border-red-500' : 'border-white/10'} ${dir === 'ltr' ? 'text-start' : ''}`}
+        className={`w-full rounded-xl border bg-panel px-3.5 py-2.5 text-sm text-body outline-none focus:border-brand focus:ring-2 focus:ring-brand-fill/20 ${error ? 'border-red-500' : 'border-edge-strong'} ${dir === 'ltr' ? 'text-start' : ''}`}
       />
-      {error && <span className="mt-1 block text-[0.7rem] text-red-400">{error}</span>}
+      {error && <span className="mt-1 block text-xs text-red-400">{error}</span>}
     </label>
   );
 }
