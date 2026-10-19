@@ -43,7 +43,7 @@ export function SiteFooter() {
                     <li key={link.label}>
                       <Link
                         href={link.href}
-                        className="text-sm text-body-muted transition-colors duration-300 hover:text-body"
+                        className="inline-block py-1.5 text-sm text-body-muted transition-colors duration-300 hover:text-body"
                       >
                         {link.label}
                       </Link>
@@ -75,11 +75,11 @@ export function SiteFooter() {
             <span>© {new Date().getFullYear()} · جميع الحقوق محفوظة</span>
             <span className="text-body-subtle/70">·</span>
             {/* صفحات السياسة ظاهرة لكل زائر — إعلانات Meta تشترطها على صفحة الوجهة. */}
-            <Link href="/legal/privacy" className="transition-colors hover:text-body-muted">
+            <Link href="/legal/privacy" className="inline-block py-2 transition-colors hover:text-body-muted">
               سياسة الخصوصية
             </Link>
             <span className="text-body-subtle/70">·</span>
-            <Link href="/legal/terms" className="transition-colors hover:text-body-muted">
+            <Link href="/legal/terms" className="inline-block py-2 transition-colors hover:text-body-muted">
               الشروط والأحكام
             </Link>
             <span className="text-body-subtle/70">·</span>
@@ -87,13 +87,13 @@ export function SiteFooter() {
               href="https://qmarketingeg.com/ar"
               target="_blank"
               rel="noopener noreferrer"
-              className="transition-colors hover:text-body-muted"
+              className="inline-block py-2 transition-colors hover:text-body-muted"
             >
               تصميم وبرمجة شركة Q Marketing
             </a>
             <Link
               href="/login"
-              className="text-body-subtle/60 transition-colors hover:text-body-muted"
+              className="inline-block px-2 py-2 text-body-subtle/60 transition-colors hover:text-body-muted"
               aria-label="دخول الموظفين إلى النظام"
             >
               ·

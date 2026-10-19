@@ -71,13 +71,13 @@ export default function AboutPage() {
             مصوّرة من إنتاجنا.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Link href="/products" className="text-sm text-brand hover:underline">
+            <Link href="/products" className="inline-block py-2 text-sm text-brand hover:underline">
               تصفّح المنتجات
             </Link>
             <span aria-hidden className="text-body-subtle">
               ·
             </span>
-            <Link href="/quote" className="text-sm text-brand hover:underline">
+            <Link href="/quote" className="inline-block py-2 text-sm text-brand hover:underline">
               اطلب عرض سعر
             </Link>
           </div>

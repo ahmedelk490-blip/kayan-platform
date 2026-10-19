@@ -398,12 +398,16 @@ export function Hero({ slides }: { slides: HeroSlide[] }) {
                   aria-selected={index === active}
                   aria-label={slide.name}
                   onClick={() => setActive(index)}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${
-                    index === active
-                      ? 'w-7 bg-brand-fill'
-                      : 'w-1.5 bg-edge-strong hover:bg-body-subtle'
-                  }`}
-                />
+                  // مساحة لمس ٣٢px حول الشرطة الرفيعة — كانت ٦px فقط على الموبايل.
+                  className="grid h-8 min-w-6 place-items-center px-0.5"
+                >
+                  <span
+                    aria-hidden
+                    className={`block h-1.5 rounded-full transition-all duration-300 ${
+                      index === active ? 'w-7 bg-brand-fill' : 'w-1.5 bg-edge-strong'
+                    }`}
+                  />
+                </button>
               ))}
             </div>
 

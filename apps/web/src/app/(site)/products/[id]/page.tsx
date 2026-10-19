@@ -136,7 +136,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                 href={`/quote?product=${product.id}`}
                 className="inline-flex w-full items-center justify-center rounded-full border border-brand px-4 py-3.5 text-center text-sm font-semibold text-brand"
               >
-                اطلب عرض سعر بالكمية
+                عرض سعر بالكمية
               </Link>
               {waHref && (
                 <a
