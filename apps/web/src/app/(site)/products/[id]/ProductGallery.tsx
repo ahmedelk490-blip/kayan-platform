@@ -42,8 +42,10 @@ export function ProductGallery({
 
   const current = images[index] ?? null;
 
+  // min-w-0: صفّ المصغّرات الطويل كان يوسّع عمود الشبكة فتعرض الصفحة أكبر من الشاشة.
   return (
-    <div>
+    // على الكمبيوتر الصورة بعرض محدود وثابتة بجانب التفاصيل — كانت كبيرة جداً.
+    <div className="mx-auto w-full min-w-0 max-w-[440px] lg:sticky lg:top-28">
       <div className="relative aspect-[4/5] overflow-hidden rounded-[28px] bg-panel-2 shadow-[0_40px_90px_-50px_rgba(0,0,0,0.6)]">
         {current ? (
           <Image
@@ -51,7 +53,7 @@ export function ProductGallery({
             src={current}
             alt={imageColors[index] ? `${name} — ${imageColors[index]}` : name}
             fill
-            sizes="(max-width: 1024px) 100vw, 55vw"
+            sizes="(max-width: 480px) 100vw, 440px"
             className="object-cover"
             priority={index === 0}
           />

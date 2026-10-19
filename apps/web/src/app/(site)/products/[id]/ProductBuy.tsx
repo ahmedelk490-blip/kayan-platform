@@ -46,7 +46,9 @@ export function ProductBuy({
   const available = color && sizesByColor[color]?.length ? sizesByColor[color] : sizes;
   const needsColor = colors.length > 0;
   const needsSize = available.length > 0;
-  const ready = (!needsColor || !!color) && (!needsSize || !!size);
+  // بطلب المالك: اختيار اللون والمقاس اختياري — الزبون يقدر يضيف للسلّة مباشرة،
+  // والتفاصيل تُكمَل مع المندوب. ما يُختار يُرسل مع الطلب.
+  const ready = true;
 
   function chooseColor(next: string, fromGallery = false) {
     setColor(next);
@@ -123,7 +125,7 @@ export function ProductBuy({
                     className={`grid h-12 w-12 place-items-center rounded-full border-2 ${on ? 'border-brand' : 'border-transparent'}`}
                   >
                     <span
-                      className="h-9 w-9 rounded-full border border-white/25 shadow-[inset_0_2px_6px_rgba(0,0,0,0.2)]"
+                      className="h-9 w-9 rounded-full border border-edge-strong shadow-[inset_0_2px_6px_rgba(0,0,0,0.2)]"
                       style={{ background: bg ?? 'transparent' }}
                     />
                   </button>
@@ -187,13 +189,7 @@ export function ProductBuy({
           {added ? '✓ أُضيف للسلّة' : 'أضف للسلّة'}
         </button>
       </div>
-      {!ready && (
-        <p className="mt-2 text-xs text-body-subtle">
-          اختر {needsColor && !color ? 'اللون' : ''}
-          {needsColor && !color && needsSize && !size ? ' و' : ''}
-          {needsSize && !size ? 'المقاس' : ''} لتفعيل الطلب — والكمية تحددها في السلّة.
-        </p>
-      )}
+      <p className="mt-2 text-xs text-body-subtle">اللون والمقاس اختياريان — والكمية تحددها في السلّة.</p>
     </div>
   );
 }

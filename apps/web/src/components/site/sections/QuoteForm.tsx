@@ -28,7 +28,7 @@ type Status = 'idle' | 'sending' | 'sent' | 'error';
 
 // قوائم الاختيار: الخيارات بخلفية اللوحة نفسها — كانت بيضاء ونصّها باهت لا يُقرأ.
 const FIELD =
-  'w-full rounded-xl border bg-white/[0.02] px-4 py-3.5 text-sm text-body outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand-fill/20 [&>option]:bg-panel [&>option]:text-body';
+  'w-full rounded-xl border bg-panel px-4 py-3.5 text-sm text-body outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand-fill/20 [&>option]:bg-panel [&>option]:text-body';
 
 export function QuoteForm({
   products,
@@ -43,7 +43,8 @@ export function QuoteForm({
   const [status, setStatus] = useState<Status>('idle');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [failure, setFailure] = useState('');
-  const [qty, setQty] = useState(MIN_QTY);
+  // يبدأ فارغاً: «أقل عدد ٤» حدّ أدنى، لا قيمة مقترحة (بطلب المالك).
+  const [qty, setQty] = useState<number | ''>('');
   const [waLink, setWaLink] = useState<string | null>(null);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -62,7 +63,7 @@ export function QuoteForm({
     if (!phone) local.phone = 'هذا الحقل مطلوب.';
     if (!productId) local.productId = 'اختر المنتج.';
     if (!service) local.service = 'اختر نوع الشغل.';
-    if (qty < MIN_QTY) local.quantity = `أقلّ كمية ${MIN_QTY} قطع.`;
+    if (qty === '' || qty < MIN_QTY) local.quantity = `أقل عدد ${MIN_QTY} قطع.`;
     setErrors(local);
     setFailure('');
     if (Object.keys(local).length) return;
@@ -94,7 +95,7 @@ export function QuoteForm({
         content_name: 'quote_form',
         content_ids: productId && productId !== 'other' ? [productId] : [],
         content_type: 'product',
-        num_items: qty,
+        num_items: Number(qty),
       };
       track('CompleteRegistration', params, eventId);
       track('Lead', params, eventId);
@@ -106,7 +107,7 @@ export function QuoteForm({
         `الاسم: ${name}`,
         `الجوال: ${phone}`,
         `المنتج: ${productName}`,
-        `العدد: ${qty} قطعة`,
+        `العدد: ${Number(qty)} قطعة`,
         `نوع الشغل: ${serviceLabel}`,
         notes ? `ملاحظات: ${notes}` : '',
       ]
@@ -118,7 +119,7 @@ export function QuoteForm({
 
       setStatus('sent');
       formEl.reset();
-      setQty(MIN_QTY);
+      setQty('');
       return;
     }
 
@@ -137,7 +138,7 @@ export function QuoteForm({
           : item.reason === 'Does not look like a phone number.'
             ? 'رقم الجوال ما يبدو صحيحاً.'
             : item.field === 'quantity'
-              ? `أقلّ كمية ${MIN_QTY} قطع.`
+              ? `أقل عدد ${MIN_QTY} قطع.`
               : item.reason;
     }
     setErrors(mapped);
@@ -202,28 +203,15 @@ export function QuoteForm({
             whileInView={{ opacity: 1 }}
             viewport={{ once: true, margin: '-40px' }}
             transition={{ duration: 0.6, ease: EASE.outQuart }}
-            className="relative overflow-hidden rounded-[28px] border border-white/10 p-7 shadow-[0_40px_100px_-50px_rgba(92,35,52,0.7)] md:p-10"
-            style={{
-              background:
-                'linear-gradient(160deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008) 55%, transparent)',
-            }}
+            className="relative overflow-hidden rounded-[28px] border border-edge-strong bg-panel/60 p-7 shadow-[0_40px_100px_-50px_rgba(92,35,52,0.7)] md:p-10"
           >
-            {/* توهّج نبيتيّ خفيف أعلى بداية الكارت. */}
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -top-16 end-0 h-52 w-52 rounded-full opacity-70"
-              style={{
-                background:
-                  'radial-gradient(circle, color-mix(in srgb, var(--color-brand-fill) 30%, transparent), transparent 70%)',
-              }}
-            />
             <div className="grid gap-5 sm:grid-cols-2">
               <Field name="name" label="الاسم الكامل" required autoComplete="name" error={errors.name} />
               <Field name="phone" label="رقم التواصل" required type="tel" dir="ltr" autoComplete="tel" error={errors.phone} />
 
               <div>
                 <Label htmlFor="productId" required>نوع المنتج</Label>
-                <select id="productId" name="productId" defaultValue={defaultProduct ?? ""} aria-invalid={Boolean(errors.productId)} className={`${FIELD} ${errors.productId ? 'border-red-500' : 'border-white/10'}`}>
+                <select id="productId" name="productId" defaultValue={defaultProduct ?? ""} aria-invalid={Boolean(errors.productId)} className={`${FIELD} ${errors.productId ? 'border-red-500' : 'border-edge-strong'}`}>
                   <option value="" disabled>اختر المنتج…</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
@@ -234,28 +222,32 @@ export function QuoteForm({
               </div>
 
               <div>
-                <Label htmlFor="quantity" required>عدد القطع (أقلّه {MIN_QTY})</Label>
-                <div className={`flex items-center rounded-xl border ${errors.quantity ? 'border-red-500' : 'border-white/10'}`}>
-                  <button type="button" aria-label="أنقص" onClick={() => setQty((q) => Math.max(MIN_QTY, q - 1))} className="px-4 py-3 text-lg text-body-muted">−</button>
+                <Label htmlFor="quantity" required>عدد القطع</Label>
+                <div className={`flex items-center rounded-xl border ${errors.quantity ? 'border-red-500' : 'border-edge-strong'}`}>
+                  <button type="button" aria-label="أنقص" onClick={() => setQty((q) => (q === '' ? q : Math.max(MIN_QTY, q - 1)))} className="px-4 py-3 text-lg text-body-muted">−</button>
                   <input
                     id="quantity"
                     type="number"
                     inputMode="numeric"
                     min={MIN_QTY}
                     value={qty}
-                    onChange={(e) => setQty(Math.max(0, Math.round(Number(e.target.value) || 0)))}
-                    onBlur={() => setQty((q) => Math.max(MIN_QTY, q))}
+                    placeholder={`${MIN_QTY} أو أكثر`}
+                    onChange={(e) => setQty(e.target.value === '' ? '' : Math.max(0, Math.round(Number(e.target.value) || 0)))}
                     dir="ltr"
                     className="w-full bg-transparent py-3 text-center text-sm text-body outline-none"
                   />
-                  <button type="button" aria-label="زد" onClick={() => setQty((q) => q + 1)} className="px-4 py-3 text-lg text-body-muted">+</button>
+                  <button type="button" aria-label="زد" onClick={() => setQty((q) => (q === '' || q < MIN_QTY ? MIN_QTY : q + 1))} className="px-4 py-3 text-lg text-body-muted">+</button>
                 </div>
-                {errors.quantity && <ErrorText>{errors.quantity}</ErrorText>}
+                {errors.quantity ? (
+                  <ErrorText>{errors.quantity}</ErrorText>
+                ) : (
+                  <p className="mt-1.5 text-xs text-body-subtle">أقل عدد {MIN_QTY} قطع.</p>
+                )}
               </div>
 
               <div>
                 <Label htmlFor="service" required>نوع الشغل</Label>
-                <select id="service" name="service" defaultValue="" aria-invalid={Boolean(errors.service)} className={`${FIELD} ${errors.service ? 'border-red-500' : 'border-white/10'}`}>
+                <select id="service" name="service" defaultValue="" aria-invalid={Boolean(errors.service)} className={`${FIELD} ${errors.service ? 'border-red-500' : 'border-edge-strong'}`}>
                   <option value="" disabled>طباعة أو تطريز…</option>
                   {SERVICES.map((s) => (
                     <option key={s.value} value={s.value}>{s.label}</option>
@@ -274,7 +266,7 @@ export function QuoteForm({
                 name="message"
                 rows={3}
                 placeholder="الألوان، مكان الشعار، موعد التسليم…"
-                className={`${FIELD} resize-y border-white/10 placeholder:text-body-subtle`}
+                className={`${FIELD} resize-y border-edge-strong placeholder:text-body-subtle`}
               />
             </div>
 
@@ -351,7 +343,7 @@ function Field({
         autoComplete={autoComplete}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${name}-error` : undefined}
-        className={`${FIELD} ${error ? 'border-red-500' : 'border-white/10'} ${dir === 'ltr' ? 'text-start' : ''}`}
+        className={`${FIELD} ${error ? 'border-red-500' : 'border-edge-strong'} ${dir === 'ltr' ? 'text-start' : ''}`}
       />
       {error && <ErrorText>{error}</ErrorText>}
     </div>

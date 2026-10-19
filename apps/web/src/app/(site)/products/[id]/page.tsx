@@ -77,12 +77,12 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           <span className="text-body">{product.nameAr}</span>
         </nav>
 
-        <div className="grid gap-10 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)] lg:items-start lg:gap-14">
           {/* ── المعرض: يقلّبه الزبون، واختيار اللون يعرض صورته ── */}
           <ProductGallery name={product.nameAr} images={product.images} imageColors={product.imageColors} />
 
           {/* ── العرض ── */}
-          <div className="lg:pt-4">
+          <div className="min-w-0 lg:pt-4">
             <span className="inline-flex items-center gap-2.5 rounded-full bg-brand-fill/10 px-4 py-1.5 text-sm font-semibold text-brand">
               <span className="h-2 w-2 rounded-full bg-brand-fill" />
               منتجات كيان

@@ -17,13 +17,17 @@ import type { Kind } from './types';
 export async function fillColorsFromNames(): Promise<void> {
   const user = await requirePermission('catalog.manage');
   const colors = await prisma.color.findMany({
-    where: { tenantId: user.tenantId, isDeleted: false, OR: [{ hex: null }, { hex: '' }] },
-    select: { id: true, nameAr: true },
+    where: { tenantId: user.tenantId, isDeleted: false },
+    select: { id: true, nameAr: true, hex: true },
   });
   let filled = 0;
+  const replaced: string[] = [];
   for (const c of colors) {
+    // كود صالح يبقى؛ الفارغ أو غير الصالح (مثل «#22») يُستبدل بلون الاسم.
+    if (c.hex && normalizeHex(c.hex)) continue;
     const hex = suggestHex(c.nameAr);
     if (!hex) continue;
+    if (c.hex) replaced.push(`${c.nameAr}: ${c.hex}`);
     await prisma.color.update({ where: { id: c.id }, data: { hex } });
     filled += 1;
   }
@@ -33,7 +37,8 @@ export async function fillColorsFromNames(): Promise<void> {
     action: 'catalog.update',
     entityType: 'Color',
     entityId: 'bulk',
-    detail: `تعبئة أكواد ${filled} لون من الأسماء`,
+    // الأكواد القديمة غير الصالحة تُحفظ هنا فلا تضيع.
+    detail: `تعبئة أكواد ${filled} لون من الأسماء${replaced.length ? ` — القديم: ${replaced.join('، ')}` : ''}`.slice(0, 1900),
   });
   revalidatePath('/catalog/colors');
   revalidatePath('/products', 'layout');

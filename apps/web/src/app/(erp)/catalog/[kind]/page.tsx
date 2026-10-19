@@ -9,7 +9,7 @@ import { ConfirmButton } from '@/components/crud/ConfirmButton';
 import { CatalogForm } from './CatalogForm';
 import { RenameForm } from './RenameForm';
 import { deleteCatalogItem, fillColorsFromNames } from '../actions';
-import { swatchBackground } from '@/lib/color-swatch';
+import { swatchBackground, normalizeHex } from '@/lib/color-swatch';
 import { isKind, KINDS, type Kind } from '../types';
 
 export const metadata: Metadata = { title: 'القوائم' };
@@ -148,7 +148,7 @@ export default async function CatalogPage({ params }: { params: Promise<{ kind: 
         // الألوان بلا كود تظهر فارغة على الموقع — زرّ واحد يتعرّف عليها من أسمائها.
         <form action={fillColorsFromNames} className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-card-2 px-4 py-3">
           <p className="text-xs text-txt-2">
-            {rows.filter((r) => !r.hex).length} لون بلا كود. التعرّف يقرأ الألوان من الاسم («اسود ياخة احمر» ⇒ أسود بياقة حمراء)، وتقدر تعدّلها بعدها من «تعديل».
+            {rows.filter((r) => !r.hex || !normalizeHex(r.hex)).length} لون بلا كود لوني صالح. التعرّف يقرأ الألوان من الاسم («اسود ياخة احمر» ⇒ أسود بياقة حمراء)، وتقدر تعدّلها بعدها من «تعديل».
           </p>
           <button type="submit" className="erp-btn">تعرّف على الألوان من الأسماء</button>
         </form>
