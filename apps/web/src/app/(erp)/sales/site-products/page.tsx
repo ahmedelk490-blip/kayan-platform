@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
+import { swatchBackground } from '@/lib/color-swatch';
 import Link from 'next/link';
 import { SERVICE_PRICE_NOTE } from '@erp/domain';
 import { requirePermission, allows } from '@/lib/guard';
@@ -110,7 +111,7 @@ export default async function SiteProductsPage() {
                         key={c.nameAr}
                         title={c.nameAr}
                         className="h-4 w-4 rounded-full border border-line"
-                        style={{ background: c.hex ?? 'transparent' }}
+                        style={{ background: swatchBackground(c.nameAr, c.hex) ?? 'transparent' }}
                       />
                     ))}
                     {colors.length > 6 && <span className="text-xs text-txt-3">+{colors.length - 6}</span>}

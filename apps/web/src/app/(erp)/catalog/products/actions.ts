@@ -1252,6 +1252,36 @@ export async function deleteProductImage(productId: string, imageId: string): Pr
   revalidatePath('/');
 }
 
+/**
+ * يربط صورة بلون من ألوان المنتج (عبر أول متغيّر بهذا اللون).
+ *
+ * بطلب المالك: على الموقع، اختيار لون يعرض صورته، والضغط على صورة يختار
+ * لونها. «بلا لون» يفكّ الربط.
+ */
+export async function setImageColor(productId: string, imageId: string, formData: FormData): Promise<void> {
+  const user = await requirePermission('products.write');
+  const colorId = String(formData.get('colorId') ?? '');
+
+  const owned = await prisma.productImage.findFirst({
+    where: { id: imageId, product: { id: productId, tenantId: user.tenantId } },
+    select: { id: true },
+  });
+  if (!owned) return;
+
+  const variant = colorId
+    ? await prisma.productVariant.findFirst({
+        where: { productId, colorId, isDeleted: false },
+        orderBy: { sku: 'asc' },
+        select: { id: true },
+      })
+    : null;
+
+  await prisma.productImage.update({ where: { id: imageId }, data: { variantId: variant?.id ?? null } });
+
+  revalidatePath(`/catalog/products/${productId}`);
+  revalidatePath(`/products/${productId}`);
+}
+
 export async function setPrimaryImage(productId: string, imageId: string): Promise<void> {
   const user = await requirePermission('products.write');
 

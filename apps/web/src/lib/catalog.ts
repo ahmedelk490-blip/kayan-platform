@@ -144,6 +144,10 @@ export interface PublicProductDetail {
   sellingPrice: string | null;
   /** كل الصور، الأساسية أولاً. */
   images: string[];
+  /** لون كل صورة (بنفس ترتيب images) إن رُبطت بلون من النظام، وإلا null. */
+  imageColors: (string | null)[];
+  /** المقاسات المتاحة لكل لون — يُعرض للعميل المتاح فقط. */
+  sizesByColor: Record<string, string[]>;
   /** الألوان المتاحة باسمها وكودها اللوني للعيّنة. */
   colors: { nameAr: string; hex: string | null }[];
   sizes: string[];
@@ -173,7 +177,7 @@ export async function publicProduct(id: string): Promise<PublicProductDetail | n
         sellingPrice: true,
         images: {
           orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
-          select: { path: true },
+          select: { path: true, variant: { select: { color: { select: { nameAr: true } } } } },
         },
         variants: {
           where: { isDeleted: false },
@@ -214,6 +218,16 @@ export async function publicProduct(id: string): Promise<PublicProductDetail | n
     }
     const sizes = [...sizeMap.entries()].sort((a, b) => a[1] - b[1]).map(([code]) => code);
 
+    // المتاح لكل لون = المقاسات التي لها متغيّر بهذا اللون، بترتيب المقاسات العام.
+    const sizesByColor: Record<string, string[]> = {};
+    for (const v of p.variants) {
+      if (!v.color || !v.size?.code) continue;
+      (sizesByColor[v.color.nameAr] ??= []).push(v.size.code);
+    }
+    for (const k of Object.keys(sizesByColor)) {
+      sizesByColor[k] = sizes.filter((s) => sizesByColor[k].includes(s));
+    }
+
     return {
       id: p.id,
       sku: p.sku,
@@ -222,8 +236,10 @@ export async function publicProduct(id: string): Promise<PublicProductDetail | n
       descriptionAr: p.descriptionAr,
       sellingPrice: p.sellingPrice ? p.sellingPrice.toString() : null,
       images: p.images.map((i) => i.path),
+      imageColors: p.images.map((i) => i.variant?.color?.nameAr ?? null),
       colors: colors.map((c) => ({ nameAr: c.nameAr, hex: c.hex })),
       sizes,
+      sizesByColor,
       materials: [...new Set(p.materials.map((m) => m.material.nameAr))],
       tiers: p.priceTiers.map((t) => ({
         service: t.service,

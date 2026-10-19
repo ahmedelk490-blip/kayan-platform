@@ -1,3 +1,4 @@
+import { swatchBackground } from '@/lib/color-swatch';
 import type { PublicProduct } from '@/lib/catalog';
 
 /**
@@ -26,7 +27,7 @@ export function ProductCardMeta({ product }: { product: Pick<PublicProduct, 'pri
                   key={s.name}
                   title={s.name}
                   className="h-3.5 w-3.5 rounded-full border border-white/50"
-                  style={{ background: s.hex ?? 'transparent' }}
+                  style={{ background: swatchBackground(s.name, s.hex) ?? 'transparent' }}
                 />
               ))}
               {more > 0 && <span className="tnum text-white/80">+{more}</span>}

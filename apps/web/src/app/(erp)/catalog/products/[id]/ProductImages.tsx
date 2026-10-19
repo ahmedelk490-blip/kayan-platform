@@ -24,8 +24,12 @@ export function ProductImages({
   remove,
   setPrimary,
   move,
+  colors,
+  setColor,
 }: {
-  images: { id: string; src: string; isPrimary: boolean; isUploaded: boolean }[];
+  images: { id: string; src: string; isPrimary: boolean; isUploaded: boolean; colorId: string }[];
+  colors: { id: string; nameAr: string }[];
+  setColor: (imageId: string, formData: FormData) => Promise<void>;
   upload: UploadAction;
   remove: (imageId: string) => Promise<void>;
   setPrimary: (imageId: string) => Promise<void>;
@@ -41,8 +45,8 @@ export function ProductImages({
       {images.length > 0 ? (
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
           {images.map((img, i) => (
+            <div key={img.id}>
             <div
-              key={img.id}
               className={`group relative overflow-hidden rounded-lg border ${img.isPrimary ? 'border-brand ring-1 ring-brand' : 'border-line'}`}
             >
               <div className="relative aspect-square bg-card-2">
@@ -78,6 +82,24 @@ export function ProductImages({
                   </button>
                 </form>
               </div>
+            </div>
+            {/* لون الصورة: على الموقع اختيار اللون يعرض صورته. */}
+            {colors.length > 0 && (
+              <form action={setColor.bind(null, img.id)} className="mt-1.5">
+                <select
+                  name="colorId"
+                  defaultValue={img.colorId}
+                  aria-label="لون الصورة"
+                  onChange={(e) => e.currentTarget.form?.requestSubmit()}
+                  className="erp-input w-full px-2 py-1.5 text-xs"
+                >
+                  <option value="">بلا لون</option>
+                  {colors.map((c) => (
+                    <option key={c.id} value={c.id}>{c.nameAr}</option>
+                  ))}
+                </select>
+              </form>
+            )}
             </div>
           ))}
         </div>

@@ -74,7 +74,7 @@ export default async function ServicesPage() {
 
         <p className="mt-10 text-sm text-body-muted">
           عندك طلب محدّد؟{' '}
-          <Link href="/contact" className="text-brand hover:underline">
+          <Link href="/quote" className="text-brand hover:underline">
             اطلب عرض سعر
           </Link>
           {' '}وسنرجع لك بسعر وموعد تسليم واضحين.

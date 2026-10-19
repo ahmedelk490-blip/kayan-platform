@@ -1,8 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { addToCart, itemKey, openCart } from '@/lib/cart';
-import { track, priceFromText, toMetaValue, META_CURRENCY } from '@/lib/meta-pixel';
+import { track, toMetaValue, META_CURRENCY } from '@/lib/meta-pixel';
+import { swatchBackground } from '@/lib/color-swatch';
+import { COLOR_EVENT, PICK_COLOR_EVENT } from './ProductGallery';
 
 interface Tier {
   service: string;
@@ -13,19 +15,12 @@ interface Tier {
   color: string | null;
 }
 
-const SERVICE_AR: Record<string, string> = {
-  EMBROIDERY: 'تطريز',
-  DTF: 'طباعة DTF',
-  PRINT: 'طباعة',
-  SCREEN: 'طباعة سلك',
-};
-
 /**
  * اختيار المنتج وإضافته للسلّة.
  *
- * ألوان المنتج ومقاساته قابلة للنقر (لا عرض فقط). عند اكتمال الاختيار يظهر
- * السعر التقريبي المحسوب من شرائح السعر (حسب الكمية واللون). «أضف للسلّة»
- * يجمّع، و«اشترِ الآن» يفتح السلّة مباشرة لإتمام الطلب.
+ * بطلب المالك: ألوان المنتج المتوفّرة وحدها، كلٌّ بشكل لونه؛ ثم المقاسات
+ * المتاحة لهذا اللون فقط؛ بلا خانات كمية هنا — الكمية تُعدَّل في السلّة.
+ * اختيار اللون ينقل المعرض لصورته (ProductGallery).
  */
 export function ProductBuy({
   productId,
@@ -33,6 +28,7 @@ export function ProductBuy({
   image,
   colors,
   sizes,
+  sizesByColor,
   tiers,
 }: {
   productId: string;
@@ -40,76 +36,61 @@ export function ProductBuy({
   image: string | null;
   colors: { nameAr: string; hex: string | null }[];
   sizes: string[];
+  sizesByColor: Record<string, string[]>;
   tiers: Tier[];
 }) {
   const [color, setColor] = useState('');
-  const [qtyBySize, setQtyBySize] = useState<Record<string, number>>({});
-  const [singleQty, setSingleQty] = useState(12);
+  const [size, setSize] = useState('');
   const [added, setAdded] = useState(false);
 
+  const available = color && sizesByColor[color]?.length ? sizesByColor[color] : sizes;
   const needsColor = colors.length > 0;
-  const needsSize = sizes.length > 0;
-  const totalQty = needsSize ? sizes.reduce((s, sz) => s + (qtyBySize[sz] || 0), 0) : singleQty;
-  const ready = (!needsColor || !!color) && totalQty >= 1;
-  const setSizeQty = (s: string, n: number) => setQtyBySize((p) => ({ ...p, [s]: Math.max(0, Math.round(n)) }));
+  const needsSize = available.length > 0;
+  const ready = (!needsColor || !!color) && (!needsSize || !!size);
 
-  // أسعار الشرائح المنطبقة على الكمية واللون المختارين، مجمّعة حسب الخدمة.
-  const priceLines = useMemo(() => {
-    const q = Math.max(1, totalQty);
-    const applicable = tiers.filter(
-      (t) => (t.color === null || t.color === color) && t.minQty <= q && (t.maxQty === null || q <= t.maxQty),
-    );
-    const byService = new Map<string, Tier>();
-    for (const t of applicable) {
-      const cur = byService.get(t.service);
-      // فضّل السعر الخاص باللون على العام، وإلا الأقل.
-      if (!cur || (t.color !== null && cur.color === null) || t.price < cur.price) byService.set(t.service, t);
-    }
-    return [...byService.values()];
-  }, [tiers, color, totalQty]);
+  function chooseColor(next: string, fromGallery = false) {
+    setColor(next);
+    // مقاس غير متاح في اللون الجديد يُلغى بدل أن يُطلب ما لا يوجد.
+    const nextSizes = next && sizesByColor[next]?.length ? sizesByColor[next] : sizes;
+    setSize((s) => (nextSizes.includes(s) ? s : ''));
+    if (!next) return;
+    if (!fromGallery) window.dispatchEvent(new CustomEvent(COLOR_EVENT, { detail: next }));
+    track('CustomizeProduct', { content_ids: [productId], content_name: productName, content_type: 'product', color: next });
+  }
 
-  const priceText =
-    priceLines.length > 0
-      ? priceLines.map((t) => `${SERVICE_AR[t.service] ?? t.service} ${Number(t.price).toLocaleString('en-US')} ${t.currency}`).join(' · ')
-      : '';
+  // صورة مربوطة بلون ضُغطت في المعرض ⇒ يُختار لونها هنا.
+  useEffect(() => {
+    const onPick = (e: Event) => chooseColor((e as CustomEvent<string>).detail, true);
+    window.addEventListener(PICK_COLOR_EVENT, onPick);
+    return () => window.removeEventListener(PICK_COLOR_EVENT, onPick);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sizesByColor, sizes]);
+
+  // «يبدأ من»: أقلّ سعر يخصّ اللون المختار أو يعمّ كل الألوان.
+  const priceFrom = useMemo(() => {
+    const prices = tiers.filter((t) => t.color === null || !color || t.color === color).map((t) => t.price);
+    return prices.length ? Math.min(...prices) : null;
+  }, [tiers, color]);
+  const priceText = priceFrom ? `يبدأ من ${priceFrom.toLocaleString('en-US')} د.ع` : '';
 
   function add(openAfter: boolean) {
     if (!ready) return;
-    // مقاسات لها كميات ⇒ سطر لكل مقاس بكميته؛ وإلا سطر واحد بالكمية.
-    if (needsSize) {
-      for (const s of sizes) {
-        const q = qtyBySize[s] || 0;
-        if (q <= 0) continue;
-        addToCart({
-          key: itemKey(productId, color || undefined, s),
-          productId,
-          productName,
-          image,
-          colorLabel: color || undefined,
-          sizeLabel: s,
-          quantity: q,
-          priceText: priceText || undefined,
-        });
-      }
-    } else {
-      addToCart({
-        key: itemKey(productId, color || undefined, undefined),
-        productId,
-        productName,
-        image,
-        colorLabel: color || undefined,
-        quantity: singleQty,
-        priceText: priceText || undefined,
-      });
-    }
-    // إعلانات Meta: إضافةٌ للسلّة — بقيمةٍ تقريبية من أول سعرٍ معروض.
-    const pieces = needsSize ? sizes.reduce((n, s) => n + (qtyBySize[s] || 0), 0) : singleQty;
+    addToCart({
+      key: itemKey(productId, color || undefined, size || undefined),
+      productId,
+      productName,
+      image,
+      colorLabel: color || undefined,
+      sizeLabel: size || undefined,
+      quantity: 1,
+      priceText: priceText || undefined,
+    });
     track('AddToCart', {
       content_ids: [productId],
       content_name: productName,
       content_type: 'product',
-      num_items: pieces,
-      value: toMetaValue(priceFromText(priceText) * pieces),
+      num_items: 1,
+      value: toMetaValue(priceFrom ?? 0),
       currency: META_CURRENCY,
     });
     if (openAfter) openCart();
@@ -121,30 +102,30 @@ export function ProductBuy({
 
   return (
     <div className="mt-9">
-      {/* الألوان — قابلة للاختيار */}
       {needsColor && (
         <div>
           <h2 className="mb-3 text-base font-semibold text-body">
             اللون
             {color && <span className="ms-2 text-sm font-normal text-brand">{color}</span>}
           </h2>
-          <ul className="flex flex-wrap gap-3">
+          <ul className="flex flex-wrap gap-2.5">
             {colors.map((c) => {
               const on = color === c.nameAr;
+              const bg = swatchBackground(c.nameAr, c.hex);
               return (
                 <li key={c.nameAr}>
                   <button
                     type="button"
-                    onClick={() => setColor(on ? '' : c.nameAr)}
+                    onClick={() => chooseColor(on ? '' : c.nameAr)}
                     aria-pressed={on}
+                    aria-label={c.nameAr}
                     title={c.nameAr}
-                    className={`flex flex-col items-center gap-1.5 rounded-xl p-1 transition-transform ${on ? 'scale-105' : ''}`}
+                    className={`grid h-12 w-12 place-items-center rounded-full border-2 ${on ? 'border-brand' : 'border-transparent'}`}
                   >
                     <span
-                      className={`h-11 w-11 rounded-full border shadow-[inset_0_2px_6px_rgba(0,0,0,0.15)] ${on ? 'ring-2 ring-brand ring-offset-2 ring-offset-panel border-brand' : 'border-black/10'}`}
-                      style={{ backgroundColor: c.hex ?? 'transparent' }}
+                      className="h-9 w-9 rounded-full border border-white/25 shadow-[inset_0_2px_6px_rgba(0,0,0,0.2)]"
+                      style={{ background: bg ?? 'transparent' }}
                     />
-                    <span className={`text-[0.72rem] ${on ? 'font-semibold text-brand' : 'text-body-muted'}`}>{c.nameAr}</span>
                   </button>
                 </li>
               );
@@ -153,73 +134,47 @@ export function ProductBuy({
         </div>
       )}
 
-      {/* المقاسات — كمية لكل مقاس */}
       {needsSize && (
         <div className="mt-7">
           <h2 className="mb-3 text-base font-semibold text-body">
-            الكمية لكل مقاس
-            {totalQty > 0 && <span className="ms-2 text-sm font-normal text-brand">{totalQty} قطعة</span>}
+            المقاس
+            {size && <span className="ms-2 text-sm font-normal text-brand">{size}</span>}
           </h2>
-          <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-            {sizes.map((s) => {
-              const q = qtyBySize[s] || 0;
+          <ul className="flex flex-wrap gap-2.5">
+            {available.map((s) => {
+              const on = size === s;
               return (
-                <li key={s} className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 ${q > 0 ? 'border-brand' : 'border-edge-strong'}`}>
-                  <span className="text-sm font-medium text-body">{s}</span>
-                  <div className="flex items-center rounded-lg border border-edge-strong">
-                    <button type="button" aria-label="أنقص" onClick={() => setSizeQty(s, q - 1)} className="px-2.5 py-1.5 text-body-muted hover:text-body">−</button>
-                    <input
-                      type="number"
-                      min="0"
-                      value={q}
-                      onChange={(e) => setSizeQty(s, Number(e.target.value) || 0)}
-                      dir="ltr"
-                      className="w-10 bg-transparent py-1.5 text-center text-sm text-body outline-none"
-                    />
-                    <button type="button" aria-label="زد" onClick={() => setSizeQty(s, q + 1)} className="px-2.5 py-1.5 text-body-muted hover:text-body">+</button>
-                  </div>
+                <li key={s}>
+                  <button
+                    type="button"
+                    onClick={() => setSize(on ? '' : s)}
+                    aria-pressed={on}
+                    dir="ltr"
+                    className={`min-w-14 rounded-xl border px-4 py-2.5 text-sm font-medium ${
+                      on ? 'border-brand bg-brand-fill text-on-brand' : 'border-edge-strong text-body'
+                    }`}
+                  >
+                    {s}
+                  </button>
                 </li>
               );
             })}
           </ul>
+          {color && <p className="mt-2 text-xs text-body-subtle">المقاسات المتاحة لهذا اللون فقط.</p>}
         </div>
       )}
 
-      {/* الكمية (بلا مقاسات) + السعر */}
-      <div className="mt-7 flex flex-wrap items-end gap-5">
-        {!needsSize && (
-          <label className="block">
-            <span className="mb-2 block text-xs text-body-muted">الكمية</span>
-            <div className="flex items-center rounded-xl border border-edge-strong">
-              <button type="button" aria-label="أنقص" onClick={() => setSingleQty((q) => Math.max(1, q - 1))} className="px-3.5 py-2.5 text-body-muted hover:text-body">−</button>
-              <input
-                type="number"
-                min="1"
-                value={singleQty}
-                onChange={(e) => setSingleQty(Math.max(1, Math.round(Number(e.target.value) || 1)))}
-                dir="ltr"
-                className="w-16 bg-transparent py-2.5 text-center text-sm text-body outline-none"
-              />
-              <button type="button" aria-label="زد" onClick={() => setSingleQty((q) => q + 1)} className="px-3.5 py-2.5 text-body-muted hover:text-body">+</button>
-            </div>
-          </label>
-        )}
-
-        <div className="min-w-0">
-          <span className="mb-1 block text-xs text-body-muted">السعر التقريبي</span>
-          <p className="text-sm font-semibold text-body">
-            {ready ? (priceText || 'السعر حسب الطلب — نرجع لك بالتسعيرة') : (needsSize ? 'اختر اللون وأدخل الكميات' : 'اختر اللون')}
-          </p>
-        </div>
+      <div className="mt-7">
+        <span className="mb-1 block text-xs text-body-muted">السعر</span>
+        <p className="text-sm font-semibold text-body">{priceText || 'السعر حسب الطلب — نرجع لك بالتسعيرة'}</p>
       </div>
 
-      {/* الأزرار */}
       <div className="mt-7 flex flex-wrap gap-3">
         <button
           type="button"
           onClick={() => add(true)}
           disabled={!ready}
-          className="inline-flex items-center rounded-full bg-brand-fill px-8 py-4 text-sm font-bold text-on-brand shadow-[0_18px_40px_-16px_rgba(92,35,52,0.9)] transition-all hover:-translate-y-0.5 hover:opacity-95 disabled:translate-y-0 disabled:opacity-40"
+          className="inline-flex items-center rounded-full bg-brand-fill px-8 py-4 text-sm font-bold text-on-brand shadow-[0_18px_40px_-16px_rgba(92,35,52,0.9)] disabled:opacity-40"
         >
           اشترِ الآن
         </button>
@@ -227,13 +182,17 @@ export function ProductBuy({
           type="button"
           onClick={() => add(false)}
           disabled={!ready}
-          className="inline-flex items-center gap-2 rounded-full border border-edge-strong px-8 py-4 text-sm font-medium text-body transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
+          className="inline-flex items-center gap-2 rounded-full border border-edge-strong px-8 py-4 text-sm font-medium text-body disabled:opacity-40"
         >
           {added ? '✓ أُضيف للسلّة' : 'أضف للسلّة'}
         </button>
       </div>
-      {!ready && (needsColor || needsSize) && (
-        <p className="mt-2 text-[0.7rem] text-body-subtle">اختر {needsColor ? 'اللون' : ''}{needsColor && needsSize ? ' و' : ''}{needsSize ? 'المقاس' : ''} لتفعيل الطلب.</p>
+      {!ready && (
+        <p className="mt-2 text-xs text-body-subtle">
+          اختر {needsColor && !color ? 'اللون' : ''}
+          {needsColor && !color && needsSize && !size ? ' و' : ''}
+          {needsSize && !size ? 'المقاس' : ''} لتفعيل الطلب — والكمية تحددها في السلّة.
+        </p>
       )}
     </div>
   );

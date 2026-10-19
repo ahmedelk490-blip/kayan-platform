@@ -31,16 +31,16 @@ export const SITE_URL = (
  */
 export const INDEXABLE_ROUTES = [
   { path: '/', changeFrequency: 'monthly' as const, priority: 1 },
-  { path: '/contact', changeFrequency: 'yearly' as const, priority: 0.8 },
+  { path: '/quote', changeFrequency: 'yearly' as const, priority: 0.8 },
   { path: '/legal/privacy', changeFrequency: 'yearly' as const, priority: 0.3 },
   { path: '/legal/terms', changeFrequency: 'yearly' as const, priority: 0.3 },
 ];
 
 export const NAV_LINKS = [
-  { href: '#products', label: 'منتجاتنا' },
-  { href: '#services', label: 'الطباعة والتطريز' },
-  { href: '#why', label: 'ليش كيان' },
-  { href: '#quote', label: 'اطلب عرض سعر' },
+  { href: '/#products', label: 'منتجاتنا' },
+  { href: '/#services', label: 'الطباعة والتطريز' },
+  { href: '/#why', label: 'ليش كيان' },
+  { href: '/quote', label: 'اطلب عرض سعر' },
 ] as const;
 
 /**
@@ -197,26 +197,26 @@ export const FOOTER_GROUPS = [
   {
     title: 'منتجاتنا',
     links: [
-      { href: '#products', label: 'اليلكات' },
-      { href: '#products', label: 'التيشيرتات والبولو' },
-      { href: '#products', label: 'المرايل' },
-      { href: '#products', label: 'الشماغ' },
+      { href: '/#products', label: 'اليلكات' },
+      { href: '/#products', label: 'التيشيرتات والبولو' },
+      { href: '/#products', label: 'المرايل' },
+      { href: '/#products', label: 'الشماغ' },
     ],
   },
   {
     title: 'خدماتنا',
     links: [
-      { href: '#services', label: 'الطباعة' },
-      { href: '#services', label: 'التطريز' },
-      { href: '#services', label: 'تصنيع الزي الموحد' },
-      { href: '#services', label: 'حلول الشركات' },
+      { href: '/#services', label: 'الطباعة' },
+      { href: '/#services', label: 'التطريز' },
+      { href: '/#services', label: 'تصنيع الزي الموحد' },
+      { href: '/#services', label: 'حلول الشركات' },
     ],
   },
   {
     title: 'كيان',
     links: [
-      { href: '#why', label: 'ليش كيان' },
-      { href: '#quote', label: 'اطلب عرض سعر' },
+      { href: '/#why', label: 'ليش كيان' },
+      { href: '/quote', label: 'اطلب عرض سعر' },
     ],
   },
   {

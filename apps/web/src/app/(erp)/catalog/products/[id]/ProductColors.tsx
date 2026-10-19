@@ -1,5 +1,6 @@
 'use client';
 
+import { swatchBackground } from '@/lib/color-swatch';
 import { useActionState, useState, useTransition } from 'react';
 import { addColorToProduct, toggleProductColor } from '../actions';
 
@@ -70,7 +71,7 @@ export function ProductColors({
             >
               <span
                 aria-hidden
-                style={{ backgroundColor: c.hex ?? 'transparent' }}
+                style={{ background: swatchBackground(c.nameAr, c.hex) ?? 'transparent' }}
                 className="h-5 w-5 shrink-0 rounded-full border border-line-2"
               />
               <span>{c.nameAr}</span>

@@ -1,3 +1,4 @@
+import { swatchBackground } from '@/lib/color-swatch';
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -19,6 +20,7 @@ import {
   uploadProductImage,
   deleteProductImage,
   setPrimaryImage,
+  setImageColor,
   moveProductImage,
   setShowOnSite,
   addBundle,
@@ -190,7 +192,14 @@ export default async function ProductDetailPage({
               src: img.path,
               isPrimary: img.isPrimary,
               isUploaded: img.path.startsWith('/product-img/'),
+              colorId: product.variants.find((v) => v.id === img.variantId)?.colorId ?? '',
             }))}
+            colors={[
+              ...new Map(
+                product.variants.filter((v) => v.color).map((v) => [v.color!.id, { id: v.color!.id, nameAr: v.color!.nameAr }]),
+              ).values(),
+            ]}
+            setColor={setImageColor.bind(null, product.id)}
             upload={uploadProductImage.bind(null, product.id)}
             remove={deleteProductImage.bind(null, product.id)}
             setPrimary={setPrimaryImage.bind(null, product.id)}
@@ -256,7 +265,7 @@ export default async function ProductDetailPage({
                           <span
                             aria-hidden="true"
                             className="inline-block h-3 w-3 rounded-full border border-line-2"
-                            style={{ backgroundColor: v.color.hex ?? 'transparent' }}
+                            style={{ background: swatchBackground(v.color.nameAr, v.color.hex) ?? 'transparent' }}
                           />
                           {v.color.nameAr}
                         </span>
@@ -274,7 +283,7 @@ export default async function ProductDetailPage({
                           label={[product.nameAr, v.color?.nameAr, v.size?.code].filter(Boolean).join(' · ')}
                         />
                       ) : (
-                        <span className="text-[0.65rem] text-txt-4">—</span>
+                        <span className="text-xs text-txt-4">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3">

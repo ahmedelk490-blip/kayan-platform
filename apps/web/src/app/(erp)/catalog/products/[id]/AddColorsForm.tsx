@@ -1,5 +1,6 @@
 'use client';
 
+import { swatchBackground } from '@/lib/color-swatch';
 import { useActionState } from 'react';
 import { SubmitButton, FormError } from '@/components/crud/Form';
 
@@ -51,7 +52,7 @@ export function AddColorsForm({
                 <span
                   aria-hidden
                   className="h-5 w-5 shrink-0 rounded-full border border-line-2 peer-checked:ring-2 peer-checked:ring-brand peer-checked:ring-offset-1"
-                  style={{ backgroundColor: c.hex ?? 'transparent' }}
+                  style={{ background: swatchBackground(c.nameAr, c.hex) ?? 'transparent' }}
                 />
                 {c.nameAr}
               </label>

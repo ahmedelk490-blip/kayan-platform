@@ -418,7 +418,7 @@ export function Hero({ slides }: { slides: HeroSlide[] }) {
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-4">
-            <MagneticCta href="#quote" reduced={reduced} primary>
+            <MagneticCta href="/quote" reduced={reduced} primary>
               اطلب عرض سعر
             </MagneticCta>
             <MagneticCta href="#products" reduced={reduced}>

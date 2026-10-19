@@ -6,7 +6,39 @@ import { z } from 'zod';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
+import { normalizeHex, suggestHex } from '@/lib/color-swatch';
 import type { Kind } from './types';
+
+/**
+ * يتعرّف على ألوان كل لون بلا كود من اسمه ويحفظها («اسود ياخة احمر» ⇒
+ * أسود + ياقة حمراء) — بطلب المالك، فلا تبقى عيّنات فارغة على الموقع.
+ * لا يمسّ لوناً له كود مسجَّل؛ يُعدَّل بعدها يدوياً من «تعديل».
+ */
+export async function fillColorsFromNames(): Promise<void> {
+  const user = await requirePermission('catalog.manage');
+  const colors = await prisma.color.findMany({
+    where: { tenantId: user.tenantId, isDeleted: false, OR: [{ hex: null }, { hex: '' }] },
+    select: { id: true, nameAr: true },
+  });
+  let filled = 0;
+  for (const c of colors) {
+    const hex = suggestHex(c.nameAr);
+    if (!hex) continue;
+    await prisma.color.update({ where: { id: c.id }, data: { hex } });
+    filled += 1;
+  }
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'catalog.update',
+    entityType: 'Color',
+    entityId: 'bulk',
+    detail: `تعبئة أكواد ${filled} لون من الأسماء`,
+  });
+  revalidatePath('/catalog/colors');
+  revalidatePath('/products', 'layout');
+  revalidatePath('/');
+}
 
 export interface FormState {
   error?: string;
@@ -50,7 +82,10 @@ export async function createCatalogItem(
         break;
       }
       case 'colors':
-        await prisma.color.create({ data: { tenantId, nameAr, nameEn: nameEn || null, hex: extra || null } });
+        // بلا كود: يُقترح من الاسم («اسود ياخة احمر» ⇒ لونان) فلا تُضاف عيّنة فارغة.
+        await prisma.color.create({
+          data: { tenantId, nameAr, nameEn: nameEn || null, hex: (extra && normalizeHex(extra)) || suggestHex(nameAr) },
+        });
         break;
       case 'sizes':
         if (!code) return { fieldErrors: { code: 'رمز المقاس مطلوب.' } };
@@ -116,9 +151,14 @@ export async function updateCatalogItem(
       case 'categories':
         await prisma.category.updateMany({ where, data: { nameAr, nameEn: nameEn || nameAr } });
         break;
-      case 'colors':
-        await prisma.color.updateMany({ where, data: { nameAr, nameEn: nameEn || null, ...(extra ? { hex: extra } : {}) } });
+      case 'colors': {
+        // لون الجسم + (اختياري) لون الياقة/الكتف ⇒ «#جسم,#ياقة».
+        const trim = formData.get('twoTone') ? String(formData.get('extra2') ?? '') : '';
+        const hex = extra ? normalizeHex(trim ? `${extra},${trim}` : extra) : null;
+        await prisma.color.updateMany({ where, data: { nameAr, nameEn: nameEn || null, ...(hex ? { hex } : {}) } });
+        revalidatePath('/products', 'layout');
         break;
+      }
       case 'sizes':
         await prisma.size.updateMany({
           where,

@@ -77,7 +77,7 @@ export default function AboutPage() {
             <span aria-hidden className="text-body-subtle">
               ·
             </span>
-            <Link href="/contact" className="text-sm text-brand hover:underline">
+            <Link href="/quote" className="text-sm text-brand hover:underline">
               اطلب عرض سعر
             </Link>
           </div>

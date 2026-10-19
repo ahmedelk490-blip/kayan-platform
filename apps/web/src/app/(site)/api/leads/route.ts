@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { createLead } from '@/lib/leads';
 import { sendCapiEvents } from '@/lib/meta-capi';
+import { createWebOrder } from '@/lib/orders';
+import { notifyByEmail } from '@/lib/notify-email';
+import { prisma } from '@/lib/prisma';
+import { setCurrentTenant } from '@/lib/tenant-context';
+
+const PUBLIC_TENANT = process.env.PUBLIC_TENANT_ID ?? 'kayan';
 
 export const runtime = 'nodejs';
 
@@ -54,7 +60,20 @@ interface Lead {
   phone: string;
   interests: string[];
   message: string;
+  /** من نموذج عرض السعر: المنتج والعدد ونوع الشغل (اختيارية لباقي النماذج). */
+  productId: string;
+  quantity: number;
+  service: string;
 }
+
+/** أقلّ طلب يقبله المصنع — بطلب المالك. */
+const MIN_QUOTE_QTY = 4;
+const SERVICE_AR: Record<string, string> = {
+  printing: 'طباعة',
+  embroidery: 'تطريز',
+  print_embroidery: 'طباعة + تطريز',
+  plain: 'سادة',
+};
 
 function validate(body: unknown): { ok: true; lead: Lead } | { ok: false; errors: Rejection[] } {
   const errors: Rejection[] = [];
@@ -116,8 +135,19 @@ function validate(body: unknown): { ok: true; lead: Lead } | { ok: false; errors
     }
   }
 
+  const productId = typeof raw.productId === 'string' ? raw.productId.trim().slice(0, 40) : '';
+  const service = typeof raw.service === 'string' ? raw.service : '';
+  if (service && !(service in SERVICE_AR)) errors.push({ field: 'service', reason: 'Unknown service.' });
+  let quantity = 0;
+  if (raw.quantity !== undefined) {
+    quantity = Number(raw.quantity);
+    if (!Number.isInteger(quantity) || quantity < MIN_QUOTE_QTY || quantity > 100_000) {
+      errors.push({ field: 'quantity', reason: `At least ${MIN_QUOTE_QTY}.` });
+    }
+  }
+
   if (errors.length) return { ok: false, errors };
-  return { ok: true, lead: { name, company, email, phone, interests, message } };
+  return { ok: true, lead: { name, company, email, phone, interests, message, productId, quantity, service } };
 }
 
 /**
@@ -170,8 +200,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, errors: result.errors }, { status: 422 });
   }
 
+  const lead = result.lead;
+  const productName = lead.productId
+    ? await (async () => {
+        setCurrentTenant(PUBLIC_TENANT);
+        const p = await prisma.product.findFirst({
+          where: { id: lead.productId, tenantId: PUBLIC_TENANT, isDeleted: false },
+          select: { nameAr: true },
+        });
+        return p?.nameAr;
+      })()
+    : undefined;
+  const serviceAr = SERVICE_AR[lead.service] ?? '';
+  // تفاصيل عرض السعر تُكتب في نصّ الطلب فتظهر في نشاط العميل كما هي.
+  const summary = [
+    productName ? `المنتج: ${productName}` : lead.quantity ? 'المنتج: حسب الطلب' : null,
+    lead.quantity ? `العدد: ${lead.quantity} قطعة` : null,
+    serviceAr ? `نوع الشغل: ${serviceAr}` : null,
+    lead.message ? `ملاحظات: ${lead.message}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
   const record = {
-    ...result.lead,
+    ...lead,
+    message: summary || lead.message,
     receivedAt: new Date().toISOString(),
     source: 'marketing-site',
     status: 'UNQUALIFIED',
@@ -180,6 +233,16 @@ export async function POST(request: Request) {
 
   try {
     await createLead(record);
+    // طلب بمنتج وعدد ⇒ يظهر أيضاً في «طلبات الموقع» بجانب طلبات السلّة.
+    if (productName && lead.quantity) {
+      await createWebOrder({
+        name: lead.name,
+        phone: lead.phone,
+        company: lead.company || undefined,
+        note: ['طلب عرض سعر', serviceAr, lead.message].filter(Boolean).join(' — '),
+        items: [{ productId: lead.productId, quantity: lead.quantity }],
+      });
+    }
   } catch (error) {
     console.error('[leads] failed to persist submission', error);
     return NextResponse.json(
@@ -190,9 +253,19 @@ export async function POST(request: Request) {
 
   // إعلانات Meta من الخادم — بنفس معرّف حدث المتصفح (يرجع في الرد).
   const eventId = `lead-${randomUUID()}`;
+  const custom = lead.quantity
+    ? { content_ids: lead.productId ? [lead.productId] : [], content_type: 'product', num_items: lead.quantity }
+    : undefined;
   void sendCapiEvents(request, [
-    { name: 'Lead', eventId, phone: result.lead.phone },
-    { name: 'CompleteRegistration', eventId, phone: result.lead.phone },
+    { name: 'Lead', eventId, phone: lead.phone, custom },
+    { name: 'CompleteRegistration', eventId, phone: lead.phone, custom },
   ]);
+  // بريد للمصنع بالطلب — لا ننتظره، والطلب محفوظ في النظام على أي حال.
+  void notifyByEmail(
+    `طلب عرض سعر جديد — ${lead.name}`,
+    [`الاسم: ${lead.name}`, `الجوال: ${lead.phone}`, lead.company ? `الشركة: ${lead.company}` : null, summary]
+      .filter(Boolean)
+      .join('\n'),
+  );
   return NextResponse.json({ ok: true, eventId }, { status: 201 });
 }

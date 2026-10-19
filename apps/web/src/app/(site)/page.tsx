@@ -1,5 +1,5 @@
 import { Hero, type HeroSlide } from '@/components/site/sections/Hero';
-import { publicProducts } from '@/lib/catalog';
+import { publicProducts, siteWhatsApp } from '@/lib/catalog';
 import { publicHeroSlides } from '@/lib/hero';
 import { siteText } from '@/lib/content';
 import { Products } from '@/components/site/sections/Products';
@@ -23,10 +23,11 @@ import { QuoteForm } from '@/components/site/sections/QuoteForm';
 export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
-  const [products, heroSlides, t] = await Promise.all([
+  const [products, heroSlides, t, whatsapp] = await Promise.all([
     publicProducts(),
     publicHeroSlides(),
     siteText(),
+    siteWhatsApp(),
   ]);
 
   // لون خلفية الشريحة يُشتق من الترتيب لا من قاعدة البيانات: قيمة بصرية
@@ -65,7 +66,7 @@ export default async function HomePage() {
       <Products products={products} />
       <Services t={t} />
       <WhyKayan t={t} />
-      <QuoteForm />
+      <QuoteForm products={products.map((p) => ({ id: p.id, name: p.nameAr }))} whatsapp={whatsapp} />
     </>
   );
 }

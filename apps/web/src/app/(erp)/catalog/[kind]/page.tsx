@@ -8,7 +8,8 @@ import { ModuleHeader, Table } from '@/components/crud/Shell';
 import { ConfirmButton } from '@/components/crud/ConfirmButton';
 import { CatalogForm } from './CatalogForm';
 import { RenameForm } from './RenameForm';
-import { deleteCatalogItem } from '../actions';
+import { deleteCatalogItem, fillColorsFromNames } from '../actions';
+import { swatchBackground } from '@/lib/color-swatch';
 import { isKind, KINDS, type Kind } from '../types';
 
 export const metadata: Metadata = { title: 'القوائم' };
@@ -143,17 +144,27 @@ export default async function CatalogPage({ params }: { params: Promise<{ kind: 
         ))}
       </nav>
 
+      {kind === 'colors' && canManage && (
+        // الألوان بلا كود تظهر فارغة على الموقع — زرّ واحد يتعرّف عليها من أسمائها.
+        <form action={fillColorsFromNames} className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-card-2 px-4 py-3">
+          <p className="text-xs text-txt-2">
+            {rows.filter((r) => !r.hex).length} لون بلا كود. التعرّف يقرأ الألوان من الاسم («اسود ياخة احمر» ⇒ أسود بياقة حمراء)، وتقدر تعدّلها بعدها من «تعديل».
+          </p>
+          <button type="submit" className="erp-btn">تعرّف على الألوان من الأسماء</button>
+        </form>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <Table headers={['الاسم', 'بالإنجليزية', 'إضافي', 'مستخدم في', '']} empty={rows.length === 0}>
           {rows.map((row) => (
             <tr key={row.id} className="hover:bg-card-2">
               <td className="px-4 py-3 font-medium text-txt">
                 <span className="flex items-center gap-2">
-                  {row.hex && (
+                  {kind === 'colors' && (
                     <span
                       aria-hidden="true"
-                      className="inline-block h-3.5 w-3.5 rounded-full border border-line-2"
-                      style={{ backgroundColor: row.hex }}
+                      className="inline-block h-5 w-5 shrink-0 rounded-full border border-line-2"
+                      style={{ background: swatchBackground(row.primary, row.hex) ?? 'transparent' }}
                     />
                   )}
                   {row.primary}

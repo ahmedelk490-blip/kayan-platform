@@ -4,45 +4,81 @@ import { useState } from 'react';
 import { motion } from 'motion/react';
 import { EASE } from '@erp/motion';
 import { SectionShell } from '@erp/ui-market';
-import { QUOTE_SERVICES } from '@/site';
 import { track } from '@/lib/meta-pixel';
 
 /**
  * اطلب عرض سعر.
  *
- * رقم الجوال هو الحقل الإلزامي الوحيد بعد الاسم — هذا السوق يرد على واتساب،
- * وإلزام البريد يخسر طلبات من ناس ما يستخدمونه أصلاً.
- *
- * Errors come back from the server and are shown per field. The form does not
- * pretend to have succeeded: the confirmation only appears after a 2xx.
+ * بطلب المالك: الاسم، رقم التواصل، المنتج (من منتجات النظام)، العدد (أقلّه
+ * ٤ قطع)، ونوع الشغل (طباعة/تطريز…). الطلب يُحفظ في النظام — يظهر في «طلبات
+ * الموقع» وفي العملاء — ويُرسل بريداً للمصنع، ثم يُفتح واتساب المصنع
+ * بتفاصيله جاهزة. التأكيد لا يظهر إلا بعد ردّ 2xx من الخادم.
  */
+
+const MIN_QTY = 4;
+
+const SERVICES = [
+  { value: 'printing', label: 'طباعة' },
+  { value: 'embroidery', label: 'تطريز' },
+  { value: 'print_embroidery', label: 'طباعة + تطريز' },
+  { value: 'plain', label: 'سادة (بدون طباعة أو تطريز)' },
+] as const;
 
 type Status = 'idle' | 'sending' | 'sent' | 'error';
 
-export function QuoteForm() {
+// قوائم الاختيار: الخيارات بخلفية اللوحة نفسها — كانت بيضاء ونصّها باهت لا يُقرأ.
+const FIELD =
+  'w-full rounded-xl border bg-white/[0.02] px-4 py-3.5 text-sm text-body outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand-fill/20 [&>option]:bg-panel [&>option]:text-body';
+
+export function QuoteForm({
+  products,
+  whatsapp,
+  defaultProduct,
+}: {
+  products: { id: string; name: string }[];
+  whatsapp: string | null;
+  /** يأتي من صفحة منتج (/quote?product=…) فيُختار مسبقاً. */
+  defaultProduct?: string;
+}) {
   const [status, setStatus] = useState<Status>('idle');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [failure, setFailure] = useState('');
+  const [qty, setQty] = useState(MIN_QTY);
+  const [waLink, setWaLink] = useState<string | null>(null);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus('sending');
-    setErrors({});
-    setFailure('');
-
     const formEl = event.currentTarget;
     const form = new FormData(formEl);
+    const productId = String(form.get('productId') ?? '');
     const service = String(form.get('service') ?? '');
+    const name = String(form.get('name') ?? '').trim();
+    const phone = String(form.get('phone') ?? '').trim();
+    const notes = String(form.get('message') ?? '').trim();
 
+    // تحقّق فوري قبل الإرسال — الخادم يتحقّق مرة ثانية على أي حال.
+    const local: Record<string, string> = {};
+    if (!name) local.name = 'هذا الحقل مطلوب.';
+    if (!phone) local.phone = 'هذا الحقل مطلوب.';
+    if (!productId) local.productId = 'اختر المنتج.';
+    if (!service) local.service = 'اختر نوع الشغل.';
+    if (qty < MIN_QTY) local.quantity = `أقلّ كمية ${MIN_QTY} قطع.`;
+    setErrors(local);
+    setFailure('');
+    if (Object.keys(local).length) return;
+
+    setStatus('sending');
     const response = await fetch('/api/leads', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        name: String(form.get('name') ?? ''),
-        phone: String(form.get('phone') ?? ''),
+        name,
+        phone,
         company: String(form.get('company') ?? ''),
-        message: String(form.get('message') ?? ''),
-        interests: service ? [service] : [],
+        message: notes,
+        productId: productId === 'other' ? '' : productId,
+        quantity: qty,
+        service,
       }),
     }).catch(() => null);
 
@@ -53,12 +89,36 @@ export function QuoteForm() {
     }
 
     if (response.ok) {
-      // إعلانات Meta: طلب عرض سعرٍ أُرسل.
       const { eventId } = (await response.json().catch(() => ({}))) as { eventId?: string };
-      track('CompleteRegistration', { content_name: 'quote_form' }, eventId);
-      track('Lead', { content_name: 'quote_form' }, eventId);
+      const params = {
+        content_name: 'quote_form',
+        content_ids: productId && productId !== 'other' ? [productId] : [],
+        content_type: 'product',
+        num_items: qty,
+      };
+      track('CompleteRegistration', params, eventId);
+      track('Lead', params, eventId);
+
+      const productName = products.find((p) => p.id === productId)?.name ?? 'منتج حسب الطلب';
+      const serviceLabel = SERVICES.find((s) => s.value === service)?.label ?? service;
+      const text = [
+        'طلب عرض سعر من الموقع',
+        `الاسم: ${name}`,
+        `الجوال: ${phone}`,
+        `المنتج: ${productName}`,
+        `العدد: ${qty} قطعة`,
+        `نوع الشغل: ${serviceLabel}`,
+        notes ? `ملاحظات: ${notes}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+      const link = whatsapp ? `https://wa.me/${whatsapp}?text=${encodeURIComponent(text)}` : null;
+      setWaLink(link);
+      if (link) window.open(link, '_blank', 'noopener');
+
       setStatus('sent');
       formEl.reset();
+      setQty(MIN_QTY);
       return;
     }
 
@@ -76,7 +136,9 @@ export function QuoteForm() {
           ? 'هذا الحقل مطلوب.'
           : item.reason === 'Does not look like a phone number.'
             ? 'رقم الجوال ما يبدو صحيحاً.'
-            : item.reason;
+            : item.field === 'quantity'
+              ? `أقلّ كمية ${MIN_QTY} قطع.`
+              : item.reason;
     }
     setErrors(mapped);
     setStatus('error');
@@ -115,14 +177,14 @@ export function QuoteForm() {
               عطنا فكرة عن طلبك، ونرجع لك بالسعر.
             </h2>
             <p className="mt-6 max-w-[46ch] text-lg leading-[2] text-body-muted md:text-xl">
-              اكتب لنا نوع الزي والكمية التقريبية، ونرسل لك تسعيرة مفصّلة بند بند.
+              اختار المنتج والعدد ونوع الشغل، ونرسل لك تسعيرة مفصّلة بند بند.
               وإذا حبيت عيّنة قبل الكمية، قلها لنا في الملاحظات.
             </p>
             {/* صفّ طمأنة يملأ العمود ويوازن الفورم الطويل. */}
             <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-sm text-body-muted">
-              {['رد سريع على واتساب', 'تسعيرة مفصّلة بند بند', 'عيّنة قبل الكمية'].map((li) => (
+              {['رد سريع على واتساب', 'تسعيرة مفصّلة بند بند', `أقل طلب ${MIN_QTY} قطع`].map((li) => (
                 <li key={li} className="flex items-center gap-2">
-                  <span aria-hidden className="grid h-5 w-5 place-items-center rounded-full bg-brand-fill/15 text-[0.7rem] text-brand">
+                  <span aria-hidden className="grid h-5 w-5 place-items-center rounded-full bg-brand-fill/15 text-xs text-brand">
                     ✓
                   </span>
                   {li}
@@ -131,10 +193,8 @@ export function QuoteForm() {
             </ul>
           </motion.div>
 
-          {/* The quietest motion on the page, on purpose. A form that slides
-              into place reads as decoration; this one has to read as somewhere
-              safe to type a phone number. Opacity only — nothing moves, so
-              nothing can shift under a finger already reaching for a field. */}
+          {/* The quietest motion on the page, on purpose: opacity only, so
+              nothing shifts under a finger already reaching for a field. */}
           <motion.form
             onSubmit={onSubmit}
             noValidate
@@ -158,47 +218,63 @@ export function QuoteForm() {
               }}
             />
             <div className="grid gap-5 sm:grid-cols-2">
-              <Field name="name" label="الاسم" required error={errors.name} />
-              <Field
-                name="phone"
-                label="رقم الجوال"
-                required
-                type="tel"
-                dir="ltr"
-                error={errors.phone}
-              />
-              <Field name="company" label="اسم الشركة" error={errors.company} />
+              <Field name="name" label="الاسم الكامل" required autoComplete="name" error={errors.name} />
+              <Field name="phone" label="رقم التواصل" required type="tel" dir="ltr" autoComplete="tel" error={errors.phone} />
 
               <div>
-                <label htmlFor="service" className="mb-2 block text-xs text-body-muted">
-                  نوع الخدمة المطلوبة
-                </label>
-                <select
-                  id="service"
-                  name="service"
-                  defaultValue=""
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3.5 text-sm text-body outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand-fill/20"
-                >
-                  <option value="">اختر…</option>
-                  {QUOTE_SERVICES.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
-                    </option>
+                <Label htmlFor="productId" required>نوع المنتج</Label>
+                <select id="productId" name="productId" defaultValue={defaultProduct ?? ""} aria-invalid={Boolean(errors.productId)} className={`${FIELD} ${errors.productId ? 'border-red-500' : 'border-white/10'}`}>
+                  <option value="" disabled>اختر المنتج…</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                  <option value="other">منتج آخر / حسب الطلب</option>
+                </select>
+                {errors.productId && <ErrorText>{errors.productId}</ErrorText>}
+              </div>
+
+              <div>
+                <Label htmlFor="quantity" required>عدد القطع (أقلّه {MIN_QTY})</Label>
+                <div className={`flex items-center rounded-xl border ${errors.quantity ? 'border-red-500' : 'border-white/10'}`}>
+                  <button type="button" aria-label="أنقص" onClick={() => setQty((q) => Math.max(MIN_QTY, q - 1))} className="px-4 py-3 text-lg text-body-muted">−</button>
+                  <input
+                    id="quantity"
+                    type="number"
+                    inputMode="numeric"
+                    min={MIN_QTY}
+                    value={qty}
+                    onChange={(e) => setQty(Math.max(0, Math.round(Number(e.target.value) || 0)))}
+                    onBlur={() => setQty((q) => Math.max(MIN_QTY, q))}
+                    dir="ltr"
+                    className="w-full bg-transparent py-3 text-center text-sm text-body outline-none"
+                  />
+                  <button type="button" aria-label="زد" onClick={() => setQty((q) => q + 1)} className="px-4 py-3 text-lg text-body-muted">+</button>
+                </div>
+                {errors.quantity && <ErrorText>{errors.quantity}</ErrorText>}
+              </div>
+
+              <div>
+                <Label htmlFor="service" required>نوع الشغل</Label>
+                <select id="service" name="service" defaultValue="" aria-invalid={Boolean(errors.service)} className={`${FIELD} ${errors.service ? 'border-red-500' : 'border-white/10'}`}>
+                  <option value="" disabled>طباعة أو تطريز…</option>
+                  {SERVICES.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
                   ))}
                 </select>
+                {errors.service && <ErrorText>{errors.service}</ErrorText>}
               </div>
+
+              <Field name="company" label="اسم الشركة (اختياري)" autoComplete="organization" error={errors.company} />
             </div>
 
             <div className="mt-5">
-              <label htmlFor="message" className="mb-2 block text-xs text-body-muted">
-                ملاحظات
-              </label>
+              <Label htmlFor="message">ملاحظات</Label>
               <textarea
                 id="message"
                 name="message"
-                rows={4}
-                placeholder="الكمية التقريبية، الألوان، مكان الشعار…"
-                className="w-full resize-y rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3.5 text-sm text-body outline-none transition-colors placeholder:text-body-subtle focus:border-brand focus:ring-2 focus:ring-brand-fill/20"
+                rows={3}
+                placeholder="الألوان، مكان الشعار، موعد التسليم…"
+                className={`${FIELD} resize-y border-white/10 placeholder:text-body-subtle`}
               />
             </div>
 
@@ -206,21 +282,20 @@ export function QuoteForm() {
               <button
                 type="submit"
                 disabled={status === 'sending'}
-                className="rounded-full bg-brand-fill px-9 py-4 text-sm font-bold text-on-brand shadow-[0_18px_40px_-16px_rgba(92,35,52,0.9)] transition-all hover:-translate-y-0.5 hover:opacity-95 disabled:translate-y-0 disabled:opacity-60"
+                className="rounded-full bg-brand-fill px-9 py-4 text-sm font-bold text-on-brand shadow-[0_18px_40px_-16px_rgba(92,35,52,0.9)] disabled:opacity-60"
               >
                 {status === 'sending' ? 'جارٍ الإرسال…' : 'أرسل الطلب'}
               </button>
 
               {status === 'sent' && (
-                <p
-                  role="status"
-                  className="flex items-center gap-2 rounded-lg border border-ok/40 bg-ok/10 px-4 py-3 text-sm font-medium text-ok"
-                >
-                  <span aria-hidden className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-ok text-[0.7rem] text-white">
-                    ✓
-                  </span>
-                  تم التسجيل بنجاح. وصلنا طلبك وبنتواصل معك على الرقم اللي كتبته.
-                </p>
+                <div role="status" className="flex flex-wrap items-center gap-3 rounded-lg border border-ok/40 bg-ok/10 px-4 py-3 text-sm font-medium text-ok">
+                  <span>✓ وصلنا طلبك، وبنتواصل معك على رقمك.</span>
+                  {waLink && (
+                    <a href={waLink} target="_blank" rel="noopener noreferrer" className="rounded-full bg-brand-fill px-4 py-1.5 text-xs font-bold text-on-brand">
+                      أرسل التفاصيل على واتساب
+                    </a>
+                  )}
+                </div>
               )}
               {status === 'error' && failure && (
                 <p role="alert" className="text-sm text-red-400">
@@ -235,12 +310,26 @@ export function QuoteForm() {
   );
 }
 
+function Label({ htmlFor, required, children }: { htmlFor: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <label htmlFor={htmlFor} className="mb-2 block text-xs text-body-muted">
+      {children}
+      {required && <span className="ms-1 text-brand">*</span>}
+    </label>
+  );
+}
+
+function ErrorText({ children }: { children: React.ReactNode }) {
+  return <p className="mt-1.5 text-xs text-red-400">{children}</p>;
+}
+
 function Field({
   name,
   label,
   required,
   type = 'text',
   dir,
+  autoComplete,
   error,
 }: {
   name: string;
@@ -248,30 +337,23 @@ function Field({
   required?: boolean;
   type?: string;
   dir?: 'ltr' | 'rtl';
+  autoComplete?: string;
   error?: string;
 }) {
   return (
     <div>
-      <label htmlFor={name} className="mb-2 block text-xs text-body-muted">
-        {label}
-        {required && <span className="ms-1 text-brand">*</span>}
-      </label>
+      <Label htmlFor={name} required={required}>{label}</Label>
       <input
         id={name}
         name={name}
         type={type}
         dir={dir}
+        autoComplete={autoComplete}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${name}-error` : undefined}
-        className={`w-full rounded-xl border bg-white/[0.02] px-4 py-3.5 text-sm text-body outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand-fill/20 ${
-          error ? 'border-red-500' : 'border-white/10'
-        } ${dir === 'ltr' ? 'text-start' : ''}`}
+        className={`${FIELD} ${error ? 'border-red-500' : 'border-white/10'} ${dir === 'ltr' ? 'text-start' : ''}`}
       />
-      {error && (
-        <p id={`${name}-error`} className="mt-1.5 text-[0.7rem] text-red-400">
-          {error}
-        </p>
-      )}
+      {error && <ErrorText>{error}</ErrorText>}
     </div>
   );
 }

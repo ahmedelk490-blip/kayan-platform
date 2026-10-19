@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createWebOrder, type WebOrderItem } from '@/lib/orders';
 import { sendCapiEvents } from '@/lib/meta-capi';
 import { META_CURRENCY } from '@/lib/meta-pixel';
+import { notifyByEmail } from '@/lib/notify-email';
 
 export const runtime = 'nodejs';
 
@@ -139,6 +140,19 @@ export async function POST(request: Request) {
       { name: 'Purchase', eventId, phone: result.value.phone, custom },
       { name: 'Lead', eventId, phone: result.value.phone, custom },
     ]);
+    void notifyByEmail(
+      `طلب جديد من الموقع ${created.number} — ${result.value.name}`,
+      [
+        `رقم الطلب: ${created.number}`,
+        `الاسم: ${result.value.name}`,
+        `الجوال: ${result.value.phone}`,
+        `عدد القطع: ${custom.num_items}`,
+        result.value.note ? `ملاحظات: ${result.value.note}` : null,
+        'التفاصيل في النظام: طلبات الموقع',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    );
     return NextResponse.json({ ok: true, number: created.number, eventId }, { status: 201 });
   } catch (error) {
     console.error('[orders] failed to persist order', error);
