@@ -1,6 +1,6 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
-import { META_PIXEL_ID } from './meta-pixel';
+import { trackingIds } from './tracking';
 
 /**
  * واجهة التحويلات (Conversions API) — الخادم يرسل أحداث الطلب إلى Meta بنفسه،
@@ -30,7 +30,10 @@ export interface CapiEvent {
 /** يرسل الأحداث إلى Meta؛ يصمت إن لم يُضبط الرمز ولا يعطّل الطلب أبداً. */
 export async function sendCapiEvents(request: Request, events: CapiEvent[]): Promise<void> {
   const token = process.env.META_CAPI_TOKEN;
-  if (!token || !META_PIXEL_ID || events.length === 0) return;
+  if (!token || events.length === 0) return;
+  // معرّف البكسل من «أكواد التتبّع» في النظام — نفس ما يحمّله المتصفح.
+  const { metaPixelId } = await trackingIds();
+  if (!metaPixelId) return;
 
   const headers = request.headers;
   const cookie = headers.get('cookie') ?? '';
@@ -55,7 +58,7 @@ export async function sendCapiEvents(request: Request, events: CapiEvent[]): Pro
 
   try {
     const res = await fetch(
-      `https://graph.facebook.com/v21.0/${META_PIXEL_ID}/events?access_token=${encodeURIComponent(token)}`,
+      `https://graph.facebook.com/v26.0/${metaPixelId}/events?access_token=${encodeURIComponent(token)}`,
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },

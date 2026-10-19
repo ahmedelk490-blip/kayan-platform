@@ -6,7 +6,8 @@ import { Navigation } from '@/components/site/Navigation';
 import { SiteFooter } from '@/components/site/SiteFooter';
 import { WhatsAppButton } from '@/components/site/WhatsAppButton';
 import { CartWidget } from '@/components/site/CartWidget';
-import { MetaPixel } from '@/components/site/MetaPixel';
+import { SiteTracking } from '@/components/site/MetaPixel';
+import { trackingIds } from '@/lib/tracking';
 import { SITE_URL, whatsappHref } from '@/site';
 import { siteWhatsApp } from '@/lib/catalog';
 import './site.css';
@@ -79,7 +80,7 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const whatsapp = await siteWhatsApp();
+  const [whatsapp, tracking] = await Promise.all([siteWhatsApp(), trackingIds()]);
 
   return (
     <html
@@ -138,8 +139,8 @@ document.documentElement.setAttribute('data-theme', stored || system);
           {/* سلّة الطلب العائمة — فوق زرّ الواتساب، تظهر حين تحوي أصنافاً. */}
           <CartWidget />
         </SmoothScroller>
-        {/* Meta Pixel لإعلانات فيسبوك وإنستغرام — لا يُحمَّل ما لم يُضبط معرّفه. */}
-        <MetaPixel />
+        {/* أكواد التتبّع (Meta / جوجل / تيك توك) — يغيّرها المدير من النظام. */}
+        <SiteTracking ids={tracking} />
       </body>
     </html>
   );

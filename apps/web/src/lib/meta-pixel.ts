@@ -1,33 +1,79 @@
 /**
- * Meta Pixel — لربط إعلانات فيسبوك وإنستغرام بما يحدث في الموقع (بطلب المالك).
+ * أحداث الإعلانات — Meta وجوجل وتيك توك معاً (بطلب المالك).
  *
- * المعرّف يُكتب هنا مرة واحدة؛ وفارغاً لا يُحمَّل شيء ولا تُرسَل أحداث. والأحداث
- * معيارية فيفهمها مدير الإعلانات دون إعداد: PageView، ViewContent، AddToCart،
- * AddToWishlist، InitiateCheckout، وPurchase + Lead عند إتمام الطلب.
+ * المعرّفات يضبطها المدير من «أكواد التتبّع» في النظام (lib/tracking.ts)،
+ * والمكوّن SiteTracking يكتب ما فُعّل منها في window.__trk قبل أي حدث. track()
+ * يرسل الحدث بأسماء Meta المعيارية، ويترجمه لجوجل (GA4/Ads) وتيك توك تلقائياً.
  */
-export const META_PIXEL_ID = '1657197319267168';
 
-type Fbq = (
-  command: 'track',
-  event: string,
-  params?: Record<string, unknown>,
-  options?: { eventID: string },
-) => void;
+type Fn = (...args: unknown[]) => void;
+interface TrackWindow {
+  fbq?: Fn;
+  gtag?: Fn;
+  ttq?: { track: Fn; page: Fn };
+  __trk?: { meta: boolean; google: boolean; tiktok: boolean; adsPurchase?: string; adsLead?: string };
+}
+
+/** اسم الحدث في GA4 / Google Ads وفي تيك توك لكل حدث Meta معياري. */
+const MAP: Record<string, { google?: string; tiktok?: string }> = {
+  ViewContent: { google: 'view_item', tiktok: 'ViewContent' },
+  AddToCart: { google: 'add_to_cart', tiktok: 'AddToCart' },
+  AddToWishlist: { google: 'add_to_wishlist', tiktok: 'AddToWishlist' },
+  InitiateCheckout: { google: 'begin_checkout', tiktok: 'InitiateCheckout' },
+  AddPaymentInfo: { google: 'add_payment_info', tiktok: 'AddPaymentInfo' },
+  Purchase: { google: 'purchase', tiktok: 'CompletePayment' },
+  Lead: { google: 'generate_lead', tiktok: 'SubmitForm' },
+  CompleteRegistration: { google: 'sign_up', tiktok: 'CompleteRegistration' },
+  Contact: { google: 'contact', tiktok: 'Contact' },
+  CustomizeProduct: { google: 'customize_product' },
+  Search: { google: 'search', tiktok: 'Search' },
+};
 
 /**
- * يرسل حدثاً معيارياً إن كان البكسل محمّلاً — وإلا لا شيء. eventId يطابق ما
- * يرسله الخادم بواجهة التحويلات للحدث نفسه، فتعدّه Meta مرة واحدة.
+ * يرسل الحدث لكل منصّة مفعّلة. السكربتات تُحمَّل afterInteractive، فحدث يُطلق
+ * عند فتح الصفحة (ViewContent) يسبقها — ننتظر كل منصّة قليلاً (~8 ثوانٍ) بدل
+ * إسقاطه. eventId يطابق ما يرسله الخادم لـ Meta فيُعدّ الحدث مرة واحدة.
  */
-export function track(event: string, params?: Record<string, unknown>, eventId?: string, attempt = 0): void {
-  if (typeof window === 'undefined' || !META_PIXEL_ID) return;
-  const fbq = (window as unknown as { fbq?: Fbq }).fbq;
-  // ViewContent يُطلق عند فتح الصفحة، قبل أن يُحمَّل سكربت البكسل (afterInteractive)،
-  // فكان يضيع. ننتظره قليلاً بدل إسقاط الحدث (حتى ~8 ثوانٍ).
-  if (!fbq) {
-    if (attempt < 20) setTimeout(() => track(event, params, eventId, attempt + 1), 400);
-    return;
+export function track(event: string, params?: Record<string, unknown>, eventId?: string): void {
+  if (typeof window === 'undefined') return;
+  const w = window as unknown as TrackWindow;
+  const on = w.__trk ?? { meta: true, google: false, tiktok: false };
+  const map = MAP[event] ?? {};
+
+  const send = (ready: () => boolean, fire: () => void, attempt = 0) => {
+    if (ready()) return fire();
+    if (attempt < 20) setTimeout(() => send(ready, fire, attempt + 1), 400);
+  };
+
+  if (on.meta) {
+    send(() => !!w.fbq, () => w.fbq!('track', event, params, eventId ? { eventID: eventId } : undefined));
   }
-  fbq('track', event, params, eventId ? { eventID: eventId } : undefined);
+  if (on.google && map.google) {
+    const p = params ?? {};
+    const ids = Array.isArray(p.content_ids) ? (p.content_ids as string[]) : [];
+    send(() => !!w.gtag, () =>
+      w.gtag!('event', map.google, {
+        ...(p.value !== undefined ? { value: p.value, currency: p.currency } : {}),
+        ...(ids.length ? { items: ids.map((id) => ({ item_id: id, item_name: p.content_name, quantity: p.num_items })) } : {}),
+        ...(eventId ? { transaction_id: eventId } : {}),
+      }),
+    );
+  }
+  // Google Ads: الشراء وطلب عرض السعر يُسجَّلان «تحويلاً» بتسميتهما (send_to).
+  const sendTo = event === 'Purchase' ? on.adsPurchase : event === 'Lead' ? on.adsLead : '';
+  if (on.google && sendTo) {
+    const p = params ?? {};
+    send(() => !!w.gtag, () =>
+      w.gtag!('event', 'conversion', {
+        send_to: sendTo,
+        ...(p.value !== undefined ? { value: p.value, currency: p.currency } : {}),
+        ...(eventId ? { transaction_id: eventId } : {}),
+      }),
+    );
+  }
+  if (on.tiktok && map.tiktok) {
+    send(() => !!w.ttq, () => w.ttq!.track(map.tiktok, params ?? {}, eventId ? { event_id: eventId } : undefined));
+  }
 }
 
 /**
