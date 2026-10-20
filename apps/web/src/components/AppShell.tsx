@@ -52,6 +52,7 @@ const NAV: NavItem[] = [
   { href: '/sales', label: 'لوحة المبيعات', permission: 'sales.view', built: true, group: 'المبيعات' },
   { href: '/invoices', label: 'فواتير المبيعات', permission: 'invoices.view', built: true, group: 'المبيعات' },
   { href: '/cashier', label: 'الكاشير', permission: 'invoices.write', built: true, group: 'المبيعات' },
+  { href: '/sales/today', label: 'قطع اليوم', permission: 'sales.view', built: true, group: 'المبيعات' },
   { href: '/sales/web-orders', label: 'طلبات الموقع', permission: 'invoices.write', built: true, group: 'المبيعات' },
 
   // إدارة المنتجات — قسم مستقل يجمع كل ما يخصّ المنتجات: اللوحة، قائمة
