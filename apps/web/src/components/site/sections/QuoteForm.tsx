@@ -34,11 +34,14 @@ export function QuoteForm({
   products,
   whatsapp,
   defaultProduct,
+  defaultNote,
 }: {
   products: { id: string; name: string }[];
   whatsapp: string | null;
   /** يأتي من صفحة منتج (/quote?product=…) فيُختار مسبقاً. */
   defaultProduct?: string;
+  /** نصّ مبدئي للملاحظات — مثل اللون المختار في صفحة المنتج. */
+  defaultNote?: string;
 }) {
   const [status, setStatus] = useState<Status>('idle');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -231,7 +234,7 @@ export function QuoteForm({
                     inputMode="numeric"
                     min={MIN_QTY}
                     value={qty}
-                    placeholder={`${MIN_QTY} أو أكثر`}
+                    placeholder={`أقل عدد ${MIN_QTY} قطع`}
                     onChange={(e) => setQty(e.target.value === '' ? '' : Math.max(0, Math.round(Number(e.target.value) || 0)))}
                     dir="ltr"
                     className="w-full bg-transparent py-3 text-center text-sm text-body outline-none"
@@ -265,6 +268,7 @@ export function QuoteForm({
                 id="message"
                 name="message"
                 rows={3}
+                defaultValue={defaultNote}
                 placeholder="الألوان، مكان الشعار، موعد التسليم…"
                 className={`${FIELD} resize-y border-edge-strong placeholder:text-body-subtle`}
               />

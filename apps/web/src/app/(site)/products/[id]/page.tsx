@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { publicProduct, siteWhatsApp } from '@/lib/catalog';
+import { publicProduct } from '@/lib/catalog';
 import { ProductBuy } from './ProductBuy';
 import { ProductGallery } from './ProductGallery';
 import { TrackViewContent } from '@/components/site/MetaPixel';
@@ -49,15 +49,11 @@ export async function generateMetadata({
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [product, whatsapp] = await Promise.all([publicProduct(id), siteWhatsApp()]);
+  const product = await publicProduct(id);
   if (!product) notFound();
 
   const description = product.descriptionAr ?? composeDescription(product);
   const cover = product.images[0] ?? null;
-
-  const waHref = whatsapp
-    ? `https://wa.me/${whatsapp}?text=${encodeURIComponent(`مرحبا، مهتم بـ${product.nameAr}. ممكن تفاصيل وسعر؟`)}`
-    : null;
 
   return (
     <article className="relative overflow-hidden pb-24 pt-28 md:pt-32">
@@ -111,14 +107,11 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
             <p className="mt-6 text-lg leading-[2] text-body-muted">{description}</p>
 
-            {/* اختيار اللون والمقاس والكمية + السعر + الإضافة للسلّة. */}
+            {/* اختيار اللون + السعر + زرّ واحد لطلب عرض السعر (بلا سلّة ولا مقاسات). */}
             <ProductBuy
               productId={product.id}
               productName={product.nameAr}
-              image={cover}
               colors={product.colors}
-              sizes={product.sizes}
-              sizesByColor={product.sizesByColor}
               tiers={product.tiers.map((t) => ({
                 service: t.service,
                 minQty: t.minQty,
@@ -128,27 +121,6 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                 color: t.color,
               }))}
             />
-
-            {/* صفّ ثانٍ بنفس مقاس أزرار الشراء: عرض سعر بالكمية (يفتح الصفحة الكاملة
-                والمنتج مختار) + واتساب. */}
-            <div className={`mt-3 grid gap-3 ${waHref ? 'grid-cols-2' : 'grid-cols-1'}`}>
-              <Link
-                href={`/quote?product=${product.id}`}
-                className="inline-flex w-full items-center justify-center rounded-full border border-brand px-4 py-3.5 text-center text-sm font-semibold text-brand"
-              >
-                عرض سعر بالكمية
-              </Link>
-              {waHref && (
-                <a
-                  href={waHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex w-full items-center justify-center rounded-full border border-edge-strong px-4 py-3.5 text-center text-sm font-medium text-body"
-                >
-                  اسأل على واتساب
-                </a>
-              )}
-            </div>
 
             {/* الأسعار — أسفل, للمهتمّ. عمود «اللون» يظهر فقط حين يختلف السعر
                 حسب اللون، فلا نُثقل الجدول بعمود «كل الألوان» بلا داعٍ. */}

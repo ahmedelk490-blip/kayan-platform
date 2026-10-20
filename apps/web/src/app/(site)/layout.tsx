@@ -5,7 +5,7 @@ import { SmoothScroller, ScrollProgress } from '@erp/ui-market';
 import { Navigation } from '@/components/site/Navigation';
 import { SiteFooter } from '@/components/site/SiteFooter';
 import { WhatsAppButton } from '@/components/site/WhatsAppButton';
-import { CartWidget } from '@/components/site/CartWidget';
+import { ScrollTopOnRoute } from '@/components/site/ScrollTopOnRoute';
 import { SiteTracking } from '@/components/site/MetaPixel';
 import { trackingIds } from '@/lib/tracking';
 import { SITE_URL, whatsappHref } from '@/site';
@@ -136,8 +136,8 @@ document.documentElement.setAttribute('data-theme', stored || system);
           {/* يُحسب على الخادم فيصل للعميل رابطاً جاهزاً أو لا شيء —
               ولا يصل الرقم إلى الحزمة حين لا يكون مضبوطاً. */}
           <WhatsAppButton href={whatsappHref(whatsapp)} />
-          {/* سلّة الطلب العائمة — فوق زرّ الواتساب، تظهر حين تحوي أصنافاً. */}
-          <CartWidget />
+          {/* بطلب المالك: لا سلّة — الطلب كله عبر «اطلب عرض سعر». */}
+          <ScrollTopOnRoute />
         </SmoothScroller>
         {/* أكواد التتبّع (Meta / جوجل / تيك توك) — يغيّرها المدير من النظام. */}
         <SiteTracking ids={tracking} />

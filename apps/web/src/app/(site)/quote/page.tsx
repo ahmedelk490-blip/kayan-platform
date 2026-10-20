@@ -17,14 +17,20 @@ export const metadata: Metadata = {
  * بدل القفز لقسم في الرئيسية (كان لا يعمل من الصفحات الأخرى). ‎?product=<id>
  * يختار المنتج مسبقاً حين يأتي الزائر من صفحة منتج.
  */
-export default async function QuotePage({ searchParams }: { searchParams: Promise<{ product?: string }> }) {
-  const [{ product }, products, whatsapp] = await Promise.all([searchParams, publicProducts(), siteWhatsApp()]);
+export default async function QuotePage({ searchParams }: { searchParams: Promise<{ product?: string; color?: string }> }) {
+  const [{ product, color }, products, whatsapp] = await Promise.all([searchParams, publicProducts(), siteWhatsApp()]);
   const list = products.map((p) => ({ id: p.id, name: p.nameAr }));
   const preselect = list.some((p) => p.id === product) ? product : undefined;
 
   return (
     <div className="pt-20 md:pt-24">
-      <QuoteForm products={list} whatsapp={whatsapp} defaultProduct={preselect} />
+      <QuoteForm
+        products={list}
+        whatsapp={whatsapp}
+        defaultProduct={preselect}
+        // اللون المختار في صفحة المنتج يُكتب في الملاحظات جاهزاً (نصّ عادي، حتى ٦٠ حرفاً).
+        defaultNote={preselect && color ? `اللون: ${color.slice(0, 60)}` : undefined}
+      />
     </div>
   );
 }

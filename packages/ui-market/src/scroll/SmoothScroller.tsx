@@ -28,6 +28,9 @@ export function SmoothScroller({ children }: { children: ReactNode }) {
       syncTouch: false,
     });
     lenisRef.current = lenis;
+    // يُتاح للتطبيق ليصفّر الموضع عند الانتقال لصفحة جديدة — Lenis يحفظ هدفه
+    // الداخلي فكان يعيد الصفحة الجديدة لموضع القديمة (تفتح من آخرها).
+    (window as unknown as { __lenis?: Lenis }).__lenis = lenis;
 
     let frame = 0;
     const raf = (time: number) => {
@@ -40,6 +43,7 @@ export function SmoothScroller({ children }: { children: ReactNode }) {
       cancelAnimationFrame(frame);
       lenis.destroy();
       lenisRef.current = null;
+      delete (window as unknown as { __lenis?: Lenis }).__lenis;
     };
   }, [reducedMotion]);
 
