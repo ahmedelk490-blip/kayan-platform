@@ -116,14 +116,12 @@ export default async function TodayPiecesPage({ searchParams }: { searchParams: 
   const repRow = list.find((r) => r.id === rep);
   const fmt = new Intl.NumberFormat('en-US');
 
-  // اختصارات المدى للمالك — روابط from/to جاهزة.
+  // اختصارات المدى للمالك — روابط from/to جاهزة («هذا الشهر» موجود في أزرار الفترات تحتها).
   const shortcut = (label: string, f: string, t: string) => ({ label, href: `/sales/today?from=${f}&to=${t}`, on: f === fromStr && t === toStr });
-  const monthStart = `${todayKey.slice(0, 8)}01`;
   const shortcuts = [
     shortcut('اليوم', todayKey, todayKey),
     shortcut('أمس', keyOf(todayStart.getTime() - DAY), keyOf(todayStart.getTime() - DAY)),
     shortcut('آخر 7 أيام', keyOf(todayStart.getTime() - 6 * DAY), todayKey),
-    shortcut('هذا الشهر', monthStart, todayKey),
   ];
   const rangeQs = `from=${fromStr}&to=${toStr}`;
 
