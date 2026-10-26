@@ -328,3 +328,49 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
 }
 
 export type RealProfit = Awaited<ReturnType<typeof realProfit>>;
+
+/**
+ * ربح المدى مفصولاً: مجموع الأيام الرابحة وحده، ومجموع الأيام الخاسرة وحده.
+ *
+ * بطلب المالك: الصافي يجمع الأيام فيغطّي يومٌ رابح خسارةَ يومٍ آخر، فلا يُعرف
+ * كم خسرنا فعلاً. كل يومٍ (أو شهرٍ في المدى الطويل) يُحسب بـ realProfit نفسه،
+ * فمجموع الربح ناقص الخسارة = الصافي المعروض. الأيام بعد اليوم لا تُحسب.
+ */
+export async function profitLossSplit(tenantId: string, from: Date, to: Date) {
+  const end = Math.min(to.getTime(), dayStart(Date.now()) + DAY - 1);
+  const buckets: { from: Date; to: Date }[] = [];
+  const days = Math.ceil((end - from.getTime()) / DAY);
+  const unit: 'day' | 'month' = days > 62 ? 'month' : 'day';
+  let cur = dayStart(from.getTime());
+  while (cur <= end) {
+    const b = new Date(cur + BAGHDAD);
+    const next =
+      unit === 'day'
+        ? cur + DAY
+        : Date.UTC(b.getUTCFullYear(), b.getUTCMonth() + 1, 1) - BAGHDAD;
+    buckets.push({ from: new Date(Math.max(cur, from.getTime())), to: new Date(Math.min(next - 1, end)) });
+    cur = next;
+  }
+
+  // ٤ في المرة — مسبح الاتصالات صغير (connection_limit=5).
+  const nets: Dec[] = [];
+  for (let i = 0; i < buckets.length; i += 4) {
+    const chunk = await Promise.all(buckets.slice(i, i + 4).map((b) => realProfit(tenantId, b.from, b.to)));
+    nets.push(...chunk.map((r) => r.net));
+  }
+
+  let profit = dec(0);
+  let loss = dec(0);
+  let profitCount = 0;
+  let lossCount = 0;
+  for (const n of nets) {
+    if (n.gt(0)) {
+      profit = profit.plus(n);
+      profitCount += 1;
+    } else if (n.lt(0)) {
+      loss = loss.plus(n.abs());
+      lossCount += 1;
+    }
+  }
+  return { unit, profit, loss, profitCount, lossCount };
+}

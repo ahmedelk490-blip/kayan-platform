@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { dec, formatMoney, balance, RECEIVABLE_STATUSES } from '@erp/domain';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
-import { realProfit } from '@/lib/profit';
+import { realProfit, profitLossSplit } from '@/lib/profit';
 import { returnsByInvoice, netOwed } from '@/lib/receivables';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader } from '@/components/crud/Shell';
@@ -35,8 +35,10 @@ export default async function ProfitsPage({ searchParams }: { searchParams: Prom
   const range = resolveRange(await searchParams);
   const { from, to } = range;
 
-  const [rp, collectedAgg, receivable, payables, stock] = await Promise.all([
+  const [rp, split, collectedAgg, receivable, payables, stock] = await Promise.all([
     realProfit(user.tenantId, from, to),
+    // نفس المدى مفصولاً: الأيام الرابحة وحدها والخاسرة وحدها (بطلب المالك).
+    profitLossSplit(user.tenantId, from, to),
     // ما دخل الصندوق فعلاً في المدة — الدفعات العاكسة سالبة فتُخصم وحدها.
     prisma.payment.aggregate({
       where: { tenantId: user.tenantId, paidAt: { gte: from, lte: to }, invoice: { isDeleted: false } },
@@ -175,6 +177,32 @@ export default async function ProfitsPage({ searchParams }: { searchParams: Prom
         )}
       </section>
 
+      {/* ربح المدى وخسارته كلٌّ وحده — الصافي أعلاه يجمعهما فيغطّي يومٌ رابح
+          خسارةَ يومٍ آخر. بطلب المالك: «يظهر الربح وتحته مربع فيه الخسارة». */}
+      <div className="mb-6 grid max-w-xl gap-3">
+        <div className="erp-card border-s-4 border-s-ok p-5">
+          <p className="text-xs text-txt-2">
+            الربح · {split.unit === 'day' ? 'الأيام الرابحة' : 'الأشهر الرابحة'}{' '}
+            <span className="tnum">({split.profitCount})</span>
+          </p>
+          <p className="tnum mt-1 text-2xl font-bold text-ok">
+            +{formatMoney(split.profit)} <span className="text-sm font-medium">د.ع</span>
+          </p>
+        </div>
+        <div className="erp-card border-s-4 border-s-bad p-5">
+          <p className="text-xs text-txt-2">
+            الخسارة · {split.unit === 'day' ? 'الأيام الخاسرة' : 'الأشهر الخاسرة'}{' '}
+            <span className="tnum">({split.lossCount})</span>
+          </p>
+          <p className="tnum mt-1 text-2xl font-bold text-bad">
+            −{formatMoney(split.loss)} <span className="text-sm font-medium">د.ع</span>
+          </p>
+        </div>
+        <p className="text-xs text-txt-3">
+          نفس المدة أعلاه، كل {split.unit === 'day' ? 'يوم' : 'شهر'} محسوب وحده — الربح ناقص الخسارة = الصافي.
+        </p>
+      </div>
+
       {/* ٢. كيف تكوّن الربح — قائمةٌ واحدة تُقرأ من أعلى لأسفل. */}
       <section className="erp-card mb-6 p-5 lg:p-6">
         <h3 className="text-sm font-semibold text-brand">كيف تكوّن الربح</h3>
@@ -299,7 +327,7 @@ function Step({
 
 function Emoji({ children }: { children: string }) {
   return (
-    <span aria-hidden className="text-sm leading-none">
+    <span aria-hidden className="text-sm leading-[1.3]">
       {children}
     </span>
   );
