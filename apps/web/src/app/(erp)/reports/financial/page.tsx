@@ -22,6 +22,7 @@ import type { SearchParams } from '@/lib/query';
 import { ReportFilter, Figure, Empty } from '../Shell';
 import { resolveRange } from '../range';
 import { categoryOf } from '@/app/(erp)/returns/category';
+import { swatchBackground } from '@/lib/color-swatch';
 
 export const metadata: Metadata = { title: 'التقرير المالي' };
 
@@ -63,7 +64,13 @@ export default async function FinancialReport({
           issueDate: { gte: from, lte: to },
         },
       },
-      select: { description: true, quantity: true, lineTotal: true },
+      select: {
+        description: true,
+        quantity: true,
+        lineTotal: true,
+        product: { select: { nameAr: true } },
+        variant: { select: { color: { select: { nameAr: true, hex: true } } } },
+      },
     }),
     prisma.invoice.findMany({
       where: { tenantId: user.tenantId, isDeleted: false, status: { in: RECEIVABLE_STATUSES } },
@@ -100,6 +107,41 @@ export default async function FinancialReport({
     families.set(key, f);
   }
   const familyRows = [...families.entries()].sort((a, b) => b[1].pieces - a[1].pieces);
+
+  // الضغط على نوعٍ يفتح تفصيله: كل موديل (صيني، تركي…) بقطعه، وتحته ألوانه —
+  // بلا مقاسات، بطلب المالك: ليعرف أي موديل ولون يُطلب أكثر فيوفّر بضاعةً
+  // تُباع أسرع ولا تتكدّس في المخزن. الموديل = اسم المنتج، واللون من الصنف.
+  const rawType = Array.isArray(params.type) ? params.type[0] : params.type;
+  const selectedType = rawType && families.has(rawType) ? rawType : null;
+  type ColorTally = { pieces: number; hex: string | null };
+  const models = new Map<string, { pieces: number; value: ReturnType<typeof dec>; colors: Map<string, ColorTally> }>();
+  if (selectedType) {
+    for (const l of lines) {
+      if (isDeliveryDesc(l.description) || categoryOf(l.description) !== selectedType) continue;
+      const model = l.product?.nameAr ?? l.description.split(' · ')[0]?.trim() ?? '—';
+      const colorName = l.variant?.color?.nameAr ?? 'بلا لون';
+      const m = models.get(model) ?? { pieces: 0, value: dec(0), colors: new Map<string, ColorTally>() };
+      const qty = Number(l.quantity);
+      m.pieces += qty;
+      m.value = m.value.plus(dec(l.lineTotal));
+      const c = m.colors.get(colorName) ?? { pieces: 0, hex: l.variant?.color?.hex ?? null };
+      c.pieces += qty;
+      m.colors.set(colorName, c);
+      models.set(model, m);
+    }
+  }
+  const modelRows = [...models.entries()].sort((a, b) => b[1].pieces - a[1].pieces);
+  const typePieces = selectedType ? (families.get(selectedType)?.pieces ?? 0) : 0;
+  const typeHref = (name: string | null) => {
+    const q = new URLSearchParams();
+    if (range.period) q.set('period', range.period);
+    else {
+      q.set('from', range.fromStr);
+      q.set('to', range.toStr);
+    }
+    if (name) q.set('type', name);
+    return `/reports/financial?${q.toString()}#types`;
+  };
 
   const invoiced = invoices.reduce((s, i) => s.plus(dec(i.total)), dec(0));
   const collected = invoices.reduce((s, i) => s.plus(dec(i.paidAmount)), dec(0));
@@ -204,9 +246,12 @@ export default async function FinancialReport({
           {/* تفصيل القطع حسب النوع — يلكات وتيشيرتات ومرايل… بصورة عامة، بلا
               ألوان ولا موديلات، للمدى المختار نفسه: أساس عائد الاستثمار. */}
           {familyRows.length > 0 && (
-            <section className="erp-card mb-6 p-5">
+            <section id="types" className="erp-card mb-6 scroll-mt-4 p-5">
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
-                <h3 className="text-sm font-semibold text-brand">تفصيل القطع المباعة حسب النوع</h3>
+                <h3 className="text-sm font-semibold text-brand">
+                  تفصيل القطع المباعة حسب النوع
+                  <span className="ms-2 text-xs font-normal text-txt-3">اضغط على النوع لترى موديلاته وألوانه</span>
+                </h3>
                 <span className="tnum text-xs text-txt-3">
                   {totalPieces} قطعة · {range.fromStr} ← {range.toStr}
                 </span>
@@ -223,8 +268,23 @@ export default async function FinancialReport({
                   </thead>
                   <tbody>
                     {familyRows.map(([name, f]) => (
-                      <tr key={name} className="border-b border-line/60">
-                        <td className="px-3 py-2.5 font-medium text-txt">{name}</td>
+                      <tr
+                        key={name}
+                        className={`border-b border-line/60 ${selectedType === name ? 'bg-brand-soft/40' : ''}`}
+                      >
+                        <td className="px-3 py-1">
+                          <Link
+                            href={typeHref(selectedType === name ? null : name)}
+                            scroll={false}
+                            aria-current={selectedType === name ? 'true' : undefined}
+                            className="inline-flex min-h-9 items-center gap-1.5 font-medium text-txt underline decoration-line underline-offset-4 hover:text-brand"
+                          >
+                            {name}
+                            <span aria-hidden className="text-xs text-txt-3">
+                              {selectedType === name ? '▴' : '▾'}
+                            </span>
+                          </Link>
+                        </td>
                         <td className="tnum px-3 py-2.5 font-semibold text-brand">{f.pieces}</td>
                         <td className="tnum px-3 py-2.5 text-txt-2">{formatMoney(f.value)}</td>
                         <td className="px-3 py-2.5">
@@ -245,6 +305,60 @@ export default async function FinancialReport({
                   </tbody>
                 </table>
               </div>
+
+              {selectedType && (
+                <div className="mt-5 border-t border-line pt-4">
+                  <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
+                    <h4 className="text-sm font-semibold text-txt">
+                      {selectedType} — حسب الموديل واللون
+                      <span className="ms-2 tnum text-xs font-normal text-txt-3">{typePieces} قطعة</span>
+                    </h4>
+                    <Link href={typeHref(null)} scroll={false} className="text-xs text-txt-3 underline hover:text-brand">
+                      إغلاق التفصيل
+                    </Link>
+                  </div>
+                  {modelRows.length === 0 ? (
+                    <p className="py-4 text-center text-sm text-txt-3">لا مبيعات لهذا النوع في الفترة.</p>
+                  ) : (
+                    <ul className="space-y-3">
+                      {modelRows.map(([model, m]) => {
+                        const pct = typePieces > 0 ? Math.round((m.pieces / typePieces) * 100) : 0;
+                        const colors = [...m.colors.entries()].sort((a, b) => b[1].pieces - a[1].pieces);
+                        return (
+                          <li key={model} className="rounded-lg border border-line p-3">
+                            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                              <span className="font-semibold text-txt">{model}</span>
+                              <span className="tnum text-xs text-txt-3">
+                                <strong className="text-sm text-brand">{m.pieces}</strong> قطعة · {formatMoney(m.value)} ·{' '}
+                                {pct}% من {selectedType}
+                              </span>
+                            </div>
+                            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-card-2">
+                              <div className="h-full rounded-full bg-brand" style={{ width: `${pct}%` }} />
+                            </div>
+                            <div className="mt-2.5 flex flex-wrap gap-1.5">
+                              {colors.map(([colorName, c]) => (
+                                <span
+                                  key={colorName}
+                                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-2.5 py-1 text-xs text-txt-2"
+                                >
+                                  <span
+                                    aria-hidden
+                                    className="h-3 w-3 shrink-0 rounded-full border border-line"
+                                    style={{ background: swatchBackground(colorName, c.hex) ?? 'transparent' }}
+                                  />
+                                  {colorName}
+                                  <strong className="tnum text-txt">{c.pieces}</strong>
+                                </span>
+                              ))}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )}
             </section>
           )}
 
