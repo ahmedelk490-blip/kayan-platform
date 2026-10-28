@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Noto_Kufi_Arabic } from 'next/font/google';
 import { BRAND } from '@erp/brand';
+import { LatinDigits } from '@/components/LatinDigits';
 import './erp.css';
 
 /**
@@ -34,7 +35,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ar" dir="rtl" className={notoKufi.variable}>
-      <body>{children}</body>
+      <body>
+        <LatinDigits />
+        {children}
+      </body>
     </html>
   );
 }
