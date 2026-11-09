@@ -18,6 +18,7 @@ import {
 import { Field, TextArea, SubmitButton, FormError } from '@/components/crud/Form';
 import { SearchableSelect } from '@/components/crud/SearchableSelect';
 import { DELIVERY_DEFAULT_FEE } from '@/lib/delivery';
+import { giftOf, notesWithoutGift } from '@/lib/gift';
 import type { FormState } from './shared';
 import { PayModePills, type PayMode } from './PayMode';
 
@@ -1331,6 +1332,21 @@ export function DocumentForm({
             </section>
           )}
 
+          {/* الهدية — عرض «من يأخذ عدداً معيناً يحصل على هدية». ظاهرة لا مطويّة كي
+              لا تُنسى، وتُحفظ أول سطر في ملاحظات الفاتورة (lib/gift). */}
+          {isInvoice && (
+            <label className="block rounded-xl border border-line bg-card-2 px-4 py-3">
+              <span className="mb-1.5 block text-sm font-medium text-txt-2">🎁 الهدية (اختياري)</span>
+              <input
+                name="gift"
+                defaultValue={giftOf(values?.notes) ?? ''}
+                maxLength={200}
+                placeholder="مثلاً: كاسكيته هدية لطلب ١٢ قطعة"
+                className="erp-input py-2.5"
+              />
+            </label>
+          )}
+
           {/* ٤. اختياري ومطويّ: خصم وتواريخ وملاحظات — لا يراها من لا يحتاجها. */}
           <details className="rounded-xl border border-line bg-card-2 px-4 py-3">
             <summary className="cursor-pointer select-none text-sm font-medium text-txt-2">
@@ -1370,7 +1386,7 @@ export function DocumentForm({
                 )}
                 <Field name={labels.dateB === 'تاريخ الانتهاء' ? 'expiryDate' : 'requiredDeliveryDate'} label={labels.dateB} type="date" dir="ltr" defaultValue={values?.dateB} />
               </div>
-              <TextArea name="notes" label="ملاحظات" defaultValue={values?.notes} rows={3} />
+              <TextArea name="notes" label="ملاحظات" defaultValue={notesWithoutGift(values?.notes)} rows={3} />
             </div>
           </details>
 

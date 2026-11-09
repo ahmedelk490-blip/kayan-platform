@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { notesWithGift } from '@/lib/gift';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import {
@@ -219,7 +220,10 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
     discountPercent: docDiscountPct,
   });
 
-  const notes = notesWithDelivery(formData.get('notes'), delivery.onUs, delivery.fee);
+  const notes = notesWithGift(
+    notesWithDelivery(formData.get('notes'), delivery.onUs, delivery.fee),
+    formData.get('gift'),
+  );
   const lineData: InvoiceLineData[] = rawLines.map((l, i) => {
     const v = byId.get(l.variantId)!;
     const t = computed[i];
@@ -621,7 +625,10 @@ export async function updateInvoiceLines(
   }
   const totals = calcDocument(computed, { discountAmount: docDiscount, discountPercent: docDiscountPct });
 
-  const notes = notesWithDelivery(formData.get('notes'), delivery.onUs, delivery.fee);
+  const notes = notesWithGift(
+    notesWithDelivery(formData.get('notes'), delivery.onUs, delivery.fee),
+    formData.get('gift'),
+  );
   const lineData: InvoiceLineData[] = rawLines.map((l, i) => {
     const v = byId.get(l.variantId)!;
     const t = computed[i];

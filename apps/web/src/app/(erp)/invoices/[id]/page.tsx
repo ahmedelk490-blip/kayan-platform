@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { giftOf } from '@/lib/gift';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
@@ -207,6 +208,12 @@ export default async function InvoicePage({
         )}
         {/* عنوان العميل أمام العين — عامل التوصيل يقرأه من هنا ومن الطباعة. */}
         {invoice.customer.address && <span>📍 {invoice.customer.address}</span>}
+        {/* الهدية من العرض — ظاهرة لمن يجهّز الطلب كي لا تُنسى (lib/gift). */}
+        {giftOf(invoice.notes) && (
+          <span className="rounded-full border border-brand bg-brand-soft px-3 py-1 text-xs font-medium text-brand">
+            🎁 الهدية: {giftOf(invoice.notes)}
+          </span>
+        )}
         {invoice.issueDate && (
           <span className="tnum">صدرت {invoice.issueDate.toLocaleDateString('ar-EG')}</span>
         )}

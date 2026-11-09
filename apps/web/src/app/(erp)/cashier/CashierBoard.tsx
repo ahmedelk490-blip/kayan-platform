@@ -507,6 +507,17 @@ export function CashierBoard({
           <input type="hidden" name="deliveryOn" value={deliveryWho} />
         </div>
 
+        {/* الهدية — عرض «من يأخذ عدداً معيناً يحصل على هدية» (lib/gift). */}
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-medium text-txt-2">🎁 الهدية (اختياري)</span>
+          <input
+            name="gift"
+            maxLength={200}
+            placeholder="مثلاً: كاسكيته هدية لطلب ١٢ قطعة"
+            className="erp-input py-2.5"
+          />
+        </label>
+
         {shortLines.length > 0 && (
           <p className="rounded-lg border border-warn bg-warn-soft px-3 py-2 text-[0.7rem] leading-[1.8] text-warn">
             ⚠ {shortLines.length} صنف بكمية أكبر من المتاح — البيع مسموح، ورصيدها سينزل
