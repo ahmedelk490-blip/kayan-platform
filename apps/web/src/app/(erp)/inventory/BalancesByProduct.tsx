@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { Table } from '@/components/crud/Shell';
 import { normalizeDigits } from '@/lib/num';
 import { MinStockCell } from './MinStockCell';
+import { ColorCountCell, ZeroNegativeButton } from './ColorCountCell';
 
 /**
  * أرصدة المنتجات مجمَّعةً بالموديل.
@@ -103,6 +104,12 @@ export function BalancesByProduct({
   // ما فتحه المستخدم أو طواه بيده يغلب الافتراض — والافتراض: افتح ما فيه نقص.
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
   const [details, setDetails] = useState<Record<string, boolean>>({});
+  // المخزون بالعدد لكل لون هو الافتراض (بطلب المالك) — المقاسات خلف زرار.
+  const [showSizes, setShowSizes] = useState(false);
+  const colorTotal = (c: ColorGroup) => c.cells.reduce((n, x) => n + x.onHand, 0);
+  const negColors = (g: ProductGroup) => g.colors.filter((c) => colorTotal(c) < 0).length;
+  const zeroColors = (g: ProductGroup) =>
+    g.colors.filter((c) => colorTotal(c) === 0 && c.cells.some((x) => x.state !== 'none')).length;
 
   const visible = useMemo(() => {
     const q = normalizeDigits(query).trim().toLowerCase();
@@ -135,6 +142,7 @@ export function BalancesByProduct({
   );
   // المجموع لكل المنتجات (بطلب المالك) — القطع والدست معاً.
   const totalPieces = groups.reduce((n, g) => n + g.pieces, 0);
+  const totalNeg = groups.reduce((n, g) => n + negColors(g), 0);
   const totalDozens = groups.reduce((n, g) => n + g.dozens, 0);
 
   return (
@@ -147,6 +155,14 @@ export function BalancesByProduct({
           className="erp-input w-full max-w-xs py-2.5"
         />
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setShowSizes((v) => !v)}
+            aria-pressed={showSizes}
+            className="rounded-full border border-line-2 px-3.5 py-1.5 text-xs font-medium text-txt-2 hover:border-brand hover:text-brand"
+          >
+            {showSizes ? 'العدد لكل لون فقط' : 'إظهار المقاسات'}
+          </button>
           {FILTERS.map((f) => (
             <button
               key={f.key}
@@ -170,6 +186,11 @@ export function BalancesByProduct({
         <span className="tnum text-xs text-txt-3">
           {totalDozens.toLocaleString('en-US')} دست · {groups.length} موديل
         </span>
+        {canWrite && totalNeg > 0 && (
+          <span className="ms-auto">
+            <ZeroNegativeButton productId={null} count={totalNeg} />
+          </span>
+        )}
       </div>
 
       <p className="mb-4 text-[0.7rem] leading-[1.8] text-txt-4">
@@ -192,7 +213,9 @@ export function BalancesByProduct({
       ) : (
         <div className="space-y-3">
           {visible.map((g) => {
-            const short = g.out + g.low > 0;
+            const neg = negColors(g);
+            const zero = zeroColors(g);
+            const short = showSizes ? g.out + g.low > 0 : neg + zero > 0;
             const open = toggled[g.id] ?? short;
             return (
               <article
@@ -207,12 +230,22 @@ export function BalancesByProduct({
                   <span className="flex min-w-0 flex-wrap items-center gap-2">
                     <span aria-hidden className="text-xs text-txt-4">{open ? '▾' : '◂'}</span>
                     <span className="text-sm font-semibold text-txt">{g.name}</span>
-                    {g.out > 0 && (
+                    {!showSizes && neg > 0 && (
+                      <span className="rounded-full border border-bad bg-bad-soft px-2.5 py-0.5 text-xs font-medium text-bad">
+                        {neg} لون بالسالب
+                      </span>
+                    )}
+                    {!showSizes && zero > 0 && (
+                      <span className="rounded-full border border-warn bg-warn-soft px-2.5 py-0.5 text-xs font-medium text-warn">
+                        {zero} لون نفد
+                      </span>
+                    )}
+                    {showSizes && g.out > 0 && (
                       <span className="rounded-full border border-bad bg-bad-soft px-2.5 py-0.5 text-[0.7rem] font-medium text-bad">
                         {g.out} نفد
                       </span>
                     )}
-                    {g.low > 0 && (
+                    {showSizes && g.low > 0 && (
                       <span className="rounded-full border border-warn bg-warn-soft px-2.5 py-0.5 text-[0.7rem] font-medium text-warn">
                         {g.low} قارب
                       </span>
@@ -251,6 +284,9 @@ export function BalancesByProduct({
                             )}
                             <span className="text-xs font-medium leading-snug text-txt-2">{c.name}</span>
                           </span>
+                          {!showSizes ? (
+                            <ColorCountCell productId={g.id} colorKey={c.key} total={colorTotal(c)} canWrite={canWrite} />
+                          ) : (
                           <span className="flex flex-wrap gap-1.5">
                             {c.cells.map((x) => (
                               <span
@@ -277,9 +313,16 @@ export function BalancesByProduct({
                               </span>
                             </span>
                           </span>
+                          )}
                         </div>
                       ))}
                     </div>
+
+                    {canWrite && neg > 0 && (
+                      <div className="mt-3">
+                        <ZeroNegativeButton productId={g.id} count={neg} />
+                      </div>
+                    )}
 
                     <button
                       type="button"
@@ -349,9 +392,9 @@ export function BalancesByProduct({
       )}
 
       <p className="mt-3 text-[0.7rem] leading-[1.8] text-txt-4">
-        الرقم داخل المربّع هو رصيد ذلك المقاس. الأحمر نفد (صفر أو أقل)، والبرتقالي بلغ
-        حدّه الأدنى أو نزل تحته، والباقي سليم. اضبط الحدّ الأدنى من «التفاصيل» ليُنبّهك
-        النظام قبل النفاد لا بعده.
+        العدد = كل قطع اللون بكل مقاساته. الأحمر بالسالب: قطعٌ بيعت ولم تُسجَّل لها بضاعة
+        داخلة — لا تمسّ المبيعات ولا الأرباح، و«تصفير السالب» يجعلها صفراً بحركة تسوية مسجّلة
+        تُعكس من «حركات المخزون». «✎ جرد» يكتب العدد الموجود فعلاً للّون.
       </p>
     </section>
   );

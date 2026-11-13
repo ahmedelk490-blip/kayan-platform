@@ -559,3 +559,147 @@ export async function deleteMovement(movementId: string): Promise<void> {
   revalidatePath('/inventory');
   redirect('/inventory?tab=movements');
 }
+
+// ── المخزون بالعدد لكل لون (بطلب المالك: «اصفّر القياسات وأخليهن فقط عدد») ──
+//
+// البيع يبقى يسجّل المقاس على الفاتورة، لكن المخزون يُقرأ ويُجرد عدداً للّون
+// كله. فالجرد يصفّر كل مقاسات اللون بحركات «تسوية» ثم يضع العدد المعدود على
+// أول مقاس — مجموع اللون يساوي ما عُدّ، وكل حركةٍ مسجّلة وقابلة للعكس.
+
+type InvTx = Parameters<Parameters<typeof tenantTransaction>[0]>[0];
+
+/** يجعل مجموع لونٍ من موديل = target. يرجع عدد الحركات المكتوبة. */
+async function recountColor(
+  tx: InvTx,
+  ctx: { tenantId: string; userId: string; warehouseId: string },
+  productId: string,
+  colorKey: string,
+  target: number,
+  reason: string,
+): Promise<number> {
+  const variants = await tx.productVariant.findMany({
+    where: {
+      productId,
+      product: { tenantId: ctx.tenantId },
+      colorId: colorKey === 'none' ? null : colorKey,
+      isDeleted: false,
+    },
+    select: { id: true, size: { select: { sortOrder: true } } },
+  });
+  if (variants.length === 0) return 0;
+  variants.sort((a, b) => (a.size?.sortOrder ?? 0) - (b.size?.sortOrder ?? 0));
+  const rows = await tx.stock.findMany({
+    where: { variantId: { in: variants.map((v) => v.id) }, onHand: { not: 0 } },
+    select: { variantId: true, warehouseId: true, locationId: true, onHand: true },
+  });
+  const current = rows.reduce((s, r) => s + dec(r.onHand).toNumber(), 0);
+  if (current === target && rows.length <= 1) return 0;
+
+  const move = async (
+    key: { variantId: string; warehouseId: string; locationId: string | null },
+    delta: number,
+  ) => {
+    await tx.stockMovement.create({
+      data: {
+        tenantId: ctx.tenantId,
+        productId,
+        variantId: key.variantId,
+        warehouseId: key.warehouseId,
+        locationId: key.locationId,
+        type: 'ADJUSTMENT',
+        quantity: delta,
+        reason,
+        userId: ctx.userId,
+      },
+    });
+    await applyStockDelta(tx, key, 'onHand', delta);
+  };
+
+  for (const r of rows) await move(r, dec(r.onHand).negated().toNumber());
+  if (target !== 0) await move({ variantId: variants[0].id, warehouseId: ctx.warehouseId, locationId: null }, target);
+  return rows.length + (target !== 0 ? 1 : 0);
+}
+
+/** جرد لونٍ واحد بالعدد: «ماروني عندنا فعلاً 95». */
+export async function setColorCount(
+  productId: string,
+  colorKey: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requirePermission('inventory.write');
+  const raw = normalizeDigits(String(formData.get('count') ?? '')).trim();
+  const target = Number(raw);
+  if (raw === '' || !Number.isInteger(target) || target < 0) {
+    return { error: 'اكتب العدد الموجود فعلاً — صفر أو أكثر.' };
+  }
+  const warehouseId = await defaultWarehouseId(user.tenantId);
+  if (!warehouseId) return { error: 'لا يوجد مخزن.' };
+  const moves = await tenantTransaction((tx) =>
+    recountColor(tx, { tenantId: user.tenantId, userId: user.id, warehouseId }, productId, colorKey, target, 'جرد بالعدد للّون'),
+    { timeout: 30_000, maxWait: 10_000 },
+  );
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'stock.colorCount',
+    entityType: 'Product',
+    entityId: productId,
+    detail: `${colorKey} = ${target} (${moves} حركة)`,
+  });
+  revalidatePath('/inventory');
+  return { ok: 'تم.' };
+}
+
+/**
+ * تصفير الألوان السالبة — لموديلٍ واحد أو لكل الموديلات.
+ *
+ * السالب = قطعٌ بيعت ولم تُسجَّل لها بضاعة داخلة. لا يمسّ المبيعات ولا الأرباح؛
+ * يجعل مجموع اللون صفراً بحركات «تسوية» مسجّلة (تُعكس من «حركات المخزون»).
+ */
+export async function zeroNegativeColors(productId: string | null): Promise<void> {
+  const user = await requirePermission('inventory.write');
+  const warehouseId = await defaultWarehouseId(user.tenantId);
+  if (!warehouseId) return;
+  const variants = await prisma.productVariant.findMany({
+    where: {
+      isDeleted: false,
+      product: { tenantId: user.tenantId, isDeleted: false, ...(productId ? { id: productId } : {}) },
+    },
+    select: { productId: true, colorId: true, stock: { select: { onHand: true } } },
+  });
+  const totals = new Map<string, { productId: string; colorKey: string; sum: number }>();
+  for (const v of variants) {
+    const colorKey = v.colorId ?? 'none';
+    const k = `${v.productId}|${colorKey}`;
+    const t = totals.get(k) ?? { productId: v.productId, colorKey, sum: 0 };
+    t.sum += v.stock.reduce((s, st) => s + dec(st.onHand).toNumber(), 0);
+    totals.set(k, t);
+  }
+  const negative = [...totals.values()].filter((t) => t.sum < 0);
+  if (negative.length === 0) return;
+  await tenantTransaction(
+    async (tx) => {
+      for (const t of negative) {
+        await recountColor(
+          tx,
+          { tenantId: user.tenantId, userId: user.id, warehouseId },
+          t.productId,
+          t.colorKey,
+          0,
+          'تصفير رصيد سالب (بيع بلا بضاعة داخلة)',
+        );
+      }
+    },
+    { timeout: 60_000, maxWait: 10_000 },
+  );
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'stock.zeroNegative',
+    entityType: 'Product',
+    entityId: productId,
+    detail: `${negative.length} لون`,
+  });
+  revalidatePath('/inventory');
+}
