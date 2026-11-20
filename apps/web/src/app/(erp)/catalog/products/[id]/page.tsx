@@ -40,6 +40,10 @@ import { AddDozenStock } from './AddDozenStock';
 
 export const metadata: Metadata = { title: 'بيانات المنتج' };
 
+
+/** المقاسات أُلغيت (بطلب المالك) — خاناتها تبقى في الكود مطويّة لو رجعت. */
+const SIZES_ENABLED = false;
+
 export default async function ProductDetailPage({
   params,
 }: {
@@ -373,7 +377,8 @@ export default async function ProductDetailPage({
             </section>
           )}
 
-          {canWrite && (
+          {/* المقاسات أُلغيت بطلب المالك — المخزون والبيع بالعدد لكل لون. */}
+          {SIZES_ENABLED && canWrite && (
             <section className="erp-card p-6">
               <h3 className="mb-1 text-sm font-semibold text-brand">مقاسات هذا الموديل</h3>
               <p className="mb-4 text-[0.7rem] leading-[1.9] text-txt-4">
@@ -392,20 +397,20 @@ export default async function ProductDetailPage({
 
           {canWrite && (
             <section className="erp-card p-6">
-              <h3 className="mb-1 text-sm font-semibold text-brand">إضافة تركيبات محدّدة (لون×مقاس)</h3>
-              <p className="mb-4 text-[0.7rem] leading-[1.9] text-txt-4">
-                اختر ألوان ومقاسات هذا المنتج — يُنشأ متغيّر لكل تركيبة دفعة واحدة، ويظهر
-                على المنتج وصفحته وفي المخزون واختيار الأمر والفاتورة.
+              <h3 className="mb-1 text-sm font-semibold text-brand">إضافة ألوان</h3>
+              <p className="mb-4 text-xs leading-[1.9] text-txt-4">
+                اختر ألوان هذا الموديل — يُنشأ صنفٌ لكل لون (بلا مقاسات)، ويظهر على المنتج
+                وصفحته وفي المخزون والفاتورة والكاشير.
               </p>
               <AddColorsForm
                 action={addColorsToProduct.bind(null, product.id)}
                 colors={colorSwatches}
-                sizes={options.sizes.map((s) => ({ id: s.value, label: s.label }))}
+                sizes={SIZES_ENABLED ? options.sizes.map((s) => ({ id: s.value, label: s.label })) : []}
               />
             </section>
           )}
 
-          {canWrite && (
+          {SIZES_ENABLED && canWrite && (
             <section className="erp-card p-6">
               <h3 className="mb-4 text-sm font-semibold text-brand">إضافة متغيّر (لون + مقاس)</h3>
               <VariantForm productId={product.id} colors={options.colors} sizes={options.sizes} />
@@ -413,58 +418,60 @@ export default async function ProductDetailPage({
           )}
 
           {/* ── السيريات/الأطقم: توزيع مقاسات جاهز ────────────── */}
-          <section className="erp-card p-6">
-            <h3 className="mb-1 text-sm font-semibold text-brand">السيريات والأطقم</h3>
-            <p className="mb-4 text-[0.7rem] leading-[1.9] text-txt-4">
-              عرّف توزيع مقاسات جاهزاً (سيريه/درزن). في الفاتورة تختار السيريه واللون
-              والعدد، فتتوسّع القطع تلقائياً بلا إدخال كل مقاس يدوياً.
-            </p>
-
-            {product.bundles.length > 0 && (
-              <ul className="mb-5 space-y-3">
-                {product.bundles.map((b) =>
-                  canWrite ? (
-                    <BundleEditForm
-                      key={b.id}
-                      action={updateBundle.bind(null, product.id, b.id)}
-                      remove={deleteBundle.bind(null, product.id, b.id)}
-                      sizes={productSizes}
-                      initial={{
-                        nameAr: b.nameAr,
-                        cost: b.cost === null ? 0 : dec(b.cost).toNumber(),
-                        price: b.price === null ? 0 : dec(b.price).toNumber(),
-                        quantities: Object.fromEntries(b.lines.map((l) => [l.sizeId, l.quantity])),
-                      }}
-                    />
-                  ) : (
-                    <li key={b.id} className="rounded-lg border border-line bg-card-2 px-4 py-3">
-                      <div className="text-sm font-medium text-txt">
-                        {b.nameAr}
-                        <span className="ms-2 text-[0.7rem] text-txt-4">
-                          {b.lines.reduce((s, l) => s + l.quantity, 0)} قطعة
-                        </span>
-                      </div>
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {[...b.lines]
-                          .sort((a, z) => a.size.sortOrder - z.size.sortOrder)
-                          .map((l) => (
-                            <span key={l.id} className="tnum rounded-full bg-card px-2.5 py-0.5 text-[0.7rem] text-txt-2">
-                              {l.quantity}× {l.size.code}
-                            </span>
-                          ))}
-                      </div>
-                    </li>
-                  ),
-                )}
-              </ul>
-            )}
-
-            {canWrite && (
-              <div className="border-t border-line pt-5">
-                <BundleForm action={addBundle.bind(null, product.id)} sizes={productSizes} />
-              </div>
-            )}
-          </section>
+          {SIZES_ENABLED && (
+            <section className="erp-card p-6">
+              <h3 className="mb-1 text-sm font-semibold text-brand">السيريات والأطقم</h3>
+              <p className="mb-4 text-[0.7rem] leading-[1.9] text-txt-4">
+                عرّف توزيع مقاسات جاهزاً (سيريه/درزن). في الفاتورة تختار السيريه واللون
+                والعدد، فتتوسّع القطع تلقائياً بلا إدخال كل مقاس يدوياً.
+              </p>
+  
+              {product.bundles.length > 0 && (
+                <ul className="mb-5 space-y-3">
+                  {product.bundles.map((b) =>
+                    canWrite ? (
+                      <BundleEditForm
+                        key={b.id}
+                        action={updateBundle.bind(null, product.id, b.id)}
+                        remove={deleteBundle.bind(null, product.id, b.id)}
+                        sizes={productSizes}
+                        initial={{
+                          nameAr: b.nameAr,
+                          cost: b.cost === null ? 0 : dec(b.cost).toNumber(),
+                          price: b.price === null ? 0 : dec(b.price).toNumber(),
+                          quantities: Object.fromEntries(b.lines.map((l) => [l.sizeId, l.quantity])),
+                        }}
+                      />
+                    ) : (
+                      <li key={b.id} className="rounded-lg border border-line bg-card-2 px-4 py-3">
+                        <div className="text-sm font-medium text-txt">
+                          {b.nameAr}
+                          <span className="ms-2 text-[0.7rem] text-txt-4">
+                            {b.lines.reduce((s, l) => s + l.quantity, 0)} قطعة
+                          </span>
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {[...b.lines]
+                            .sort((a, z) => a.size.sortOrder - z.size.sortOrder)
+                            .map((l) => (
+                              <span key={l.id} className="tnum rounded-full bg-card px-2.5 py-0.5 text-[0.7rem] text-txt-2">
+                                {l.quantity}× {l.size.code}
+                              </span>
+                            ))}
+                        </div>
+                      </li>
+                    ),
+                  )}
+                </ul>
+              )}
+  
+              {canWrite && (
+                <div className="border-t border-line pt-5">
+                  <BundleForm action={addBundle.bind(null, product.id)} sizes={productSizes} />
+                </div>
+              )}
+            </section>
+          )}
 
           {/* ── أسعار البيع حسب الخدمة والكمية ──────────────── */}
           <section className="erp-card p-6">

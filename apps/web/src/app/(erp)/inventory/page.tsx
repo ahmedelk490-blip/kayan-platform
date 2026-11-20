@@ -20,6 +20,7 @@ import { StocktakeTable, type StocktakeRow } from './StocktakeTable';
 import { BalancesByProduct, type ProductGroup } from './BalancesByProduct';
 import { ConfirmButton } from '@/components/crud/ConfirmButton';
 import { reverseMovement, deleteMovement, writeOffRetiredStock } from './actions';
+import { mergeSizesIntoColors } from '../catalog/products/actions';
 import { TYPE_LABELS, isManualMovement } from './types';
 
 export const metadata: Metadata = { title: 'المخزون' };
@@ -46,6 +47,13 @@ export default async function InventoryPage({
   const sp = (await searchParams) ?? {};
   const initialTab = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab;
   const canWrite = allows(user, 'inventory.write');
+  // أصناف بمقاسات ما زالت فعّالة — يظهر زرار «دمج المقاسات» حتى تُدمج كلها.
+  const canMergeSizes = canWrite && allows(user, 'products.write');
+  const sizedCount = canMergeSizes
+    ? await prisma.productVariant.count({
+        where: { isDeleted: false, isActive: true, sizeId: { not: null }, product: { tenantId: user.tenantId, isDeleted: false } },
+      })
+    : 0;
   // دوره يُدخل البضاعة لكنها سُحبت من حسابه: يُقال له ذلك بدل زرٍّ يختفي بصمت.
   const writeWithdrawn = !canWrite && userCan(user.role, undefined, 'inventory.write');
   const canCorrect = allows(user, 'inventory.correct');
@@ -517,6 +525,21 @@ export default async function InventoryPage({
                         label="شطب أرصدة المحذوف"
                         message={`تصفير ${retired.length} رصيد لأصنافٍ محذوفة بحركة «تسوية» مسجّلة؟ الفواتير والتقارير القديمة لا تتأثّر.`}
                         className="rounded-lg border border-warn bg-card px-3 py-1.5 text-xs font-medium text-warn hover:bg-warn-soft disabled:opacity-50"
+                      />
+                    </form>
+                  </div>
+                )}
+                {sizedCount > 0 && (
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand/40 bg-brand-soft px-4 py-3">
+                    <p className="text-xs leading-[1.8] text-txt-2">
+                      فيه {sizedCount} صنف بمقاسات. «دمج المقاسات» يجمع رصيد كل لون في رقم واحد، وبعدها
+                      الفاتورة والكاشير يختاروا الموديل واللون والعدد فقط. الفواتير القديمة لا تتغيّر.
+                    </p>
+                    <form action={mergeSizesIntoColors}>
+                      <ConfirmButton
+                        label="دمج المقاسات"
+                        message={`دمج ${sizedCount} صنف بمقاسات في ألوانها؟ رصيد كل لون يصير رقماً واحداً بحركات «تسوية» مسجّلة، وأصناف المقاسات تتعطّل. الفواتير والتقارير القديمة لا تتأثّر.`}
+                        className="rounded-lg border border-brand bg-brand px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
                       />
                     </form>
                   </div>

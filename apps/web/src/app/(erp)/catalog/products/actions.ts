@@ -1507,3 +1507,114 @@ export async function deleteBundle(productId: string, bundleId: string): Promise
   });
   revalidatePath(`/catalog/products/${productId}`);
 }
+
+/**
+ * دمج المقاسات في الألوان — بطلب المالك: «القياسات نشيلها، نخلي فقط أعداد».
+ *
+ * لكل موديل ولون: صنفٌ واحد بلا مقاس (يُنشأ أو يُعاد تفعيله)، يُنقل إليه رصيد
+ * كل مقاساته بحركتي «تسوية» مسجّلتين (خروج من المقاس ودخول للون)، وتُنقل إليه
+ * صور اللون وأسعار الكمية، ثم تُعطَّل أصناف المقاسات (لا تُحذف: الفواتير القديمة
+ * تبقى تشير إليها كما كُتبت). بعدها الفاتورة والكاشير يختاران الموديل واللون
+ * والعدد فقط — DocumentForm يخفي خانة المقاس حين لا مقاس للّون.
+ */
+export async function mergeSizesIntoColors(): Promise<void> {
+  const user = await requirePermission('products.write');
+  const warehouse = await prisma.warehouse.findFirst({
+    where: { tenantId: user.tenantId, isDeleted: false },
+    orderBy: { code: 'asc' },
+    select: { id: true },
+  });
+  if (!warehouse) return;
+
+  const products = await prisma.product.findMany({
+    where: { tenantId: user.tenantId, isDeleted: false, variants: { some: { sizeId: { not: null }, isDeleted: false, isActive: true } } },
+    select: { id: true, sku: true },
+  });
+
+  let merged = 0;
+  for (const product of products) {
+    await tenantTransaction(
+      async (tx) => {
+        const variants = await tx.productVariant.findMany({
+          where: { productId: product.id, isDeleted: false },
+          select: {
+            id: true, colorId: true, sizeId: true, isActive: true, cost: true, sellingPrice: true,
+            color: { select: { nameEn: true } },
+            stock: { select: { warehouseId: true, locationId: true, onHand: true, reserved: true, damaged: true } },
+          },
+        });
+        const byColor = new Map<string, typeof variants>();
+        for (const v of variants) {
+          const k = v.colorId ?? '';
+          byColor.set(k, [...(byColor.get(k) ?? []), v]);
+        }
+        for (const [colorKey, group] of byColor) {
+          const sized = group.filter((v) => v.sizeId !== null && v.isActive);
+          if (sized.length === 0) continue;
+          const existing = group.find((v) => v.sizeId === null);
+          let targetId: string;
+          if (existing) {
+            targetId = existing.id;
+            if (!existing.isActive) await tx.productVariant.update({ where: { id: existing.id }, data: { isActive: true } });
+          } else {
+            const first = sized[0];
+            const tag = (first.color?.nameEn || (colorKey ? colorKey.slice(-4) : 'U')).replace(/\s+/g, '-').toUpperCase();
+            let sku = `${product.sku}-${tag}`;
+            if (await tx.productVariant.findFirst({ where: { sku }, select: { id: true } })) sku = `${sku}-${Date.now().toString(36)}`;
+            const created = await tx.productVariant.create({
+              data: { productId: product.id, colorId: colorKey || null, sizeId: null, sku, cost: first.cost, sellingPrice: first.sellingPrice },
+              select: { id: true },
+            });
+            targetId = created.id;
+          }
+          for (const v of sized) {
+            for (const st of v.stock) {
+              const onHand = dec(st.onHand).toNumber();
+              if (onHand !== 0) {
+                for (const [variantId, delta] of [[v.id, -onHand], [targetId, onHand]] as const) {
+                  await tx.stockMovement.create({
+                    data: {
+                      tenantId: user.tenantId,
+                      productId: product.id,
+                      variantId,
+                      warehouseId: st.warehouseId,
+                      locationId: st.locationId,
+                      type: 'ADJUSTMENT',
+                      quantity: delta,
+                      reason: 'دمج المقاسات في اللون',
+                      userId: user.id,
+                    },
+                  });
+                  await applyStockDelta(tx, { variantId, warehouseId: st.warehouseId, locationId: st.locationId }, 'onHand', delta);
+                }
+              }
+              for (const field of ['reserved', 'damaged'] as const) {
+                const q = dec(st[field]).toNumber();
+                if (q === 0) continue;
+                await applyStockDelta(tx, { variantId: v.id, warehouseId: st.warehouseId, locationId: st.locationId }, field, -q);
+                await applyStockDelta(tx, { variantId: targetId, warehouseId: st.warehouseId, locationId: st.locationId }, field, q);
+              }
+            }
+          }
+          const sizedIds = sized.map((v) => v.id);
+          await tx.productImage.updateMany({ where: { variantId: { in: sizedIds } }, data: { variantId: targetId } });
+          await tx.priceTier.updateMany({ where: { variantId: { in: sizedIds } }, data: { variantId: targetId } });
+          await tx.productVariant.updateMany({ where: { id: { in: sizedIds } }, data: { isActive: false } });
+          merged += sized.length;
+        }
+      },
+      { timeout: 120_000, maxWait: 10_000 },
+    );
+  }
+
+  await audit({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: 'product.mergeSizes',
+    entityType: 'Product',
+    entityId: null,
+    detail: `${products.length} موديل · ${merged} مقاس`,
+  });
+  revalidatePath('/catalog/products');
+  revalidatePath('/inventory');
+}
