@@ -10,6 +10,7 @@ import { audit, fieldErrors } from '@/lib/audit';
 import { num, numeric, normalizeDigits } from '@/lib/num';
 import { TYPES, isManualMovement, type MovementType } from './types';
 import { applyStockDelta } from '@/lib/stock';
+import { addCostLayer } from '@/lib/fifo';
 
 export interface FormState {
   error?: string;
@@ -302,6 +303,23 @@ export async function postMovement(_prev: FormState, formData: FormData): Promis
     });
 
     await applyStockDelta(tx, { variantId, warehouseId, locationId }, meta.field, delta);
+
+    // استلام بضاعة بسعرها = دفعة جديدة؛ البيع يأخذ من الأقدم أولاً (lib/fifo).
+    const unitCost = num(formData.get('unitCost'));
+    if (type === 'RECEIPT' && unitCost > 0) {
+      const v = await tx.productVariant.findUnique({ where: { id: variantId }, select: { colorId: true } });
+      await addCostLayer(tx, {
+        tenantId: user.tenantId,
+        productId: variant.productId,
+        colorId: v?.colorId ?? null,
+        quantity,
+        unitCost,
+        note: parsed.data.reference || parsed.data.reason || undefined,
+        userId: user.id,
+      });
+      // آخر سعر شراء يصير تكلفة اللون الحالية — للبيع الذي لا تغطّيه دفعة.
+      await tx.productVariant.update({ where: { id: variantId }, data: { cost: unitCost } });
+    }
   });
 
   await audit({

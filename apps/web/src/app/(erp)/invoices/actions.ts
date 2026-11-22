@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { syncInvoiceCost, releaseInvoiceCost } from '@/lib/fifo';
 import { notesWithGift, notesWithGovernorate } from '@/lib/gift';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
@@ -348,6 +349,8 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
       if (warehouseId) {
         await issueStockOut(tx, user.tenantId, user.id, warehouseId, number, stockLines);
       }
+      // تكلفة البيع من أقدم دفعة (lib/fifo).
+      await syncInvoiceCost(tx, user.tenantId, inv.id);
       return inv;
     });
 
@@ -728,6 +731,8 @@ export async function updateInvoiceLines(
         await adjustStock(tx, vid, warehouseId, delta.negated());
       }
     }
+    // البنود تغيّرت — تُعاد تكلفتها من الدفعات (lib/fifo).
+    await syncInvoiceCost(tx, user.tenantId, invoiceId);
   });
 
   // يُستدعى دائماً عند التعديل: بصفرٍ يُلغي مصروف توصيلٍ سابق لم يعد علينا
@@ -870,6 +875,7 @@ export async function issueInvoice(id: string): Promise<void> {
     if (warehouseId) {
       await issueStockOut(tx, user.tenantId, user.id, warehouseId, allocated, invoice.lines);
     }
+    await syncInvoiceCost(tx, user.tenantId, id);
     return allocated;
   });
 
@@ -994,6 +1000,8 @@ export async function cancelInvoice(
       return { productId: l.productId, variantId: l.variantId, quantity: left.gt(0) ? left : dec(0) };
     });
 
+    // الإلغاء يعيد للدفعات ما أخذته الفاتورة (lib/fifo).
+    await releaseInvoiceCost(tx, id);
     let pieces = dec(0);
     if (restockWh) {
       await restockIn(tx, user.tenantId, user.id, restockWh, invoice.number ?? null, remaining);

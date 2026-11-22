@@ -1715,6 +1715,8 @@ model InvoiceLine {
   taxRate        Decimal @default(0) @db.Decimal(19, 4)
   taxAmount      Decimal @default(0) @db.Decimal(19, 4)
   lineTotal      Decimal @db.Decimal(19, 4)
+  /// تكلفة القطعة لحظة البيع (الأقدم أولاً من دفعات CostLayer) — لا تتغيّر بتغيّر سعر الشراء لاحقاً.
+  unitCost       Decimal? @db.Decimal(19, 4)
 
   invoice Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   product Product?        @relation(fields: [productId], references: [id])
@@ -2348,4 +2350,33 @@ model HeroSlide {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, sortOrder])
+}
+
+/// دفعة بضاعة بسعرها — كل إدخال بضاعة بسعرٍ دفعة، والبيع يأخذ من الأقدم أولاً.
+model CostLayer {
+  id         String   @id @default(cuid())
+  tenantId   String
+  productId  String
+  colorId    String?
+  receivedAt DateTime @default(now())
+  quantity   Decimal  @db.Decimal(19, 4)
+  remaining  Decimal  @db.Decimal(19, 4)
+  unitCost   Decimal  @db.Decimal(19, 4)
+  note       String?
+  userId     String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, productId, colorId, receivedAt])
+}
+
+/// ما أخذته كل فاتورة من كل دفعة — يُعاد للدفعة عند تعديل الفاتورة أو إلغائها.
+model CostLayerUse {
+  id        String  @id @default(cuid())
+  layerId   String
+  invoiceId String
+  quantity  Decimal @db.Decimal(19, 4)
+  unitCost  Decimal @db.Decimal(19, 4)
+
+  @@index([invoiceId])
+  @@index([layerId])
 }

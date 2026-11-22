@@ -39,6 +39,10 @@ const MIGRATIONS = {
     name: '20260927140000_penalty_installments',
     checksum: '10f1bce2410739a5cac884760b33a2c3a6efc6e65d9ebe1141666432e79ae30c',
   },
+  fifoCostLayers: {
+    name: '20261122120000_fifo_cost_layers',
+    checksum: '8cd9f00c1be2183552ed7aed88daedba595f511bf1ba211614d81a621ea4741a',
+  },
 } as const;
 
 /** يُقيَّد الترحيل في دفتر بريزما فلا يصطدم به `migrate deploy` لاحقاً. */
@@ -141,6 +145,63 @@ export async function applyPendingSchema(): Promise<SchemaState> {
     if (penaltyDone) {
       done.push('تقسيط الجزاءات');
       await recordMigration(MIGRATIONS.penaltyInstallments);
+    }
+
+    // دفعات البضاعة بأسعارها — البيع يأخذ من الأقدم أولاً (lib/fifo).
+    let fifoDone = false;
+    if (!(await hasColumn('InvoiceLine', 'unitCost'))) {
+      await prisma.$executeRawUnsafe('ALTER TABLE `InvoiceLine` ADD COLUMN `unitCost` DECIMAL(19, 4) NULL');
+      // تجميد ربح الماضي: كل سطر قديم يأخذ تكلفته الحالية مرةً واحدة، فلا يتغيّر بعدها.
+      await prisma.$executeRawUnsafe(
+        "UPDATE `InvoiceLine` l LEFT JOIN `ProductVariant` v ON v.`id` = l.`variantId` LEFT JOIN `Product` p ON p.`id` = l.`productId` " +
+          "SET l.`unitCost` = COALESCE(NULLIF(v.`cost`, 0), NULLIF(p.`cost`, 0), p.`dozenCost` / NULLIF(p.`piecesPerDozen`, 0)) WHERE l.`productId` IS NOT NULL AND l.`description` NOT LIKE '🚚%'",
+      );
+      fifoDone = true;
+    }
+    if (!(await hasTable('CostLayer'))) {
+      await prisma.$executeRawUnsafe(`CREATE TABLE \`CostLayer\` (
+        \`id\` VARCHAR(191) NOT NULL,
+        \`tenantId\` VARCHAR(191) NOT NULL,
+        \`productId\` VARCHAR(191) NOT NULL,
+        \`colorId\` VARCHAR(191) NULL,
+        \`receivedAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        \`quantity\` DECIMAL(19, 4) NOT NULL,
+        \`remaining\` DECIMAL(19, 4) NOT NULL,
+        \`unitCost\` DECIMAL(19, 4) NOT NULL,
+        \`note\` VARCHAR(191) NULL,
+        \`userId\` VARCHAR(191) NULL,
+        \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        INDEX \`CostLayer_tenantId_productId_colorId_receivedAt_idx\`(\`tenantId\`, \`productId\`, \`colorId\`, \`receivedAt\`),
+        PRIMARY KEY (\`id\`)
+      ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+      // رصيدٌ افتتاحي: ما على الرف الآن دفعةٌ أولى بتكلفته الحالية، لكل موديل ولون.
+      await prisma.$executeRawUnsafe(
+        "INSERT INTO `CostLayer` (`id`, `tenantId`, `productId`, `colorId`, `receivedAt`, `quantity`, `remaining`, `unitCost`, `note`, `createdAt`) " +
+          "SELECT UUID(), p.`tenantId`, p.`id`, v.`colorId`, NOW(3), SUM(s.`onHand`), SUM(s.`onHand`), " +
+          "COALESCE(NULLIF(MAX(v.`cost`), 0), NULLIF(p.`cost`, 0), p.`dozenCost` / NULLIF(p.`piecesPerDozen`, 0)), 'رصيد افتتاحي', NOW(3) " +
+          "FROM `Stock` s JOIN `ProductVariant` v ON v.`id` = s.`variantId` JOIN `Product` p ON p.`id` = v.`productId` " +
+          "WHERE p.`isDeleted` = 0 AND v.`isDeleted` = 0 " +
+          "GROUP BY p.`tenantId`, p.`id`, v.`colorId`, p.`cost`, p.`dozenCost`, p.`piecesPerDozen` " +
+          "HAVING SUM(s.`onHand`) > 0 AND COALESCE(NULLIF(MAX(v.`cost`), 0), NULLIF(p.`cost`, 0), p.`dozenCost` / NULLIF(p.`piecesPerDozen`, 0)) > 0",
+      );
+      fifoDone = true;
+    }
+    if (!(await hasTable('CostLayerUse'))) {
+      await prisma.$executeRawUnsafe(`CREATE TABLE \`CostLayerUse\` (
+        \`id\` VARCHAR(191) NOT NULL,
+        \`layerId\` VARCHAR(191) NOT NULL,
+        \`invoiceId\` VARCHAR(191) NOT NULL,
+        \`quantity\` DECIMAL(19, 4) NOT NULL,
+        \`unitCost\` DECIMAL(19, 4) NOT NULL,
+        INDEX \`CostLayerUse_invoiceId_idx\`(\`invoiceId\`),
+        INDEX \`CostLayerUse_layerId_idx\`(\`layerId\`),
+        PRIMARY KEY (\`id\`)
+      ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+      fifoDone = true;
+    }
+    if (fifoDone) {
+      done.push('دفعات أسعار البضاعة (الأقدم أولاً)');
+      await recordMigration(MIGRATIONS.fifoCostLayers);
     }
 
   } catch (err) {

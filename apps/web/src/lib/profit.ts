@@ -99,6 +99,7 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
         description: true,
         quantity: true,
         lineTotal: true,
+        unitCost: true,
         product: productCost,
         variant: { select: { cost: true } },
       },
@@ -194,7 +195,10 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
     }
     const q = dec(l.quantity);
     pieces += q.toNumber();
-    const c = pieceCost(l.variant?.cost, l.product);
+    // تكلفة البيع المحفوظة على السطر (الأقدم أولاً — lib/fifo) تغلب السعر الحالي،
+    // فالربح القديم لا يتغيّر حين تصل بضاعة بسعر آخر.
+    const saved = l.unitCost == null ? null : dec(l.unitCost);
+    const c = saved?.gt(0) ? saved : pieceCost(l.variant?.cost, l.product);
     if (c) cogsSold = cogsSold.plus(q.times(c));
     else {
       const name = l.product?.nameAr ?? l.description;

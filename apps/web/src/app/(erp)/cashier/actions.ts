@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { syncInvoiceCost } from '@/lib/fifo';
 import { notesWithGift, notesWithGovernorate } from '@/lib/gift';
 import { redirect } from 'next/navigation';
 import { dec, dueDate, deriveInvoiceStatus, exceedsBalance, isPaymentMethod, isOrderSource } from '@erp/domain';
@@ -253,6 +254,8 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
       await adjustStock(tx, v.id, warehouseId, dec(l.quantity).negated());
     }
 
+    // تكلفة البيع من أقدم دفعة (lib/fifo).
+    await syncInvoiceCost(tx, user.tenantId, inv.id);
     return inv;
   });
 

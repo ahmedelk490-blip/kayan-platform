@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { dec, formatQty } from '@erp/domain';
+import { dec, formatQty, formatMoney } from '@erp/domain';
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
@@ -63,6 +63,26 @@ export default async function ProductHistory({
     select: { id: true, nameAr: true, sku: true, isDeleted: true },
   });
   if (!product) notFound();
+
+  // دفعات البضاعة بأسعارها (lib/fifo) — لمن يرى التكاليف فقط.
+  const seeCosts = allows(user, 'cost.view');
+  const layers = seeCosts
+    ? await prisma.costLayer.findMany({
+        where: { tenantId: user.tenantId, productId: product.id },
+        orderBy: [{ receivedAt: 'desc' }, { createdAt: 'desc' }],
+        take: 60,
+      })
+    : [];
+  const layerColors = layers.length
+    ? new Map(
+        (
+          await prisma.color.findMany({
+            where: { id: { in: [...new Set(layers.map((l) => l.colorId).filter((x): x is string => !!x))] } },
+            select: { id: true, nameAr: true },
+          })
+        ).map((c) => [c.id, c.nameAr]),
+      )
+    : new Map<string, string>();
 
   const [movements, stock] = await Promise.all([
     prisma.stockMovement.findMany({
@@ -231,6 +251,30 @@ export default async function ProductHistory({
           );
         })}
       </Table>
+
+      {seeCosts && (
+        <section className="mt-8">
+          <h3 className="mb-1 text-sm font-semibold text-brand">دفعات البضاعة بأسعارها</h3>
+          <p className="mb-3 text-xs leading-[1.9] text-txt-4">
+            كل استلام بسعرٍ دفعة. البيع يأخذ من الأقدم أولاً ويحفظ تكلفته على الفاتورة، فالربح
+            القديم لا يتغيّر حين تصل بضاعة بسعر آخر.
+          </p>
+          <Table headers={['التاريخ', 'اللون', 'الكمية', 'الباقي', 'سعر القطعة', 'ملاحظة']} empty={layers.length === 0}>
+            {layers.map((l) => (
+              <tr key={l.id} className="hover:bg-card-2">
+                <td className="tnum px-4 py-3 text-txt-2">{l.receivedAt.toLocaleDateString('ar-EG')}</td>
+                <td className="px-4 py-3 text-txt-2">{l.colorId ? (layerColors.get(l.colorId) ?? '—') : 'بلا لون'}</td>
+                <td className="tnum px-4 py-3 text-txt-2">{formatQty(dec(l.quantity))}</td>
+                <td className={`tnum px-4 py-3 font-medium ${dec(l.remaining).gt(0) ? 'text-brand' : 'text-txt-4'}`}>
+                  {formatQty(dec(l.remaining))}
+                </td>
+                <td className="tnum px-4 py-3 text-txt">{formatMoney(dec(l.unitCost))}</td>
+                <td className="px-4 py-3 text-txt-3">{l.note ?? '—'}</td>
+              </tr>
+            ))}
+          </Table>
+        </section>
+      )}
 
       <p className="mt-3 text-[0.7rem] leading-[1.9] text-txt-4">
         «كان عندنا» و«صار» رصيد ذلك اللون والمقاس قبل الحركة وبعدها. و«بِيع منذها» صافي ما بِيع
