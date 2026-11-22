@@ -18,7 +18,7 @@ import {
 import { Field, TextArea, SubmitButton, FormError } from '@/components/crud/Form';
 import { SearchableSelect } from '@/components/crud/SearchableSelect';
 import { DELIVERY_DEFAULT_FEE } from '@/lib/delivery';
-import { giftOf, notesWithoutGift } from '@/lib/gift';
+import { giftOf, governorateOf, plainNotes, IRAQ_GOVERNORATES } from '@/lib/gift';
 import type { FormState } from './shared';
 import { PayModePills, type PayMode } from './PayMode';
 
@@ -1334,6 +1334,19 @@ export function DocumentForm({
 
           {/* الهدية — عرض «من يأخذ عدداً معيناً يحصل على هدية». ظاهرة لا مطويّة كي
               لا تُنسى، وتُحفظ أول سطر في ملاحظات الفاتورة (lib/gift). */}
+          {/* المحافظة — للتوصيل وتقارير المحافظات (lib/gift: سطر في الملاحظات). */}
+          {isInvoice && (
+            <label className="block rounded-xl border border-line bg-card-2 px-4 py-3">
+              <span className="mb-1.5 block text-sm font-medium text-txt-2">📍 المحافظة</span>
+              <select name="governorate" defaultValue={governorateOf(values?.notes) ?? ''} className="erp-input py-2.5">
+                <option value="">— اختر المحافظة —</option>
+                {IRAQ_GOVERNORATES.map((g) => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
           {isInvoice && (
             <label className="block rounded-xl border border-line bg-card-2 px-4 py-3">
               <span className="mb-1.5 block text-sm font-medium text-txt-2">🎁 الهدية (اختياري)</span>
@@ -1386,7 +1399,7 @@ export function DocumentForm({
                 )}
                 <Field name={labels.dateB === 'تاريخ الانتهاء' ? 'expiryDate' : 'requiredDeliveryDate'} label={labels.dateB} type="date" dir="ltr" defaultValue={values?.dateB} />
               </div>
-              <TextArea name="notes" label="ملاحظات" defaultValue={notesWithoutGift(values?.notes)} rows={3} />
+              <TextArea name="notes" label="ملاحظات" defaultValue={plainNotes(values?.notes)} rows={3} />
             </div>
           </details>
 

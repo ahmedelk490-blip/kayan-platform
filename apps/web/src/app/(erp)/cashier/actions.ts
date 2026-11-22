@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { notesWithGift } from '@/lib/gift';
+import { notesWithGift, notesWithGovernorate } from '@/lib/gift';
 import { redirect } from 'next/navigation';
 import { dec, dueDate, deriveInvoiceStatus, exceedsBalance, isPaymentMethod, isOrderSource } from '@erp/domain';
 import { requirePermission, allows } from '@/lib/guard';
@@ -163,10 +163,10 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
         createdById: user.id,
         paidAmount: wantsPayment ? payAmount.toString() : '0',
         // «التوصيل علينا» يُثبَّت في ملاحظات الفاتورة ليظهر على صفحتها.
-        notes: notesWithGift(
+        notes: notesWithGovernorate(notesWithGift(
           deliveryOnUs ? `🚚 التوصيل علينا: ${deliveryFee.toLocaleString('en-US')} د.ع` : null,
           formData.get('gift'),
-        ),
+        ), formData.get('governorate')),
         lines: {
           create: (() => {
             const lines: {

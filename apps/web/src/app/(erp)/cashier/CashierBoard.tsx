@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { IRAQ_GOVERNORATES } from '@/lib/gift';
 import Image from 'next/image';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
@@ -506,6 +507,17 @@ export function CashierBoard({
           <input type="hidden" name="deliveryFee" value={fee} />
           <input type="hidden" name="deliveryOn" value={deliveryWho} />
         </div>
+
+        {/* المحافظة — للتوصيل (lib/gift: سطر في ملاحظات الفاتورة). */}
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-medium text-txt-2">📍 المحافظة</span>
+          <select name="governorate" defaultValue="" className="erp-input py-2.5">
+            <option value="">— اختر المحافظة —</option>
+            {IRAQ_GOVERNORATES.map((g) => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
+        </label>
 
         {/* الهدية — عرض «من يأخذ عدداً معيناً يحصل على هدية» (lib/gift). */}
         <label className="block">

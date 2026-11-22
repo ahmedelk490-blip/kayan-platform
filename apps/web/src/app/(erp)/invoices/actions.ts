@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { notesWithGift } from '@/lib/gift';
+import { notesWithGift, notesWithGovernorate } from '@/lib/gift';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import {
@@ -224,6 +224,7 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
     notesWithDelivery(formData.get('notes'), delivery.onUs, delivery.fee),
     formData.get('gift'),
   );
+  const notesFull = notesWithGovernorate(notes, formData.get('governorate'));
   const lineData: InvoiceLineData[] = rawLines.map((l, i) => {
     const v = byId.get(l.variantId)!;
     const t = computed[i];
@@ -253,7 +254,7 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
     discountAmount: totals.discountAmount.toString(),
     taxAmount: totals.taxAmount.toString(),
     total: totals.total.toString(),
-    notes,
+    notes: notesFull,
     source,
     createdById: user.id,
     lines: { create: lineData },
@@ -629,6 +630,7 @@ export async function updateInvoiceLines(
     notesWithDelivery(formData.get('notes'), delivery.onUs, delivery.fee),
     formData.get('gift'),
   );
+  const notesFull = notesWithGovernorate(notes, formData.get('governorate'));
   const lineData: InvoiceLineData[] = rawLines.map((l, i) => {
     const v = byId.get(l.variantId)!;
     const t = computed[i];
@@ -687,7 +689,7 @@ export async function updateInvoiceLines(
         discountAmount: totals.discountAmount.toString(),
         taxAmount: totals.taxAmount.toString(),
         total: totals.total.toString(),
-        notes,
+        notes: notesFull,
         status: newStatus,
         lines: { create: lineData },
         ...(newIssueAt ? { issueDate: newIssueAt, dueDate: dueDate(newIssueAt, termDays) } : {}),
