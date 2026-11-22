@@ -1,4 +1,5 @@
 import 'server-only';
+import { pricingSettings, oldPrices } from '@/lib/pricing';
 
 import { available, dec } from '@erp/domain';
 import { prisma } from '@/lib/prisma';
@@ -76,6 +77,16 @@ export async function loadSalesOptions(tenantId: string, keepVariantIds: string[
     tiersByProduct.set(t.productId, list);
   }
 
+  // سعر البيع القديم/الجديد كما اختار المدير، والمتاح على مستوى الموديل: لونٌ نفد
+  // يُكمَّل من بقية ألوان الموديل، فلا تنبيه نقص إلا حين يخلص الموديل كله.
+  const [pricing, prevPrices] = await Promise.all([pricingSettings(tenantId), oldPrices(tenantId)]);
+  const modelAvailable = new Map<string, number>();
+  for (const v of variants) {
+    const onHand = v.stock.reduce((s, r) => s.plus(dec(r.onHand)), dec(0));
+    const reserved = v.stock.reduce((s, r) => s.plus(dec(r.reserved)), dec(0));
+    modelAvailable.set(v.product.id, (modelAvailable.get(v.product.id) ?? 0) + available(onHand, reserved).toNumber());
+  }
+
   const variantOptions: VariantOption[] = variants.map((v) => {
     const onHand = v.stock.reduce((s, r) => s.plus(dec(r.onHand)), dec(0));
     const reserved = v.stock.reduce((s, r) => s.plus(dec(r.reserved)), dec(0));
@@ -94,8 +105,11 @@ export async function loadSalesOptions(tenantId: string, keepVariantIds: string[
       colorName: v.color?.nameAr ?? null,
       sizeId: v.sizeId,
       sizeCode: v.size?.code ?? null,
-      price: dec(v.sellingPrice ?? v.product.sellingPrice ?? 0).toNumber(),
-      available: available(onHand, reserved).toNumber(),
+      price:
+        pricing.sell === 'old' && prevPrices.has(v.product.id)
+          ? prevPrices.get(v.product.id)!
+          : dec(v.sellingPrice ?? v.product.sellingPrice ?? 0).toNumber(),
+      available: modelAvailable.get(v.product.id) ?? available(onHand, reserved).toNumber(),
       // شرائح منتج هذا المتغيّر — تلك التي بلا متغيّر (للمنتج كله) أو الخاصة
       // بهذا المتغيّر بعينه.
       tiers: (tiersByProduct.get(v.product.id) ?? []).filter(

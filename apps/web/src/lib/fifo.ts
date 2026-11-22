@@ -1,4 +1,5 @@
 import { dec } from '@erp/domain';
+import { pricingSettings } from './pricing';
 import type { tenantTransaction } from './prisma';
 import { isDeliveryDesc } from './delivery';
 
@@ -62,6 +63,8 @@ export async function syncInvoiceCost(tx: Tx, tenantId: string, invoiceId: strin
     },
   });
   if (!invoice || invoice.isDeleted || invoice.status === 'DRAFT' || invoice.status === 'VOID') return;
+  // المدير يختار: الأقدم أولاً (الافتراضي) أو الأحدث أولاً (lib/pricing).
+  const order = (await pricingSettings(tenantId)).cost === 'newest' ? 'desc' : 'asc';
 
   for (const l of invoice.lines) {
     if (!l.productId || isDeliveryDesc(l.description)) continue;
@@ -69,7 +72,7 @@ export async function syncInvoiceCost(tx: Tx, tenantId: string, invoiceId: strin
     if (need.lte(0)) continue;
     const layers = await tx.costLayer.findMany({
       where: { tenantId, productId: l.productId, colorId: l.variant?.colorId ?? null, remaining: { gt: 0 } },
-      orderBy: [{ receivedAt: 'asc' }, { createdAt: 'asc' }],
+      orderBy: [{ receivedAt: order }, { createdAt: order }],
     });
     let total = dec(0);
     let covered = dec(0);

@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { rememberOldPrice } from '@/lib/pricing';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import sharp from 'sharp';
@@ -319,6 +320,13 @@ export async function updateProduct(
       status: parsed.data.status,
     },
   });
+  // سعر البيع تغيّر؟ يُحفظ القديم ليبيع به الكاشير إن اختار المدير «القديم» (lib/pricing).
+  {
+    const after = await prisma.product.findUnique({ where: { id }, select: { sellingPrice: true } });
+    const before = current.sellingPrice === null ? null : Number(current.sellingPrice);
+    const now = after?.sellingPrice == null ? null : Number(after.sellingPrice);
+    if (before !== null && before !== now) await rememberOldPrice(user.tenantId, id, before);
+  }
 
   await syncLinks(id, formData);
   await audit({

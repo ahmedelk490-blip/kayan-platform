@@ -103,6 +103,7 @@ const NAV: NavItem[] = [
   { href: '/content/hero', label: 'صور الواجهة', permission: 'settings.manage', built: true, group: 'الإدارة' },
   { href: '/content/tracking', label: 'أكواد التتبّع', permission: 'settings.manage', built: true, group: 'الإدارة' },
   { href: '/content/claude', label: 'ربط Claude', permission: 'settings.manage', built: true, group: 'الإدارة' },
+  { href: '/content/pricing', label: 'إعدادات الأسعار', permission: 'settings.manage', built: true, group: 'الإدارة' },
   { href: '/settings', label: 'الإعدادات المالية', permission: 'settings.manage', built: true, group: 'الإدارة' },
   { href: '/audit', label: 'سجل التدقيق', permission: 'settings.manage', built: true, group: 'الإدارة' },
   { href: '/admin', label: 'إدارة النظام', permission: 'admin.view', built: true, group: 'الإدارة' },
