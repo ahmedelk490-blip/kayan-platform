@@ -64,7 +64,7 @@ export default async function ClaudeConnectPage() {
           <>
             <p>الربط غير مفعّل. اضغط «تفعيل الربط» ليتولّد رابطٌ سرّي تضيفه في claude.ai.</p>
             <form action={rotateClaudeKey}>
-              <button type="submit" className="erp-btn-primary px-4 py-2 text-sm">
+              <button type="submit" className="erp-btn">
                 تفعيل الربط
               </button>
             </form>

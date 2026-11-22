@@ -5,6 +5,7 @@ import { isDeliveryDesc } from './delivery';
 import { returnsByInvoice, netOwed } from './receivables';
 import { resolveRange } from '@/app/(erp)/reports/range';
 import { categoryOf } from '@/app/(erp)/returns/category';
+import { giftOf, governorateOf } from './gift';
 
 /**
  * أدوات «ربط Claude» — قراءة فقط. Claude عند المالك (claude.ai ← Connectors)
@@ -59,6 +60,54 @@ export const MCP_TOOLS = [
       properties: { limit: { type: 'integer', description: 'عدد العملاء (افتراضياً 20)' } },
       additionalProperties: false,
     },
+  },
+  {
+    name: 'list_invoices',
+    description: 'قائمة الفواتير لمدى تاريخ مع العميل والمبلغ والمدفوع والحالة والمحافظة والهدية. اختياري: بحث باسم العميل أو رقم الفاتورة.',
+    inputSchema: {
+      type: 'object',
+      properties: { ...RANGE_PROPS, search: { type: 'string' }, limit: { type: 'integer', description: 'افتراضياً 50' } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'invoice_detail',
+    description: 'تفاصيل فاتورة واحدة برقمها: الأصناف والكميات والأسعار والتكلفة والدفعات والملاحظات.',
+    inputSchema: { type: 'object', properties: { number: { type: 'string' } }, required: ['number'], additionalProperties: false },
+  },
+  {
+    name: 'customers',
+    description: 'العملاء مع هواتفهم وعناوينهم وعدد فواتيرهم ومجموع مشترياتهم والمتبقي عليهم. اختياري: بحث بالاسم أو الهاتف.',
+    inputSchema: {
+      type: 'object',
+      properties: { search: { type: 'string' }, limit: { type: 'integer', description: 'افتراضياً 50' } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'products_catalog',
+    description: 'كتالوج الموديلات: الكود، سعر البيع، تكلفة القطعة، الألوان، والظهور على الموقع.',
+    inputSchema: { type: 'object', properties: { search: { type: 'string' } }, additionalProperties: false },
+  },
+  {
+    name: 'staff',
+    description: 'الموظفون: الاسم والدور والراتب الشهري ونسبة العمولة، وقطع كل موظف وقيمة مبيعاته في مدى تاريخ.',
+    inputSchema: { type: 'object', properties: { ...RANGE_PROPS }, additionalProperties: false },
+  },
+  {
+    name: 'purchases',
+    description: 'أوامر الشراء لمدى تاريخ مع المورّد والمبلغ والمدفوع والمتبقي، ومجموع المستحق للمورّدين.',
+    inputSchema: { type: 'object', properties: { ...RANGE_PROPS }, additionalProperties: false },
+  },
+  {
+    name: 'returns_and_damage',
+    description: 'المرتجعات والهالك لمدى تاريخ: الأرقام والمبالغ والأسباب.',
+    inputSchema: { type: 'object', properties: { ...RANGE_PROPS }, additionalProperties: false },
+  },
+  {
+    name: 'cost_batches',
+    description: 'دفعات البضاعة بأسعار شرائها (الأقدم أولاً): الكمية والباقي وسعر القطعة لكل موديل ولون.',
+    inputSchema: { type: 'object', properties: { search: { type: 'string' } }, additionalProperties: false },
   },
 ] as const;
 
@@ -239,6 +288,224 @@ export async function runMcpTool(tenantId: string, name: string, args: Args): Pr
           .map(([customer, amount]) => ({ customer, amount: money(amount) })),
         currency: 'IQD',
       };
+    }
+    case 'list_invoices': {
+      const r = range(args);
+      const q = str(args.search)?.trim();
+      const limit = Math.min(Math.max(Number(args.limit) || 50, 1), 200);
+      const rows = await prisma.invoice.findMany({
+        where: {
+          tenantId,
+          isDeleted: false,
+          issueDate: { gte: r.from, lte: r.to },
+          ...(q
+            ? { OR: [{ number: { contains: q } }, { customer: { contactName: { contains: q } } }, { customer: { companyName: { contains: q } } }] }
+            : {}),
+        },
+        orderBy: { issueDate: 'desc' },
+        take: limit,
+        select: {
+          number: true, status: true, issueDate: true, total: true, paidAmount: true, notes: true, source: true,
+          customer: { select: { companyName: true, contactName: true, phone: true } },
+        },
+      });
+      return {
+        period: `${r.fromStr} → ${r.toStr}`,
+        invoices: rows.map((i) => ({
+          number: i.number,
+          date: i.issueDate?.toISOString().slice(0, 10),
+          customer: i.customer.companyName ?? i.customer.contactName,
+          phone: i.customer.phone,
+          status: i.status,
+          total: money(i.total),
+          paid: money(i.paidAmount),
+          source: i.source,
+          governorate: governorateOf(i.notes),
+          gift: giftOf(i.notes),
+        })),
+      };
+    }
+    case 'invoice_detail': {
+      const number = str(args.number)?.trim();
+      if (!number) throw new Error('اكتب رقم الفاتورة');
+      const i = await prisma.invoice.findFirst({
+        where: { tenantId, number },
+        select: {
+          number: true, status: true, issueDate: true, dueDate: true, subtotal: true, discountAmount: true, total: true,
+          paidAmount: true, notes: true, source: true, voidReason: true,
+          customer: { select: { companyName: true, contactName: true, phone: true, address: true } },
+          lines: { select: { description: true, quantity: true, unitPrice: true, lineTotal: true, unitCost: true } },
+        },
+      });
+      if (!i) throw new Error('الفاتورة غير موجودة');
+      return {
+        number: i.number,
+        status: i.status,
+        issueDate: i.issueDate?.toISOString().slice(0, 10),
+        dueDate: i.dueDate?.toISOString().slice(0, 10),
+        subtotal: money(i.subtotal),
+        discount: money(i.discountAmount),
+        total: money(i.total),
+        paid: money(i.paidAmount),
+        notes: i.notes,
+        source: i.source,
+        voidReason: i.voidReason,
+        customer: i.customer.companyName ?? i.customer.contactName,
+        phone: i.customer.phone,
+        address: i.customer.address,
+        lines: i.lines.map((l) => ({
+          item: l.description,
+          qty: Number(l.quantity),
+          price: money(l.unitPrice),
+          total: money(l.lineTotal),
+          unitCost: l.unitCost == null ? null : money(l.unitCost),
+        })),
+      };
+    }
+    case 'customers': {
+      const q = str(args.search)?.trim();
+      const limit = Math.min(Math.max(Number(args.limit) || 50, 1), 300);
+      const rows = await prisma.customer.findMany({
+        where: {
+          tenantId,
+          isDeleted: false,
+          ...(q ? { OR: [{ contactName: { contains: q } }, { companyName: { contains: q } }, { phone: { contains: q } }] } : {}),
+        },
+        take: limit,
+        select: {
+          code: true, companyName: true, contactName: true, phone: true, address: true, source: true,
+          invoices: { where: { isDeleted: false, status: { notIn: ['DRAFT', 'VOID'] } }, select: { total: true, paidAmount: true } },
+        },
+      });
+      return rows
+        .map((c) => {
+          const total = c.invoices.reduce((s, i) => s.plus(dec(i.total)), dec(0));
+          const paid = c.invoices.reduce((s, i) => s.plus(dec(i.paidAmount)), dec(0));
+          return {
+            name: c.companyName ?? c.contactName, code: c.code, phone: c.phone, address: c.address, source: c.source,
+            invoices: c.invoices.length, purchases: money(total), remaining: money(total.minus(paid)),
+          };
+        })
+        .sort((a, b) => b.invoices - a.invoices);
+    }
+    case 'products_catalog': {
+      const q = str(args.search)?.trim();
+      const rows = await prisma.product.findMany({
+        where: { tenantId, isDeleted: false, ...(q ? { nameAr: { contains: q } } : {}) },
+        select: {
+          nameAr: true, sku: true, sellingPrice: true, cost: true, dozenPrice: true, piecesPerDozen: true, showOnSite: true, status: true,
+          variants: { where: { isDeleted: false, isActive: true }, select: { color: { select: { nameAr: true } } } },
+        },
+      });
+      return rows.map((p) => ({
+        model: p.nameAr, sku: p.sku, status: p.status, onSite: p.showOnSite,
+        price: p.sellingPrice == null ? null : money(p.sellingPrice),
+        cost: p.cost == null ? null : money(p.cost),
+        dozenPrice: p.dozenPrice == null ? null : money(p.dozenPrice),
+        piecesPerDozen: p.piecesPerDozen,
+        colors: [...new Set(p.variants.map((v) => v.color?.nameAr ?? 'بلا لون'))],
+      }));
+    }
+    case 'staff': {
+      const r = range(args);
+      const [users, lines] = await Promise.all([
+        prisma.user.findMany({
+          where: { tenantId },
+          select: { id: true, name: true, nameAr: true, isActive: true, monthlySalary: true, commissionPercent: true, role: { select: { nameAr: true } } },
+        }),
+        prisma.invoiceLine.findMany({
+          where: { invoice: { ...issued(tenantId), issueDate: { gte: r.from, lte: r.to } } },
+          select: { description: true, quantity: true, lineTotal: true, invoice: { select: { issuedById: true, createdById: true } } },
+        }),
+      ]);
+      const per = new Map<string, { pieces: number; value: ReturnType<typeof dec> }>();
+      for (const l of lines) {
+        if (isDeliveryDesc(l.description)) continue;
+        const who = l.invoice.issuedById ?? l.invoice.createdById ?? '';
+        const f = per.get(who) ?? { pieces: 0, value: dec(0) };
+        f.pieces += Number(l.quantity);
+        f.value = f.value.plus(dec(l.lineTotal));
+        per.set(who, f);
+      }
+      return {
+        period: `${r.fromStr} → ${r.toStr}`,
+        staff: users.map((u) => ({
+          name: u.nameAr ?? u.name,
+          role: u.role?.nameAr,
+          active: u.isActive,
+          monthlySalary: u.monthlySalary == null ? null : money(u.monthlySalary),
+          commissionPercent: u.commissionPercent == null ? null : Number(u.commissionPercent),
+          piecesSold: per.get(u.id)?.pieces ?? 0,
+          salesValue: money(per.get(u.id)?.value ?? 0),
+        })),
+      };
+    }
+    case 'purchases': {
+      const r = range(args);
+      const [rows, open] = await Promise.all([
+        prisma.purchaseOrder.findMany({
+          where: { tenantId, isDeleted: false, orderDate: { gte: r.from, lte: r.to } },
+          orderBy: { orderDate: 'desc' },
+          select: { number: true, status: true, orderDate: true, total: true, paidAmount: true, supplier: { select: { name: true } } },
+        }),
+        prisma.purchaseOrder.findMany({
+          where: { tenantId, isDeleted: false, status: { not: 'CANCELLED' } },
+          select: { total: true, paidAmount: true },
+        }),
+      ]);
+      const owed = open.reduce((s, o) => s.plus(dec(o.total).minus(dec(o.paidAmount))), dec(0));
+      return {
+        period: `${r.fromStr} → ${r.toStr}`,
+        owedToSuppliersNow: money(owed),
+        orders: rows.map((o) => ({
+          number: o.number, supplier: o.supplier.name, status: o.status, date: o.orderDate.toISOString().slice(0, 10),
+          total: money(o.total), paid: money(o.paidAmount), remaining: money(dec(o.total).minus(dec(o.paidAmount))),
+        })),
+      };
+    }
+    case 'returns_and_damage': {
+      const r = range(args);
+      const [rets, dmg] = await Promise.all([
+        prisma.salesReturn.findMany({
+          where: { tenantId, isDeleted: false, returnDate: { gte: r.from, lte: r.to } },
+          select: { number: true, invoiceNumber: true, customerName: true, reason: true, totalAmount: true, returnDate: true },
+        }),
+        prisma.damageRecord.findMany({
+          where: { tenantId, isDeleted: false, damageDate: { gte: r.from, lte: r.to } },
+          select: { number: true, productLabel: true, quantity: true, reason: true, totalCost: true, status: true, damageDate: true },
+        }),
+      ]);
+      return {
+        period: `${r.fromStr} → ${r.toStr}`,
+        returnsTotal: money(rets.reduce((s, x) => s.plus(dec(x.totalAmount)), dec(0))),
+        returns: rets.map((x) => ({ ...x, totalAmount: money(x.totalAmount), returnDate: x.returnDate.toISOString().slice(0, 10) })),
+        damageTotal: money(dmg.reduce((s, x) => s.plus(dec(x.totalCost)), dec(0))),
+        damage: dmg.map((x) => ({ ...x, quantity: Number(x.quantity), totalCost: money(x.totalCost), damageDate: x.damageDate.toISOString().slice(0, 10) })),
+      };
+    }
+    case 'cost_batches': {
+      const q = str(args.search)?.trim();
+      const products = await prisma.product.findMany({
+        where: { tenantId, isDeleted: false, ...(q ? { nameAr: { contains: q } } : {}) },
+        select: { id: true, nameAr: true },
+      });
+      const name = new Map(products.map((p) => [p.id, p.nameAr]));
+      const layers = await prisma.costLayer.findMany({
+        where: { tenantId, productId: { in: products.map((p) => p.id) } },
+        orderBy: [{ productId: 'asc' }, { receivedAt: 'asc' }],
+      });
+      const colors = new Map(
+        (await prisma.color.findMany({ where: { tenantId }, select: { id: true, nameAr: true } })).map((c) => [c.id, c.nameAr]),
+      );
+      return layers.map((l) => ({
+        model: name.get(l.productId),
+        color: l.colorId ? colors.get(l.colorId) : 'بلا لون',
+        date: l.receivedAt.toISOString().slice(0, 10),
+        quantity: Number(l.quantity),
+        remaining: Number(l.remaining),
+        unitCost: money(l.unitCost),
+        note: l.note,
+      }));
     }
     default:
       throw new Error(`أداة غير معروفة: ${name}`);

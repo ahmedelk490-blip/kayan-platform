@@ -57,7 +57,7 @@ export function ColorCountCell({
               aria-label="العدد الموجود فعلاً"
               className="erp-input w-20 py-1.5 text-start text-sm"
             />
-            <button type="submit" disabled={pending} className="erp-btn-primary px-3 py-1.5 text-xs">
+            <button type="submit" disabled={pending} className="erp-btn erp-btn-sm">
               {pending ? '…' : 'حفظ'}
             </button>
             <button type="button" onClick={() => setEditing(false)} className="text-xs text-txt-3 hover:underline">
