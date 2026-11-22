@@ -696,7 +696,11 @@ export async function zeroNegativeColors(productId: string | null): Promise<void
     t.sum += v.stock.reduce((s, st) => s + dec(st.onHand).toNumber(), 0);
     totals.set(k, t);
   }
-  const negative = [...totals.values()].filter((t) => t.sum < 0);
+  // على مستوى الموديل: موديلٌ مجموعه سالب تُصفَّر كل ألوانه؛ لونٌ سالب في موديلٍ
+  // مجموعه موجب يُكمَّل من بقية ألوانه فلا يُمسّ.
+  const byModel = new Map<string, number>();
+  for (const t of totals.values()) byModel.set(t.productId, (byModel.get(t.productId) ?? 0) + t.sum);
+  const negative = [...totals.values()].filter((t) => (byModel.get(t.productId) ?? 0) < 0 && t.sum !== 0);
   if (negative.length === 0) return;
   await tenantTransaction(
     async (tx) => {

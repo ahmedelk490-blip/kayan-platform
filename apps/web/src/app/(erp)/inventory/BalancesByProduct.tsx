@@ -107,9 +107,12 @@ export function BalancesByProduct({
   // المخزون بالعدد لكل لون هو الافتراض (بطلب المالك) — المقاسات خلف زرار.
   const [showSizes, setShowSizes] = useState(false);
   const colorTotal = (c: ColorGroup) => c.cells.reduce((n, x) => n + x.onHand, 0);
-  const negColors = (g: ProductGroup) => g.colors.filter((c) => colorTotal(c) < 0).length;
+  // المخزون يُقرأ على مستوى الموديل (بطلب المالك): لونٌ نفد يُكمَّل من بقية
+  // ألوان الموديل، فالسالب لا يظهر إلا حين يخلص الموديل كله.
+  const modelTotal = (g: ProductGroup) => g.colors.reduce((n, c) => n + colorTotal(c), 0);
+  const negColors = (g: ProductGroup) => (modelTotal(g) < 0 ? 1 : 0);
   const zeroColors = (g: ProductGroup) =>
-    g.colors.filter((c) => colorTotal(c) === 0 && c.cells.some((x) => x.state !== 'none')).length;
+    g.colors.filter((c) => colorTotal(c) <= 0 && c.cells.some((x) => x.state !== 'none')).length;
 
   const visible = useMemo(() => {
     const q = normalizeDigits(query).trim().toLowerCase();
@@ -232,7 +235,7 @@ export function BalancesByProduct({
                     <span className="text-sm font-semibold text-txt">{g.name}</span>
                     {!showSizes && neg > 0 && (
                       <span className="rounded-full border border-bad bg-bad-soft px-2.5 py-0.5 text-xs font-medium text-bad">
-                        {neg} لون بالسالب
+                        الموديل كله نفد
                       </span>
                     )}
                     {!showSizes && zero > 0 && (
@@ -285,7 +288,7 @@ export function BalancesByProduct({
                             <span className="text-xs font-medium leading-snug text-txt-2">{c.name}</span>
                           </span>
                           {!showSizes ? (
-                            <ColorCountCell productId={g.id} colorKey={c.key} total={colorTotal(c)} canWrite={canWrite} />
+                            <ColorCountCell productId={g.id} colorKey={c.key} total={colorTotal(c)} canWrite={false} />
                           ) : (
                           <span className="flex flex-wrap gap-1.5">
                             {c.cells.map((x) => (
@@ -392,9 +395,9 @@ export function BalancesByProduct({
       )}
 
       <p className="mt-3 text-[0.7rem] leading-[1.8] text-txt-4">
-        العدد = كل قطع اللون بكل مقاساته. الأحمر بالسالب: قطعٌ بيعت ولم تُسجَّل لها بضاعة
-        داخلة — لا تمسّ المبيعات ولا الأرباح، و«تصفير السالب» يجعلها صفراً بحركة تسوية مسجّلة
-        تُعكس من «حركات المخزون». «✎ جرد» يكتب العدد الموجود فعلاً للّون.
+        المخزون يُحسب للموديل كله: لونٌ نفد يُكمَّل من بقية ألوانه، فالرقم أعلى البطاقة هو
+        الرصيد الحقيقي، والسالب لا يظهر إلا حين تخلص قطع الموديل كلها. «تصفير السالب» يجعل
+        موديلاً بالسالب صفراً بحركة تسوية مسجّلة تُعكس من «حركات المخزون».
       </p>
     </section>
   );

@@ -27,12 +27,8 @@ export function ColorCountCell({
     if (state.ok) setEditing(false);
   }, [state]);
 
-  const tone =
-    total < 0
-      ? 'border-bad bg-bad-soft text-bad'
-      : total === 0
-        ? 'border-warn bg-warn-soft text-warn'
-        : 'border-brand/40 bg-brand-soft text-brand';
+  // لونٌ نفد يُكمَّل من بقية ألوان الموديل — فلا يُعرض سالباً، بل «نفد».
+  const tone = total <= 0 ? 'border-line-2 bg-card-2 text-txt-4' : 'border-brand/40 bg-brand-soft text-brand';
 
   return (
     <span className="flex flex-wrap items-center gap-2">
@@ -40,7 +36,7 @@ export function ColorCountCell({
         <span className="text-xs leading-[1.3] opacity-80">العدد</span>
         {/* السالب يُقرأ «٣-» في سياق عربي، فيُثبَّت اتجاه الرقم. */}
         <span dir="ltr" className="tnum text-base font-bold leading-tight">
-          {total}
+          {total > 0 ? total : 'نفد'}
         </span>
       </span>
       {canWrite &&
@@ -92,7 +88,7 @@ export function ZeroNegativeButton({ productId, count }: { productId: string | n
         }
       }}
       onSubmit={(e) => {
-        const msg = `تصفير ${count} لون بالسالب؟ يصير عددها صفراً بحركة «تسوية» مسجّلة (تقدر تعكسها من حركات المخزون). المبيعات والأرباح لا تتأثر.`;
+        const msg = `تصفير ${count} موديل بالسالب؟ يصير عددها صفراً بحركة «تسوية» مسجّلة (تقدر تعكسها من حركات المخزون). المبيعات والأرباح لا تتأثر.`;
         if (!window.confirm(msg)) e.preventDefault();
       }}
     >
@@ -101,7 +97,7 @@ export function ZeroNegativeButton({ productId, count }: { productId: string | n
         disabled={pending}
         className="min-h-8 rounded-lg border border-bad px-3 text-xs font-medium text-bad hover:bg-bad-soft"
       >
-        {pending ? 'جارٍ التصفير…' : `تصفير السالب (${count} لون)`}
+        {pending ? 'جارٍ التصفير…' : `تصفير السالب (${count} موديل)`}
       </button>
     </form>
   );
