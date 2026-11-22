@@ -119,3 +119,29 @@ export async function addCostLayer(
     },
   });
 }
+
+/**
+ * حذف أو عكس حركة «استلام» يُسقط دفعتها: الدفعة التي أنشأها نفس الاستلام
+ * (نفس الموديل واللون والكمية، وفي نفس اللحظة تقريباً). إن بِيع منها شيء يبقى
+ * ما أُخذ مسجّلاً على فواتيره ويُصفَّر باقيها فقط.
+ */
+export async function dropReceiptLayer(
+  tx: Tx,
+  m: { tenantId: string; productId: string; variantId: string; quantity: unknown; createdAt: Date },
+): Promise<void> {
+  const v = await tx.productVariant.findUnique({ where: { id: m.variantId }, select: { colorId: true } });
+  const qty = dec(m.quantity as never).abs();
+  const layer = await tx.costLayer.findFirst({
+    where: {
+      tenantId: m.tenantId,
+      productId: m.productId,
+      colorId: v?.colorId ?? null,
+      quantity: qty.toString(),
+      createdAt: { gte: new Date(m.createdAt.getTime() - 15_000), lte: new Date(m.createdAt.getTime() + 15_000) },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (!layer) return;
+  if (dec(layer.remaining).eq(dec(layer.quantity))) await tx.costLayer.delete({ where: { id: layer.id } });
+  else await tx.costLayer.update({ where: { id: layer.id }, data: { remaining: 0 } });
+}

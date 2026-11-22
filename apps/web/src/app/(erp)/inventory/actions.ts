@@ -10,7 +10,7 @@ import { audit, fieldErrors } from '@/lib/audit';
 import { num, numeric, normalizeDigits } from '@/lib/num';
 import { TYPES, isManualMovement, type MovementType } from './types';
 import { applyStockDelta } from '@/lib/stock';
-import { addCostLayer } from '@/lib/fifo';
+import { addCostLayer, dropReceiptLayer } from '@/lib/fifo';
 
 export interface FormState {
   error?: string;
@@ -356,6 +356,7 @@ export async function reverseMovement(movementId: string): Promise<void> {
   const meta = TYPES[original.type as MovementType] ?? TYPES.ADJUSTMENT;
 
   await tenantTransaction(async (tx) => {
+    if (original.type === 'RECEIPT') await dropReceiptLayer(tx, original);
     await tx.stockMovement.create({
       data: {
         tenantId: user.tenantId,
@@ -550,6 +551,7 @@ export async function deleteMovement(movementId: string): Promise<void> {
   };
 
   await tenantTransaction(async (tx) => {
+    if (original.type === 'RECEIPT' && !original.reversedBy) await dropReceiptLayer(tx, original);
     if (original.reversedBy) {
       // الزوج مجموعه صفر: يُحذف كما هو دون أي تسوية للرصيد.
       await tx.stockMovement.delete({ where: { id: original.reversedBy.id } });
