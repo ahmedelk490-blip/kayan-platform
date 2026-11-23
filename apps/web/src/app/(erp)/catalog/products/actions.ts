@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { rememberOldPrice } from '@/lib/pricing';
+import { recordWholesalePrice } from '@/lib/fifo';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import sharp from 'sharp';
@@ -322,10 +323,16 @@ export async function updateProduct(
   });
   // سعر البيع تغيّر؟ يُحفظ القديم ليبيع به الكاشير إن اختار المدير «القديم» (lib/pricing).
   {
-    const after = await prisma.product.findUnique({ where: { id }, select: { sellingPrice: true } });
+    const after = await prisma.product.findUnique({ where: { id }, select: { sellingPrice: true, cost: true } });
     const before = current.sellingPrice === null ? null : Number(current.sellingPrice);
     const now = after?.sellingPrice == null ? null : Number(after.sellingPrice);
     if (before !== null && before !== now) await rememberOldPrice(user.tenantId, id, before);
+    // تكلفة القطعة تغيّرت؟ سطر جديد في سجل أسعار الجملة (lib/fifo).
+    const costBefore = current.cost === null ? null : Number(current.cost);
+    const costNow = after?.cost == null ? null : Number(after.cost);
+    if (costNow !== null && costNow !== costBefore) {
+      await recordWholesalePrice(prisma, { tenantId: user.tenantId, productId: id, unitCost: costNow, userId: user.id });
+    }
   }
 
   await syncLinks(id, formData);

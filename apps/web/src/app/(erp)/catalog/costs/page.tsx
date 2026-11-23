@@ -5,6 +5,7 @@ import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader } from '@/components/crud/Shell';
+import { WHOLESALE_NOTE } from '@/lib/fifo';
 import type { SearchParams } from '@/lib/query';
 import { saveProductNumbers, saveSalaries } from './actions';
 
@@ -27,7 +28,7 @@ export default async function CostsPage({ searchParams }: { searchParams: Promis
   const canProducts = allows(user, 'products.write');
   const canSalaries = allows(user, 'hr.manage');
 
-  const [products, staff] = await Promise.all([
+  const [products, staff, history] = await Promise.all([
     prisma.product.findMany({
       where: { tenantId: user.tenantId, isDeleted: false },
       orderBy: { nameAr: 'asc' },
@@ -39,8 +40,6 @@ export default async function CostsPage({ searchParams }: { searchParams: Promis
           where: { variantId: null, isActive: true },
           select: { service: true, notes: true, price: true },
         },
-        // ألوانٌ/مقاساتٌ لها تكلفتها الخاصة تُقدَّم على تكلفة المنتج في الحساب.
-        _count: { select: { variants: { where: { isDeleted: false, cost: { gt: 0 } } } } },
       },
     }),
     canSalaries
@@ -50,7 +49,33 @@ export default async function CostsPage({ searchParams }: { searchParams: Promis
           select: { id: true, nameAr: true, name: true, monthlySalary: true, role: { select: { nameAr: true } } },
         })
       : Promise.resolve([]),
+    // سجل أسعار الجملة — آخر التعديلات أولاً (lib/fifo).
+    prisma.costLayer.findMany({
+      where: { tenantId: user.tenantId, note: WHOLESALE_NOTE, quantity: 0 },
+      orderBy: [{ receivedAt: 'desc' }, { createdAt: 'desc' }],
+      take: 80,
+      select: { id: true, productId: true, unitCost: true, receivedAt: true, userId: true },
+    }),
   ]);
+  const productName = new Map(products.map((p) => [p.id, p.nameAr]));
+  const userName = new Map(
+    (
+      await prisma.user.findMany({
+        where: { tenantId: user.tenantId, id: { in: [...new Set(history.map((h) => h.userId).filter((x): x is string => !!x))] } },
+        select: { id: true, nameAr: true, name: true },
+      })
+    ).map((u) => [u.id, u.nameAr ?? u.name]),
+  );
+  // السعر السابق لكل سطر = السطر التالي لنفس الموديل في السجل (الأقدم منه).
+  const prevOf = new Map<string, number>();
+  {
+    const seen = new Map<string, string>();
+    for (const h of history) {
+      const newer = seen.get(h.productId);
+      if (newer) prevOf.set(newer, Number(h.unitCost));
+      seen.set(h.productId, h.id);
+    }
+  }
 
   const noCost = products.filter((p) => p.cost === null || Number(p.cost) <= 0).length;
   const noSalary = staff.filter((u) => u.monthlySalary === null || Number(u.monthlySalary) <= 0).length;
@@ -72,7 +97,7 @@ export default async function CostsPage({ searchParams }: { searchParams: Promis
         </p>
       )}
 
-      <p className="mb-6 max-w-[75ch] text-[0.7rem] leading-[1.9] text-txt-4">
+      <p className="mb-6 max-w-[75ch] text-xs leading-[1.9] text-txt-4">
         أرقامٌ للحساب لا تغيّر شيئاً قائماً: <strong>تكلفة القطعة</strong> تدخل حساب الأرباح وحده.{' '}
         <strong>سعر كل خدمة</strong> يُقترح في الفاتورة والكاشير حين تُختار الخدمة — والبائع يغيّره —
         ولا يظهر على الموقع ولا يمسّ الفواتير السابقة. و<strong>الراتب الشهري</strong> يدخل الأرباح
@@ -88,9 +113,9 @@ export default async function CostsPage({ searchParams }: { searchParams: Promis
           <div className="overflow-x-auto rounded-xl border border-line">
             <table className="w-full min-w-[640px] text-sm">
               <thead>
-                <tr className="bg-card-2 text-[0.7rem] text-txt-3">
+                <tr className="bg-card-2 text-xs text-txt-3">
                   <th className="px-3 py-2.5 text-start font-medium">المنتج</th>
-                  <th className="px-3 py-2.5 text-start font-medium">تكلفة القطعة</th>
+                  <th className="px-3 py-2.5 text-start font-medium">سعر الجملة للقطعة</th>
                   {PRICED.map((s) => (
                     <th key={s} className="px-3 py-2.5 text-start font-medium">
                       سعر {PRICE_SERVICE_AR[s]}
@@ -103,11 +128,6 @@ export default async function CostsPage({ searchParams }: { searchParams: Promis
                   <tr key={p.id} className="border-t border-line/60">
                     <td className="px-3 py-2 text-txt">
                       {p.nameAr}
-                      {p._count.variants > 0 && (
-                        <span className="block text-[0.65rem] text-txt-4">
-                          {p._count.variants} لون/مقاس بتكلفة خاصة — تُقدَّم عليها
-                        </span>
-                      )}
                       <input type="hidden" name="pid" value={p.id} />
                     </td>
                     <td className="px-3 py-2">
@@ -125,7 +145,7 @@ export default async function CostsPage({ searchParams }: { searchParams: Promis
                       return (
                         <td key={s} className="px-3 py-2">
                           {locked ? (
-                            <span className="text-[0.7rem] text-txt-4">له شرائح أسعار</span>
+                            <span className="text-xs text-txt-4">له شرائح أسعار</span>
                           ) : (
                             <NumberCell name={`svc:${p.id}:${s}`} value={mark?.price ?? null} disabled={!canProducts} />
                           )}
@@ -145,6 +165,50 @@ export default async function CostsPage({ searchParams }: { searchParams: Promis
         </form>
       </section>
 
+      <section className="mb-8">
+        <h3 className="mb-1 text-sm font-semibold text-brand">سجل أسعار الجملة</h3>
+        <p className="mb-3 max-w-[75ch] text-xs leading-[1.9] text-txt-4">
+          كل تعديل لسعر الجملة فوق يُسجَّل هنا بتاريخه. كل قطعة تُباع بعده تُحسب بهذا السعر حتى يُسجَّل سعر
+          جديد، والفواتير التي قبله تبقى على سعرها القديم. المخزن يُدخل البضاعة بلا أسعار.
+        </p>
+        {history.length === 0 ? (
+          <p className="rounded-xl border border-line bg-card px-4 py-3 text-xs text-txt-4">
+            لا أسعار مسجّلة بعد — عدّل سعر الجملة لأي موديل فوق واضغط حفظ.
+          </p>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-line">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead>
+                <tr className="bg-card-2 text-xs text-txt-3">
+                  <th className="px-3 py-2.5 text-start font-medium">التاريخ</th>
+                  <th className="px-3 py-2.5 text-start font-medium">الموديل</th>
+                  <th className="px-3 py-2.5 text-start font-medium">السعر الجديد</th>
+                  <th className="px-3 py-2.5 text-start font-medium">كان</th>
+                  <th className="px-3 py-2.5 text-start font-medium">بواسطة</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((h) => (
+                  <tr key={h.id} className="border-t border-line/60">
+                    <td className="px-3 py-2 text-xs text-txt-3" dir="ltr">
+                      {h.receivedAt.toISOString().slice(0, 16).replace('T', ' ')}
+                    </td>
+                    <td className="px-3 py-2 text-txt">{productName.get(h.productId) ?? '—'}</td>
+                    <td className="px-3 py-2 font-semibold text-txt" dir="ltr">
+                      {Math.round(Number(h.unitCost)).toLocaleString('en-US')}
+                    </td>
+                    <td className="px-3 py-2 text-txt-4" dir="ltr">
+                      {prevOf.has(h.id) ? Math.round(prevOf.get(h.id)!).toLocaleString('en-US') : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-txt-3">{(h.userId && userName.get(h.userId)) || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
       {canSalaries && (
         <section>
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -155,7 +219,7 @@ export default async function CostsPage({ searchParams }: { searchParams: Promis
             <div className="overflow-x-auto rounded-xl border border-line">
               <table className="w-full min-w-[420px] text-sm">
                 <thead>
-                  <tr className="bg-card-2 text-[0.7rem] text-txt-3">
+                  <tr className="bg-card-2 text-xs text-txt-3">
                     <th className="px-3 py-2.5 text-start font-medium">الموظف</th>
                     <th className="px-3 py-2.5 text-start font-medium">الدور</th>
                     <th className="px-3 py-2.5 text-start font-medium">الراتب الشهري</th>

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/guard';
 import { AppShell } from '@/components/AppShell';
@@ -52,6 +53,14 @@ export default async function PricingPage() {
           </label>
           <p className="text-xs text-txt-4">البائع يقدر يعدّل السعر بيده في الفاتورة كالمعتاد — هذا ما يُملأ تلقائياً فقط.</p>
         </fieldset>
+
+        <p className="rounded-xl border border-line bg-card-2 px-4 py-3 text-sm leading-[1.8] text-txt-2">
+          <strong className="text-txt">سعر الجملة</strong> يُسجَّل في{' '}
+          <Link href="/catalog/costs" className="text-brand underline">
+            الأسعار والتكاليف
+          </Link>{' '}
+          — كل ما يُباع بعد تسجيل السعر يُحسب به. الخيار التالي يخص فقط الموديلات التي لم يُسجَّل لها سعر جملة بعد.
+        </p>
 
         <fieldset className="space-y-2">
           <legend className="mb-2 text-sm font-semibold text-brand">تكلفة البضاعة المباعة (للربح)</legend>

@@ -68,7 +68,7 @@ export default async function ProductHistory({
   const seeCosts = allows(user, 'cost.view');
   const layers = seeCosts
     ? await prisma.costLayer.findMany({
-        where: { tenantId: user.tenantId, productId: product.id },
+        where: { tenantId: user.tenantId, productId: product.id, quantity: { gt: 0 } },
         orderBy: [{ receivedAt: 'desc' }, { createdAt: 'desc' }],
         take: 60,
       })

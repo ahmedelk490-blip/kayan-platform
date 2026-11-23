@@ -7,6 +7,7 @@ import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import { num } from '@/lib/num';
+import { recordWholesalePrice } from '@/lib/fifo';
 
 /** الخدمات التي لها سعر قطعة في الشاشة — «بدون خدمة» سعرها سعر المنتج نفسه. */
 const PRICED: PriceService[] = ['EMBROIDERY', 'DTF'];
@@ -48,6 +49,8 @@ export async function saveProductNumbers(formData: FormData): Promise<void> {
         where: { id: p.id, tenantId: user.tenantId },
         data: { cost, dozenCost: cost === null ? null : cost * Math.max(1, p.piecesPerDozen) },
       });
+      // سعر جديد = سطر في سجل أسعار الجملة؛ كل ما يُباع بعده يُحسب به.
+      if (cost !== null) await recordWholesalePrice(prisma, { tenantId: user.tenantId, productId: p.id, unitCost: cost, userId: user.id });
       changed += 1;
     }
 

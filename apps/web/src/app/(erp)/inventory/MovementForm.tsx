@@ -228,14 +228,7 @@ export function MovementForm({
         <Field name="reference" label="المرجع (اختياري)" errors={state.fieldErrors} />
       </div>
 
-      {/* سعر القطعة في الاستلام = دفعة بسعرها؛ البيع يأخذ من الأقدم أولاً فالربح القديم لا يتغيّر. */}
-      <Field
-        name="unitCost"
-        label="سعر شراء القطعة (للاستلام) — اختياري"
-        type="number"
-        dir="ltr"
-        errors={state.fieldErrors}
-      />
+      {/* المخزن يُدخل البضاعة بلا أسعار — سعر الجملة يسجّله المدير في «الأسعار والتكاليف». */}
 
       <TextArea name="reason" label="السبب" rows={2} errors={state.fieldErrors} />
       <SubmitButton label="تسجيل الحركة" />

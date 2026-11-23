@@ -28,6 +28,44 @@ function fallbackCost(
   return null;
 }
 
+/**
+ * سجل أسعار الجملة (بطلب المالك): المدير يكتب سعر جملة الموديل مرةً، وكل قطعة
+ * تُباع بعده تُحسب به حتى يُسجَّل سعر جديد. يُخزَّن صفاً في CostLayer بكمية 0
+ * وملاحظة WHOLESALE_NOTE (بلا جدول جديد)، فلا يُستهلك كدفعة أبداً.
+ */
+export const WHOLESALE_NOTE = 'سعر جملة';
+
+type Db = Pick<Tx, 'costLayer'>;
+
+export async function recordWholesalePrice(
+  db: Db,
+  data: { tenantId: string; productId: string; unitCost: number; userId?: string },
+): Promise<void> {
+  if (!(data.unitCost > 0)) return;
+  await db.costLayer.create({
+    data: {
+      tenantId: data.tenantId,
+      productId: data.productId,
+      colorId: null,
+      quantity: 0,
+      remaining: 0,
+      unitCost: data.unitCost,
+      note: WHOLESALE_NOTE,
+      userId: data.userId ?? null,
+    },
+  });
+}
+
+/** آخر سعر جملة مسجّل للموديل حتى تاريخ معيّن — أو null إن لم يُسجَّل له سعر. */
+async function wholesalePriceAt(tx: Tx, tenantId: string, productId: string, at: Date) {
+  const r = await tx.costLayer.findFirst({
+    where: { tenantId, productId, note: WHOLESALE_NOTE, quantity: 0, receivedAt: { lte: at } },
+    orderBy: [{ receivedAt: 'desc' }, { createdAt: 'desc' }],
+    select: { unitCost: true },
+  });
+  return r ? dec(r.unitCost) : null;
+}
+
 /** يعيد ما أخذته الفاتورة إلى دفعاتها ويمسح تكلفة أسطرها. */
 export async function releaseInvoiceCost(tx: Tx, invoiceId: string): Promise<void> {
   const uses = await tx.costLayerUse.findMany({ where: { invoiceId } });
@@ -50,6 +88,7 @@ export async function syncInvoiceCost(tx: Tx, tenantId: string, invoiceId: strin
     select: {
       status: true,
       isDeleted: true,
+      issueDate: true,
       lines: {
         select: {
           id: true,
@@ -70,6 +109,12 @@ export async function syncInvoiceCost(tx: Tx, tenantId: string, invoiceId: strin
     if (!l.productId || isDeliveryDesc(l.description)) continue;
     let need = dec(l.quantity);
     if (need.lte(0)) continue;
+    // سعر الجملة المسجّل وقت إصدار الفاتورة يُقدَّم على الدفعات.
+    const wholesale = await wholesalePriceAt(tx, tenantId, l.productId, invoice.issueDate ?? new Date());
+    if (wholesale) {
+      await tx.invoiceLine.update({ where: { id: l.id }, data: { unitCost: wholesale.toDecimalPlaces(4).toString() } });
+      continue;
+    }
     const layers = await tx.costLayer.findMany({
       where: { tenantId, productId: l.productId, colorId: l.variant?.colorId ?? null, remaining: { gt: 0 } },
       orderBy: [{ receivedAt: order }, { createdAt: order }],
