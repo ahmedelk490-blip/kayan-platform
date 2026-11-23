@@ -461,7 +461,7 @@ export default async function FinancialReport({
                 value={rp.salaries}
                 tone="bg-bad"
               />
-              {rp.fixedMonthly.gt(0) && (
+              {rp.fixed.gt(0) && (
                 <PnlLine
                   label="الالتزامات الثابتة — حصّة الفترة"
                   note={`${rp.fixedNames.slice(0, 3).join('، ')}${rp.fixedNames.length > 3 ? '…' : ''} · ${formatMoney(rp.fixedMonthly)} شهرياً`}

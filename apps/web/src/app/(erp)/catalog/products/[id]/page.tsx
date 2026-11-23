@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation';
 import { compareVariants, dec, formatMoney, formatQty, PRICE_SERVICE_AR, coverageGaps } from '@erp/domain';
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { WHOLESALE_NOTE } from '@/lib/fifo';
 import { AppShell } from '@/components/AppShell';
 import { ModuleHeader, Table, Badge } from '@/components/crud/Shell';
 import { ConfirmButton } from '@/components/crud/ConfirmButton';
@@ -100,6 +101,15 @@ export default async function ProductDetailPage({
   // سعر الجملة (التكلفة) لا يُعرض إلا لمن يملك صلاحيته — أمين المخزن يُدخل
   // المنتجات ويسعّر البيع ولا يعرف بكم اشتُريت.
   const seeCosts = allows(user, 'cost.view');
+  // سجل سعر الجملة لهذا الموديل — الأحدث أولاً (lib/fifo).
+  const priceLog = seeCosts
+    ? await prisma.costLayer.findMany({
+        where: { tenantId: user.tenantId, productId: product.id, note: WHOLESALE_NOTE, quantity: 0 },
+        orderBy: [{ receivedAt: 'desc' }, { createdAt: 'desc' }],
+        take: 30,
+        select: { id: true, unitCost: true, receivedAt: true },
+      })
+    : [];
 
   // مقاسات هذا المنتج (من متغيّراته) — لتعريف السيريه بتوزيعها. Map يزيل التكرار.
   const productSizes = [
@@ -244,6 +254,33 @@ export default async function ProductDetailPage({
             }}
             submitLabel="حفظ التعديلات"
           />
+
+          {seeCosts && (
+            <div className="mt-6 border-t border-line pt-5">
+              <h4 className="mb-1 text-sm font-semibold text-brand">سجل سعر الجملة</h4>
+              <p className="mb-3 text-xs leading-[1.8] text-txt-4">
+                كل تغيير لتكلفة القطعة أو الدستة فوق يُسجَّل هنا بتاريخه. القطع المباعة تُحسب بآخر سعر قبل
+                تاريخ الفاتورة، فالفواتير القديمة تبقى على سعرها.
+              </p>
+              {priceLog.length === 0 ? (
+                <p className="text-xs text-txt-4">لا تغيير مسجّل بعد — أول حفظ لسعر جديد يبدأ السجل.</p>
+              ) : (
+                <ul className="divide-y divide-line/60 rounded-lg border border-line">
+                  {priceLog.map((h, i) => (
+                    <li key={h.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+                      <span className="text-xs text-txt-3" dir="ltr">
+                        {h.receivedAt.toISOString().slice(0, 16).replace('T', ' ')}
+                      </span>
+                      <span className="tnum font-semibold text-txt">
+                        {formatMoney(h.unitCost)} للقطعة
+                        {i === 0 && <span className="ms-2 text-xs font-normal text-ok">الحالي</span>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </section>
 
         <div className="space-y-6">

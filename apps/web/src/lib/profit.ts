@@ -133,9 +133,11 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
       where: { tenantId, monthlySalary: { gt: 0 } },
       select: { id: true, monthlySalary: true, createdAt: true, isActive: true },
     }),
+    // النشطة والموقوفة: الموقوف يُحسب من يوم إضافته حتى يوم إيقافه (updatedAt)
+    // ولا يُمحى من الفترات التي كان فيها (بطلب المالك).
     prisma.recurringExpense.findMany({
-      where: { tenantId, isActive: true },
-      select: { nameAr: true, amount: true },
+      where: { tenantId },
+      select: { nameAr: true, amount: true, isActive: true, createdAt: true, updatedAt: true },
     }),
     // أول فاتورة في النظام = أول يوم عمل مسجَّل: الالتزامات لا تُحسب قبله.
     prisma.invoice.findFirst({
@@ -272,7 +274,21 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
   for (const p of salaryPayments) {
     if (!salaried.has(p.employeeId)) salaries = salaries.plus(dec(p.amount));
   }
-  const fixedMonthly = recurring.reduce((s, r) => s.plus(dec(r.amount)), dec(0));
+  // الثابت الشهري المعروض = النشط الآن. والمحسوب على المدى = كل بند بحصّة أيامه
+  // داخل المدى: من يوم إضافته حتى نهاية المدى، أو حتى يوم إيقافه إن أُوقف.
+  const fixedMonthly = recurring.filter((r) => r.isActive).reduce((s, r) => s.plus(dec(r.amount)), dec(0));
+  let fixedShare = dec(0);
+  const fixedNames: string[] = [];
+  if (live) {
+    for (const r of recurring) {
+      const start = Math.max(winStart, dayStart(r.createdAt.getTime()));
+      const end = r.isActive ? winEnd : Math.min(winEnd, dayStart(r.updatedAt.getTime()) + DAY);
+      if (start < end) {
+        fixedShare = fixedShare.plus(dec(r.amount).times(monthsBetween(new Date(start), new Date(end))));
+        fixedNames.push(r.isActive ? r.nameAr : `${r.nameAr} (موقوف)`);
+      }
+    }
+  }
 
   // ── القائمة — دنانير كاملة، فيطابق مجموعُ السطور المعروضة الصافي ──
   const whole = (d: Dec) => d.toDecimalPlaces(0);
@@ -282,7 +298,7 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
   const grossProfit = sales.minus(returns).minus(cogs);
   const expenses = dec(expensesAgg._sum.amount ?? 0);
   const salariesShare = whole(salaries);
-  const fixed = whole(fixedMonthly.times(months));
+  const fixed = whole(fixedShare);
   const bonuses = dec(bonusesAgg._sum.amount ?? 0);
   const damage = dec(damageAgg._sum.totalCost ?? 0);
   const penalties = dec(penaltiesAgg._sum.amount ?? 0);
@@ -317,7 +333,7 @@ export async function realProfit(tenantId: string, from: Date, to: Date) {
     staffCount,
     fixed,
     fixedMonthly,
-    fixedNames: recurring.map((r) => r.nameAr),
+    fixedNames,
     months,
     obligationsFrom: live ? new Date(winStart) : null,
     // آخر لحظةٍ من آخر يوم — نهاية المدى حصريّة، فلا يُعرض اليوم التالي.

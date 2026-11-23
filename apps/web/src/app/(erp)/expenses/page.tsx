@@ -30,7 +30,8 @@ import { deliveryInvoiceSuffix } from '@/lib/delivery';
 import { isOwnerRole } from '@erp/domain';
 import { ExpenseForm } from './ExpenseForm';
 import { RecurringForm } from './RecurringForm';
-import { createExpense, setExpenseStatus, deleteExpense, deleteRecurring, postRecurring, addRecurring, removeCustomerDeliveryExpenses } from './actions';
+import { deletedRecurring } from '@/lib/recurring';
+import { createExpense, setExpenseStatus, deleteExpense, deleteRecurring, restoreRecurring, postRecurring, addRecurring, removeCustomerDeliveryExpenses } from './actions';
 import { customerPaidDeliveryExpenses } from '../invoices/shared';
 
 export const metadata: Metadata = { title: 'المصروفات الثانوية' };
@@ -212,6 +213,7 @@ export default async function ExpensesPage({
   ]);
 
   const canWrite = allows(user, 'expenses.write');
+  const deleted = canWrite ? await deletedRecurring(user.tenantId) : [];
   const canApprove = allows(user, 'expenses.approve');
 
   // مصاريف توصيلٍ على الزبون سُجّلت قبل التصحيح — تُعرض على المدير ليحذفها.
@@ -328,16 +330,16 @@ export default async function ExpensesPage({
       <form method="get" action="/expenses" className="mb-4 flex flex-wrap items-end gap-2 rounded-xl border border-line bg-card-2 p-3">
         {statusFilter && <input type="hidden" name="status" value={statusFilter} />}
         <label className="block">
-          <span className="mb-1 block text-[0.7rem] text-txt-3">من</span>
+          <span className="mb-1 block text-xs text-txt-3">من</span>
           <input type="date" name="from" defaultValue={rawFrom} dir="ltr" className="erp-input w-44 py-2 text-start" />
         </label>
         <label className="block">
-          <span className="mb-1 block text-[0.7rem] text-txt-3">إلى</span>
+          <span className="mb-1 block text-xs text-txt-3">إلى</span>
           <input type="date" name="to" defaultValue={rawTo} dir="ltr" className="erp-input w-44 py-2 text-start" />
         </label>
         <button type="submit" className="erp-btn py-2">تطبيق</button>
         <Link href="/expenses" className="erp-btn-ghost py-2">مسح</Link>
-        <span className="self-center text-[0.7rem] text-brand">المدى: {range.label}</span>
+        <span className="self-center text-xs text-brand">المدى: {range.label}</span>
       </form>
 
       {/* أرقام حيّة بأيقونات (المعتمد فقط = ما صُرِف فعلاً) — بأسلوب لوحة المدير. */}
@@ -411,7 +413,7 @@ export default async function ExpensesPage({
             .sort((a, b) => Number(b._sum.amount ?? 0) - Number(a._sum.amount ?? 0))
             .map((g) => (
               <div key={g.category} className="rounded-xl border border-line bg-card px-4 py-2.5">
-                <p className="text-[0.7rem] text-txt-3">
+                <p className="text-xs text-txt-3">
                   {(EXPENSE_CATEGORY_AR as Record<string, string>)[g.category] ?? g.category} ({g._count._all})
                 </p>
                 <p className="tnum text-sm font-semibold text-txt">{formatMoney(g._sum.amount ?? 0)}</p>
@@ -446,25 +448,52 @@ export default async function ExpensesPage({
                 <li key={r.id} className={`flex items-center justify-between gap-3 rounded-lg border border-line px-4 py-2.5 ${r.isActive ? 'bg-card-2' : 'opacity-55'}`}>
                   <span className="text-sm text-txt">
                     {r.nameAr}
-                    <span className="ms-2 text-[0.7rem] text-txt-4">
+                    <span className="ms-2 text-xs text-txt-4">
                       {(EXPENSE_CATEGORY_AR as Record<string, string>)[r.category] ?? r.category}
                     </span>
                   </span>
                   <span className="flex items-center gap-4">
                     <span className="tnum text-sm font-semibold text-brand">{formatMoney(r.amount)}</span>
-                    <form action={deleteRecurring.bind(null, r.id)}>
-                      <button type="submit" className="text-[0.7rem] text-bad hover:underline">حذف</button>
-                    </form>
+                    {r.isActive ? (
+                      <form action={deleteRecurring.bind(null, r.id)}>
+                        <button type="submit" className="text-xs text-bad hover:underline">إيقاف</button>
+                      </form>
+                    ) : (
+                      <span className="text-xs text-txt-4">
+                        موقوف منذ {r.updatedAt.toISOString().slice(0, 10)}
+                      </span>
+                    )}
                   </span>
                 </li>
               ))}
             </ul>
           )}
 
+          {deleted.length > 0 && (
+            <div className="mb-4 rounded-lg border border-warn bg-warn-soft px-4 py-3">
+              <p className="mb-2 text-xs leading-[1.8] text-txt-2">
+                بنود حُذفت سابقاً فاختفت من كل الفترات. استرجعها لتعود محسوبة من يوم إضافتها حتى اليوم، ثم تبقى موقوفة.
+              </p>
+              <ul className="space-y-1.5">
+                {deleted.map((d) => (
+                  <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 text-sm text-txt">
+                    <span>
+                      {d.nameAr} · <span className="tnum">{formatMoney(d.amount)}</span>
+                      <span className="ms-2 text-xs text-txt-4">أُضيف {d.createdAt.toISOString().slice(0, 10)}</span>
+                    </span>
+                    <form action={restoreRecurring.bind(null, d.id)}>
+                      <button type="submit" className="erp-btn erp-btn-sm">استرجاع</button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="border-t border-line pt-4">
             <RecurringForm action={addRecurring} categories={categoryOptions} />
           </div>
-          <p className="mt-2 text-[0.7rem] leading-[1.8] text-txt-4">
+          <p className="mt-2 text-xs leading-[1.8] text-txt-4">
             «سجّل مصروفات هذا الشهر» يُنشئ مصروفاً لكل بند ثابت نشط، مرة واحدة للشهر (لا يتكرّر لو
             ضغطته مرتين). يُخصَم فور تسجيله لأنك تملك اعتماد المصروفات.
           </p>
@@ -497,7 +526,7 @@ export default async function ExpensesPage({
           />
         </div>
 
-        <p className="mt-3 text-[0.7rem] text-txt-4">
+        <p className="mt-3 text-xs text-txt-4">
           هذه الخصومات المعتمدة فقط. توزيع كل المصروفات حسب البند في شرايح التحليل.
         </p>
       </section>
@@ -559,12 +588,12 @@ export default async function ExpensesPage({
                 {canApprove && row.status === 'PENDING' && (
                   <>
                     <form action={setExpenseStatus.bind(null, row.id, 'APPROVED')}>
-                      <button type="submit" className="text-[0.7rem] text-ok hover:underline">
+                      <button type="submit" className="text-xs text-ok hover:underline">
                         اعتماد
                       </button>
                     </form>
                     <form action={setExpenseStatus.bind(null, row.id, 'REJECTED')}>
-                      <button type="submit" className="text-[0.7rem] text-bad hover:underline">
+                      <button type="submit" className="text-xs text-bad hover:underline">
                         رفض
                       </button>
                     </form>
@@ -606,7 +635,7 @@ export default async function ExpensesPage({
 function Figure({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <div className="rounded-lg border border-line p-4">
-      <p className="text-[0.7rem] text-txt-3">{label}</p>
+      <p className="text-xs text-txt-3">{label}</p>
       <p className={`tnum mt-1 ${strong ? 'text-lg font-semibold text-brand' : 'text-base text-txt'}`}>
         {value}
       </p>

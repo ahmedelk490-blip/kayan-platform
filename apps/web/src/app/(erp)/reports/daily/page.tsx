@@ -116,8 +116,13 @@ export default async function DailyPage({ searchParams }: { searchParams: Promis
       where: { tenantId: user.tenantId, isActive: true, monthlySalary: { not: null } },
       select: { monthlySalary: true },
     }),
+    // البنود السارية في هذا اليوم: أُضيفت قبل نهايته، ونشطة أو أُوقفت فيه أو بعده.
     prisma.recurringExpense.findMany({
-      where: { tenantId: user.tenantId, isActive: true },
+      where: {
+        tenantId: user.tenantId,
+        createdAt: { lt: end },
+        OR: [{ isActive: true }, { updatedAt: { gte: start } }],
+      },
       select: { amount: true },
     }),
     // ربح اليوم من مصدر صفحة الأرباح نفسه — فلا يخرج للّيوم رقمان.

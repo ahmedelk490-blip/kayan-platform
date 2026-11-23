@@ -12,6 +12,7 @@ import {
 import { requirePermission, allows } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
 import { audit, fieldErrors } from '@/lib/audit';
+import { deletedRecurring } from '@/lib/recurring';
 import { nextOpsNumber, parseDateOr, type FormState } from '@/lib/ops';
 import { numeric } from '@/lib/num';
 import { deliveryInvoiceSuffix } from '@/lib/delivery';
@@ -204,11 +205,40 @@ export async function addRecurring(_prev: FormState, formData: FormData): Promis
   return { ok: `أُضيف المصروف الثابت «${parsed.data.nameAr}».` };
 }
 
-/** حذف مصروف ثابت (لا يمسّ ما سُجِّل منه سابقاً). */
+/**
+ * إيقاف مصروف ثابت (بطلب المالك): لا يُحذف — يبقى محسوباً في الفترات التي كان
+ * فيها، ويقف من يوم الإيقاف (updatedAt يحفظ لحظة الإيقاف، ولا تعديل آخر للبند).
+ */
 export async function deleteRecurring(id: string): Promise<void> {
   const user = await requirePermission('expenses.write');
-  await prisma.recurringExpense.deleteMany({ where: { id, tenantId: user.tenantId } });
+  await prisma.recurringExpense.updateMany({ where: { id, tenantId: user.tenantId, isActive: true }, data: { isActive: false } });
+  await audit({ tenantId: user.tenantId, userId: user.id, action: 'recurring.stop', entityType: 'RecurringExpense', entityId: id });
   revalidatePath('/expenses');
+  revalidatePath('/reports/profits');
+  revalidatePath('/reports/financial');
+}
+
+/** يسترجع مصروفاً ثابتاً محذوفاً كبندٍ موقوف: يُحسب من يوم إضافته حتى الآن. */
+export async function restoreRecurring(auditId: string): Promise<void> {
+  const user = await requirePermission('expenses.write');
+  const row = (await deletedRecurring(user.tenantId)).find((r) => r.id === auditId);
+  if (row) {
+    await prisma.recurringExpense.create({
+      data: {
+        tenantId: user.tenantId,
+        nameAr: row.nameAr,
+        category: 'OTHER',
+        amount: row.amount,
+        isActive: false,
+        createdAt: row.createdAt,
+        updatedAt: new Date(),
+      },
+    });
+    await audit({ tenantId: user.tenantId, userId: user.id, action: 'recurring.restore', entityType: 'RecurringExpense', entityId: row.nameAr, detail: `${row.nameAr} ${row.amount}` });
+  }
+  revalidatePath('/expenses');
+  revalidatePath('/reports/profits');
+  revalidatePath('/reports/financial');
 }
 
 /**
