@@ -31,7 +31,7 @@ import { isOwnerRole } from '@erp/domain';
 import { ExpenseForm } from './ExpenseForm';
 import { RecurringForm } from './RecurringForm';
 import { deletedRecurring } from '@/lib/recurring';
-import { createExpense, setExpenseStatus, deleteExpense, deleteRecurring, restoreRecurring, postRecurring, addRecurring, removeCustomerDeliveryExpenses } from './actions';
+import { createExpense, setExpenseStatus, deleteExpense, deleteRecurring, stopRecurring, restoreRecurring, postRecurring, addRecurring, removeCustomerDeliveryExpenses } from './actions';
 import { customerPaidDeliveryExpenses } from '../invoices/shared';
 
 export const metadata: Metadata = { title: 'المصروفات الثانوية' };
@@ -455,14 +455,25 @@ export default async function ExpensesPage({
                   <span className="flex items-center gap-4">
                     <span className="tnum text-sm font-semibold text-brand">{formatMoney(r.amount)}</span>
                     {r.isActive ? (
-                      <form action={deleteRecurring.bind(null, r.id)}>
-                        <button type="submit" className="text-xs text-bad hover:underline">إيقاف</button>
+                      <form action={stopRecurring.bind(null, r.id)}>
+                        <ConfirmButton
+                          label="إيقاف"
+                          className="text-xs text-warn hover:underline"
+                          message={`إيقاف «${r.nameAr}» من اليوم؟ يبقى محسوباً في الفترات الماضية ويتوقف من الآن.`}
+                        />
                       </form>
                     ) : (
                       <span className="text-xs text-txt-4">
                         موقوف منذ {r.updatedAt.toISOString().slice(0, 10)}
                       </span>
                     )}
+                    <form action={deleteRecurring.bind(null, r.id)}>
+                      <ConfirmButton
+                        label="حذف"
+                        className="text-xs text-bad hover:underline"
+                        message={`حذف «${r.nameAr}» نهائياً؟ يخرج من كل الفترات كأنه لم يكن. للإبقاء عليه في الفترات الماضية اختر «إيقاف».`}
+                      />
+                    </form>
                   </span>
                 </li>
               ))}
@@ -495,7 +506,7 @@ export default async function ExpensesPage({
           </div>
           <p className="mt-2 text-xs leading-[1.8] text-txt-4">
             «سجّل مصروفات هذا الشهر» يُنشئ مصروفاً لكل بند ثابت نشط، مرة واحدة للشهر (لا يتكرّر لو
-            ضغطته مرتين). يُخصَم فور تسجيله لأنك تملك اعتماد المصروفات.
+            ضغطته مرتين). «إيقاف» يوقف البند من اليوم ويبقيه في حساب الفترات الماضية، و«حذف» يمسحه من كل الفترات. يُخصَم فور تسجيله لأنك تملك اعتماد المصروفات.
           </p>
         </section>
           </div>

@@ -10,12 +10,18 @@ export async function deletedRecurring(tenantId: string) {
     }),
     prisma.recurringExpense.findMany({ where: { tenantId }, select: { nameAr: true } }),
   ]);
+  // ما حُذف عمداً بزر «حذف» (بعد إضافته) لا يُعرض للاسترجاع.
+  const removed = await prisma.auditLog.findMany({
+    where: { tenantId, action: 'recurring.delete', entityType: 'RecurringExpense' },
+    select: { entityId: true, createdAt: true },
+  });
   const have = new Set(live.map((r) => r.nameAr));
   const out: { id: string; nameAr: string; amount: number; createdAt: Date }[] = [];
   for (const a of created) {
     const name = a.entityId ?? '';
     const amount = Number((a.detail ?? '').trim().split(/\s+/).pop());
     if (!name || have.has(name) || !(amount > 0)) continue;
+    if (removed.some((d) => d.entityId === name && d.createdAt >= a.createdAt)) continue;
     have.add(name);
     out.push({ id: a.id, nameAr: name, amount, createdAt: a.createdAt });
   }
