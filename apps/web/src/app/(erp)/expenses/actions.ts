@@ -219,16 +219,16 @@ export async function stopRecurring(id: string): Promise<void> {
 }
 
 /**
- * حذف مصروف ثابت نهائياً: يخرج من كل الفترات كأنه لم يكن (للبند المُدخل خطأً).
- * للإبقاء عليه في الفترات الماضية استخدم «إيقاف».
+ * حذف مصروف ثابت (بطلب المالك): يختفي من القائمة ويتوقف من الآن، ويبقى محسوباً
+ * في الفترات الماضية حتى لا يختلّ حساب المصروفات. السجل يبقى في القاعدة
+ * (موقوفاً) ويُخفى بسطر في سجل العمليات (recurring.hide).
  */
 export async function deleteRecurring(id: string): Promise<void> {
   const user = await requirePermission('expenses.write');
   const row = await prisma.recurringExpense.findFirst({ where: { id, tenantId: user.tenantId }, select: { nameAr: true, amount: true } });
   if (row) {
-    await prisma.recurringExpense.deleteMany({ where: { id, tenantId: user.tenantId } });
-    // يُسجَّل الحذف المقصود فلا يظهر البند في قائمة «الاسترجاع».
-    await audit({ tenantId: user.tenantId, userId: user.id, action: 'recurring.delete', entityType: 'RecurringExpense', entityId: row.nameAr, detail: `${row.nameAr} ${row.amount}` });
+    await prisma.recurringExpense.updateMany({ where: { id, tenantId: user.tenantId, isActive: true }, data: { isActive: false } });
+    await audit({ tenantId: user.tenantId, userId: user.id, action: 'recurring.hide', entityType: 'RecurringExpense', entityId: id, detail: `${row.nameAr} ${row.amount}` });
   }
   revalidatePath('/expenses');
   revalidatePath('/reports/profits');

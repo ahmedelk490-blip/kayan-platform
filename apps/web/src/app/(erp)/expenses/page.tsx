@@ -214,6 +214,16 @@ export default async function ExpensesPage({
 
   const canWrite = allows(user, 'expenses.write');
   const deleted = canWrite ? await deletedRecurring(user.tenantId) : [];
+  // البنود المحذوفة: تبقى في الحساب لفتراتها الماضية وتُخفى من القائمة.
+  const hiddenIds = new Set(
+    (
+      await prisma.auditLog.findMany({
+        where: { tenantId: user.tenantId, action: 'recurring.hide', entityType: 'RecurringExpense' },
+        select: { entityId: true },
+      })
+    ).map((h) => h.entityId),
+  );
+  const shownRecurring = recurring.filter((r) => !hiddenIds.has(r.id));
   const canApprove = allows(user, 'expenses.approve');
 
   // مصاريف توصيلٍ على الزبون سُجّلت قبل التصحيح — تُعرض على المدير ليحذفها.
@@ -442,9 +452,9 @@ export default async function ExpensesPage({
             )}
           </div>
 
-          {recurring.length > 0 && (
+          {shownRecurring.length > 0 && (
             <ul className="mb-4 space-y-2">
-              {recurring.map((r) => (
+              {shownRecurring.map((r) => (
                 <li key={r.id} className={`flex items-center justify-between gap-3 rounded-lg border border-line px-4 py-2.5 ${r.isActive ? 'bg-card-2' : 'opacity-55'}`}>
                   <span className="text-sm text-txt">
                     {r.nameAr}
@@ -471,7 +481,7 @@ export default async function ExpensesPage({
                       <ConfirmButton
                         label="حذف"
                         className="text-xs text-bad hover:underline"
-                        message={`حذف «${r.nameAr}» نهائياً؟ يخرج من كل الفترات كأنه لم يكن. للإبقاء عليه في الفترات الماضية اختر «إيقاف».`}
+                        message={`حذف «${r.nameAr}»؟ يختفي من القائمة ويتوقف من الآن، ويبقى محسوباً في الفترات الماضية.`}
                       />
                     </form>
                   </span>
@@ -506,7 +516,7 @@ export default async function ExpensesPage({
           </div>
           <p className="mt-2 text-xs leading-[1.8] text-txt-4">
             «سجّل مصروفات هذا الشهر» يُنشئ مصروفاً لكل بند ثابت نشط، مرة واحدة للشهر (لا يتكرّر لو
-            ضغطته مرتين). «إيقاف» يوقف البند من اليوم ويبقيه في حساب الفترات الماضية، و«حذف» يمسحه من كل الفترات. يُخصَم فور تسجيله لأنك تملك اعتماد المصروفات.
+            ضغطته مرتين). «إيقاف» يوقف البند من اليوم ويبقى ظاهراً موقوفاً، و«حذف» يوقفه ويخفيه من القائمة — وفي الحالتين يبقى محسوباً في الفترات الماضية. يُخصَم فور تسجيله لأنك تملك اعتماد المصروفات.
           </p>
         </section>
           </div>
