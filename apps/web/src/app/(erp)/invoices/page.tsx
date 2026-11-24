@@ -59,6 +59,7 @@ export default async function InvoicesPage({
   });
   const statusFilter = Array.isArray(params.status) ? params.status[0] : params.status;
   const sourceFilter = Array.isArray(params.source) ? params.source[0] : params.source;
+  const custFilter = Array.isArray(params.cust) ? params.cust[0] : params.cust;
 
   // من لا يملك «عرض فواتير كل الموظفين» يرى فواتيره هو فقط. المدير يرى الكل.
   const seeAll = userCan(user.role, user.overrides, 'invoices.viewAll');
@@ -74,12 +75,31 @@ export default async function InvoicesPage({
       }
     : {};
 
+  // الزبائن الراجعون (بطلب المالك): زبون له فاتورتان صادرتان أو أكثر = طلب
+  // مرة ثانية. النسبة = الراجعون ÷ كل من اشترى. المسودة والملغاة لا تُحسب.
+  const perCustomer = await prisma.invoice.groupBy({
+    by: ['customerId'],
+    where: { tenantId: user.tenantId, isDeleted: false, ...ownerScope, status: { notIn: ['DRAFT', 'VOID'] } },
+    _count: { _all: true },
+  });
+  const repeatIds = perCustomer.filter((g) => g._count._all >= 2).map((g) => g.customerId);
+  const repeatSet = new Set(repeatIds);
+  const buyers = perCustomer.length;
+  const repeatPct = buyers > 0 ? Math.round((repeatIds.length / buyers) * 100) : 0;
+  const custScope: Prisma.InvoiceWhereInput =
+    custFilter === 'repeat'
+      ? { customerId: { in: repeatIds } }
+      : custFilter === 'new'
+        ? { customerId: { notIn: repeatIds } }
+        : {};
+
   const where: Prisma.InvoiceWhereInput = {
     tenantId: user.tenantId,
     isDeleted: false,
     ...ownerScope,
     ...(statusFilter ? { status: statusFilter } : {}),
     ...(sourceFilter ? { source: sourceFilter } : {}),
+    ...custScope,
     ...searchScope,
   };
 
@@ -279,6 +299,28 @@ export default async function InvoicesPage({
         ))}
       </div>
 
+      {/* الزبائن الراجعون — من طلب مرة ثانية، ونسبتهم من كل من اشترى. */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {(
+          [
+            ['', `كل الزبائن (${buyers})`],
+            ['new', `زبائن جدد (${buyers - repeatIds.length})`],
+            ['repeat', `🔁 زبائن راجعين (${repeatIds.length} · ${repeatPct}%)`],
+          ] as const
+        ).map(([key, label]) => {
+          const qs = new URLSearchParams();
+          if (statusFilter) qs.set('status', statusFilter);
+          if (sourceFilter) qs.set('source', sourceFilter);
+          if (key) qs.set('cust', key);
+          const href = qs.toString() ? `/invoices?${qs}` : '/invoices';
+          return (
+            <Link key={key || 'all'} href={href} className={(custFilter ?? '') === key ? 'erp-pill-active' : 'erp-pill'}>
+              <span className="tnum">{label}</span>
+            </Link>
+          );
+        })}
+      </div>
+
       <Table
         headers={['الرقم', 'العميل', 'المصدر', 'القطع', 'الإصدار', 'الاستحقاق', 'الإجمالي', 'المدفوع', 'المتبقي', 'الحالة', '']}
         empty={rows.length === 0}
@@ -297,6 +339,11 @@ export default async function InvoicesPage({
               </td>
               <td className="px-4 py-3 text-txt-2">
                 {row.customer.companyName ?? row.customer.contactName}
+                {repeatSet.has(row.customerId) && (
+                  <span className="ms-1.5 text-xs text-ok" title="زبون راجع — طلب أكثر من مرة">
+                    🔁
+                  </span>
+                )}
               </td>
               <td className="px-4 py-3 text-[0.7rem] text-txt-3">
                 {row.source ? (ORDER_SOURCE_AR as Record<string, string>)[row.source] ?? row.source : '—'}

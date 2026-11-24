@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { requirePermission } from '@/lib/guard';
 import { prisma } from '@/lib/prisma';
+import { notesWithGovernorate } from '@/lib/gift';
 import { audit, fieldErrors, nextCode } from '@/lib/audit';
 
 export interface FormState {
@@ -77,7 +78,7 @@ async function createCustomerCore(
       email: data.email,
       address: data.address,
       taxNumber: data.taxNumber,
-      notes: data.notes,
+      notes: notesWithGovernorate(data.notes, formData.get('governorate')),
       source: 'MANUAL',
     },
   });
@@ -140,7 +141,7 @@ export async function updateCustomer(
       email: data.email,
       address: data.address,
       taxNumber: data.taxNumber,
-      notes: data.notes,
+      notes: notesWithGovernorate(data.notes, formData.get('governorate')),
     },
   });
 

@@ -4,6 +4,7 @@ import { useActionState } from 'react';
 import { Field, TextArea, SubmitButton, FormError } from '@/components/crud/Form';
 import { useFormSuccess } from '@/components/crud/useFormSuccess';
 import type { FormState } from './actions';
+import { governorateOf, plainNotes, IRAQ_GOVERNORATES } from '@/lib/gift';
 
 export interface CustomerValues {
   companyName?: string | null;
@@ -87,8 +88,19 @@ export function CustomerForm({
         />
       </div>
 
-      <TextArea name="address" label="العنوان" errors={state.fieldErrors} defaultValue={values?.address} rows={2} />
-      <TextArea name="notes" label="ملاحظات" errors={state.fieldErrors} defaultValue={values?.notes} />
+      <label className="block">
+        <span className="mb-1.5 block text-sm font-medium text-txt-2">📍 المحافظة</span>
+        <select name="governorate" defaultValue={governorateOf(values?.notes) ?? ''} className="erp-input py-2.5">
+          <option value="">— اختر المحافظة —</option>
+          {IRAQ_GOVERNORATES.map((g) => (
+            <option key={g} value={g}>
+              {g}
+            </option>
+          ))}
+        </select>
+      </label>
+      <TextArea name="address" label="العنوان / المنطقة" errors={state.fieldErrors} defaultValue={values?.address} rows={2} />
+      <TextArea name="notes" label="ملاحظات" errors={state.fieldErrors} defaultValue={plainNotes(values?.notes)} />
 
       <div className="flex items-center gap-3">
         <SubmitButton label={submitLabel} />

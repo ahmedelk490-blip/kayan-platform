@@ -167,7 +167,7 @@ export async function cashierCheckout(_prev: FormState, formData: FormData): Pro
         notes: notesWithGovernorate(notesWithGift(
           deliveryOnUs ? `🚚 التوصيل علينا: ${deliveryFee.toLocaleString('en-US')} د.ع` : null,
           formData.get('gift'),
-        ), formData.get('governorate')),
+        ), formData.get('governorate'), formData.get('area')),
         lines: {
           create: (() => {
             const lines: {

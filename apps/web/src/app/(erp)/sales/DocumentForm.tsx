@@ -18,7 +18,7 @@ import {
 import { Field, TextArea, SubmitButton, FormError } from '@/components/crud/Form';
 import { SearchableSelect } from '@/components/crud/SearchableSelect';
 import { DELIVERY_DEFAULT_FEE } from '@/lib/delivery';
-import { giftOf, governorateOf, plainNotes, IRAQ_GOVERNORATES } from '@/lib/gift';
+import { giftOf, governorateOf, areaOf, plainNotes, IRAQ_GOVERNORATES } from '@/lib/gift';
 import type { FormState } from './shared';
 import { PayModePills, type PayMode } from './PayMode';
 
@@ -1337,13 +1337,20 @@ export function DocumentForm({
           {/* المحافظة — للتوصيل وتقارير المحافظات (lib/gift: سطر في الملاحظات). */}
           {isInvoice && (
             <label className="block rounded-xl border border-line bg-card-2 px-4 py-3">
-              <span className="mb-1.5 block text-sm font-medium text-txt-2">📍 المحافظة</span>
+              <span className="mb-1.5 block text-sm font-medium text-txt-2">📍 المحافظة والمنطقة</span>
               <select name="governorate" defaultValue={governorateOf(values?.notes) ?? ''} className="erp-input py-2.5">
                 <option value="">— اختر المحافظة —</option>
                 {IRAQ_GOVERNORATES.map((g) => (
                   <option key={g} value={g}>{g}</option>
                 ))}
               </select>
+              <input
+                name="area"
+                defaultValue={areaOf(values?.notes) ?? ''}
+                maxLength={200}
+                placeholder="المنطقة / العنوان — مثلاً: الكرادة، قرب ساحة الحرية"
+                className="erp-input mt-2 py-2.5"
+              />
             </label>
           )}
 

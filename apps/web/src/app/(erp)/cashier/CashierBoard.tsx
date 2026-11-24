@@ -510,13 +510,20 @@ export function CashierBoard({
 
         {/* المحافظة — للتوصيل (lib/gift: سطر في ملاحظات الفاتورة). */}
         <label className="block">
-          <span className="mb-1.5 block text-xs font-medium text-txt-2">📍 المحافظة</span>
+          <span className="mb-1.5 block text-xs font-medium text-txt-2">📍 المحافظة والمنطقة</span>
           <select name="governorate" defaultValue="" className="erp-input py-2.5">
             <option value="">— اختر المحافظة —</option>
             {IRAQ_GOVERNORATES.map((g) => (
               <option key={g} value={g}>{g}</option>
             ))}
           </select>
+          <input
+            name="area"
+            defaultValue={""}
+            maxLength={200}
+            placeholder="المنطقة / العنوان — مثلاً: الكرادة، قرب ساحة الحرية"
+            className="erp-input mt-2 py-2.5"
+          />
         </label>
 
         {/* الهدية — عرض «من يأخذ عدداً معيناً يحصل على هدية» (lib/gift). */}

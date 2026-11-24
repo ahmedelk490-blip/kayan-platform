@@ -225,7 +225,7 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
     notesWithDelivery(formData.get('notes'), delivery.onUs, delivery.fee),
     formData.get('gift'),
   );
-  const notesFull = notesWithGovernorate(notes, formData.get('governorate'));
+  const notesFull = notesWithGovernorate(notes, formData.get('governorate'), formData.get('area'));
   const lineData: InvoiceLineData[] = rawLines.map((l, i) => {
     const v = byId.get(l.variantId)!;
     const t = computed[i];
@@ -633,7 +633,7 @@ export async function updateInvoiceLines(
     notesWithDelivery(formData.get('notes'), delivery.onUs, delivery.fee),
     formData.get('gift'),
   );
-  const notesFull = notesWithGovernorate(notes, formData.get('governorate'));
+  const notesFull = notesWithGovernorate(notes, formData.get('governorate'), formData.get('area'));
   const lineData: InvoiceLineData[] = rawLines.map((l, i) => {
     const v = byId.get(l.variantId)!;
     const t = computed[i];

@@ -47,16 +47,43 @@ export function governorateOf(notes: string | null | undefined): string | null {
   return line?.slice(GOV_MARK.length).trim() || null;
 }
 
-/** يضع سطر المحافظة أول الملاحظات (ويشيل القديم). قيمةٌ خارج القائمة تُهمَل. */
-export function notesWithGovernorate(notes: string | null | undefined, gov: FormDataEntryValue | null): string | null {
-  const kept = (notes ?? '').split('\n').filter((ln) => !ln.startsWith(GOV_MARK)).join('\n').trim();
+/** سطر المنطقة/العنوان داخل المحافظة (بطلب المالك): «🏘 المنطقة: الكرادة — قرب …». */
+export const AREA_MARK = '🏘 المنطقة:';
+
+export function areaOf(notes: string | null | undefined): string | null {
+  const line = (notes ?? '').split('\n').find((ln) => ln.startsWith(AREA_MARK));
+  return line?.slice(AREA_MARK.length).trim() || null;
+}
+
+/**
+ * يضع سطري المحافظة والمنطقة أول الملاحظات (ويشيل القديمين). محافظةٌ خارج
+ * القائمة تُهمَل؛ والمنطقة نصٌّ حرّ (سطر واحد، حتى 200 حرف).
+ */
+export function notesWithGovernorate(
+  notes: string | null | undefined,
+  gov: FormDataEntryValue | null,
+  area?: FormDataEntryValue | null,
+): string | null {
+  const kept = (notes ?? '')
+    .split('\n')
+    .filter((ln) => !ln.startsWith(GOV_MARK) && !ln.startsWith(AREA_MARK))
+    .join('\n')
+    .trim();
   const g = String(gov ?? '').trim();
-  if (!(IRAQ_GOVERNORATES as readonly string[]).includes(g)) return kept || null;
-  const line = `${GOV_MARK} ${g}`;
-  return kept ? `${line}\n${kept}` : line;
+  const a = String(area ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  const lines = [
+    ...((IRAQ_GOVERNORATES as readonly string[]).includes(g) ? [`${GOV_MARK} ${g}`] : []),
+    ...(a ? [`${AREA_MARK} ${a}`] : []),
+  ];
+  if (kept) lines.push(kept);
+  return lines.length ? lines.join('\n') : null;
 }
 
 /** الملاحظات بلا سطري الهدية والمحافظة — لخانة «ملاحظات» في فورم التعديل. */
 export function plainNotes(notes: string | null | undefined): string {
-  return notesWithoutGift(notes).split('\n').filter((ln) => !ln.startsWith(GOV_MARK)).join('\n').trim();
+  return notesWithoutGift(notes)
+    .split('\n')
+    .filter((ln) => !ln.startsWith(GOV_MARK) && !ln.startsWith(AREA_MARK))
+    .join('\n')
+    .trim();
 }

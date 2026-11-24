@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { governorateOf, plainNotes } from '@/lib/gift';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { balance, dec, formatMoney } from '@erp/domain';
@@ -183,8 +184,9 @@ export default async function CustomerDetailPage({
               <Row label="الهاتف" value={customer.phone} ltr />
               <Row label="واتساب" value={customer.whatsapp} ltr />
               <Row label="البريد" value={customer.email} ltr />
+              <Row label="المحافظة" value={governorateOf(customer.notes)} />
               <Row label="العنوان" value={customer.address} />
-              <Row label="ملاحظات" value={customer.notes} />
+              <Row label="ملاحظات" value={plainNotes(customer.notes) || null} />
             </dl>
           )}
         </section>
