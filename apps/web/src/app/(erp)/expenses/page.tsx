@@ -1,3 +1,4 @@
+import { DateText } from '@/components/crud/DateText';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
@@ -339,11 +340,11 @@ export default async function ExpensesPage({
         {statusFilter && <input type="hidden" name="status" value={statusFilter} />}
         <label className="block">
           <span className="mb-1 block text-xs text-txt-3">من</span>
-          <input type="date" name="from" defaultValue={rawFrom} dir="ltr" className="erp-input w-44 py-2 text-start" />
+          <DateText name="from" defaultValue={rawFrom} className="w-44" />
         </label>
         <label className="block">
           <span className="mb-1 block text-xs text-txt-3">إلى</span>
-          <input type="date" name="to" defaultValue={rawTo} dir="ltr" className="erp-input w-44 py-2 text-start" />
+          <DateText name="to" defaultValue={rawTo} className="w-44" />
         </label>
         <button type="submit" className="erp-btn py-2">تطبيق</button>
         <Link href="/expenses" className="erp-btn-ghost py-2">مسح</Link>
