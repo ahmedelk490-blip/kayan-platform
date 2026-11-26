@@ -893,7 +893,8 @@ export async function issueInvoice(id: string): Promise<void> {
 }
 
 const VoidSchema = z.object({
-  reason: z.string().trim().min(5, 'سبب الإلغاء مطلوب.').max(500),
+  // كان ٥ أحرف على الأقل: «غلط» أو «مكرر» تُرفض برسالة «مطلوب» فيظنّ البائع أن الإلغاء معطّل.
+  reason: z.string().trim().min(2, 'اكتب سبب الإلغاء — كلمة واحدة تكفي (مثلاً: مكرر).').max(500),
 });
 
 /**
