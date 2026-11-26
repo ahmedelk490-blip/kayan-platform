@@ -30,8 +30,7 @@ import { deliveryInvoiceSuffix } from '@/lib/delivery';
 import { isOwnerRole } from '@erp/domain';
 import { ExpenseForm } from './ExpenseForm';
 import { RecurringForm } from './RecurringForm';
-import { deletedRecurring } from '@/lib/recurring';
-import { createExpense, setExpenseStatus, deleteExpense, deleteRecurring, stopRecurring, restoreRecurring, postRecurring, addRecurring, removeCustomerDeliveryExpenses } from './actions';
+import { createExpense, setExpenseStatus, deleteExpense, deleteRecurring, stopRecurring, postRecurring, addRecurring, removeCustomerDeliveryExpenses } from './actions';
 import { customerPaidDeliveryExpenses } from '../invoices/shared';
 
 export const metadata: Metadata = { title: 'المصروفات الثانوية' };
@@ -213,7 +212,6 @@ export default async function ExpensesPage({
   ]);
 
   const canWrite = allows(user, 'expenses.write');
-  const deleted = canWrite ? await deletedRecurring(user.tenantId) : [];
   // البنود المحذوفة: تبقى في الحساب لفتراتها الماضية وتُخفى من القائمة.
   const hiddenIds = new Set(
     (
@@ -490,26 +488,7 @@ export default async function ExpensesPage({
             </ul>
           )}
 
-          {deleted.length > 0 && (
-            <div className="mb-4 rounded-lg border border-warn bg-warn-soft px-4 py-3">
-              <p className="mb-2 text-xs leading-[1.8] text-txt-2">
-                بنود حُذفت سابقاً فاختفت من كل الفترات. استرجعها لتعود محسوبة من يوم إضافتها حتى اليوم، ثم تبقى موقوفة.
-              </p>
-              <ul className="space-y-1.5">
-                {deleted.map((d) => (
-                  <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 text-sm text-txt">
-                    <span>
-                      {d.nameAr} · <span className="tnum">{formatMoney(d.amount)}</span>
-                      <span className="ms-2 text-xs text-txt-4">أُضيف {d.createdAt.toISOString().slice(0, 10)}</span>
-                    </span>
-                    <form action={restoreRecurring.bind(null, d.id)}>
-                      <button type="submit" className="erp-btn erp-btn-sm">استرجاع</button>
-                    </form>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {/* صندوق «استرجاع» البنود المحذوفة قديماً أُزيل بطلب المالك — سُجّلت كمصروفات عادية. */}
 
           <div className="border-t border-line pt-4">
             <RecurringForm action={addRecurring} categories={categoryOptions} />
