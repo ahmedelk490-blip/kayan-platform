@@ -220,6 +220,10 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
     discountAmount: docDiscount,
     discountPercent: docDiscountPct,
   });
+  // التصنيف والمحافظة والمنطقة إلزامية عند الإنشاء (بطلب المالك).
+  if (!String(formData.get('category') ?? '').trim() || !String(formData.get('governorate') ?? '').trim() || !String(formData.get('area') ?? '').trim()) {
+    return { error: 'اختر التصنيف والمحافظة واكتب المنطقة — حقول إلزامية.' };
+  }
 
   const notes = notesWithGift(
     notesWithDelivery(formData.get('notes'), delivery.onUs, delivery.fee),

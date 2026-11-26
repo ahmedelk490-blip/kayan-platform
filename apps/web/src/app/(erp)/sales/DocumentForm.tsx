@@ -608,12 +608,7 @@ export function DocumentForm({
                   placeholder="رقم الهاتف (يمنع التكرار)"
                   className="erp-input py-2.5 text-start"
                 />
-                {/* العنوان اختياري لكنه أساس التوصيل — يُحفظ على العميل ويطبع على الفاتورة. */}
-                <input
-                  name="newCustomerAddress"
-                  placeholder="📍 العنوان — للتوصيل (اختياري)"
-                  className="erp-input py-2.5 sm:col-span-2"
-                />
+                {/* العنوان أُخفي بطلب المالك — المحافظة والمنطقة (إلزاميتان) تحت في الفاتورة. */}
               </div>
             ) : (
               <SearchableSelect
@@ -1337,8 +1332,8 @@ export function DocumentForm({
           {/* تصنيف الزبون — شركة/مشروع/مطعم/كافيه (lib/gift: سطر في الملاحظات). */}
           {isInvoice && (
             <label className="block rounded-xl border border-line bg-card-2 px-4 py-3">
-              <span className="mb-1.5 block text-sm font-medium text-txt-2">🏷 التصنيف</span>
-              <select name="category" defaultValue={categoryOf(values?.notes) ?? ''} className="erp-input py-2.5">
+              <span className="mb-1.5 block text-sm font-medium text-txt-2">🏷 التصنيف *</span>
+              <select name="category" required defaultValue={categoryOf(values?.notes) ?? ''} className="erp-input py-2.5">
                 <option value="">— اختر التصنيف —</option>
                 {INVOICE_CATEGORIES.map((c) => (
                   <option key={c} value={c}>{c}</option>
@@ -1350,8 +1345,8 @@ export function DocumentForm({
           {/* المحافظة — للتوصيل وتقارير المحافظات (lib/gift: سطر في الملاحظات). */}
           {isInvoice && (
             <label className="block rounded-xl border border-line bg-card-2 px-4 py-3">
-              <span className="mb-1.5 block text-sm font-medium text-txt-2">📍 المحافظة والمنطقة</span>
-              <select name="governorate" defaultValue={governorateOf(values?.notes) ?? ''} className="erp-input py-2.5">
+              <span className="mb-1.5 block text-sm font-medium text-txt-2">📍 المحافظة والمنطقة *</span>
+              <select name="governorate" required defaultValue={governorateOf(values?.notes) ?? ''} className="erp-input py-2.5">
                 <option value="">— اختر المحافظة —</option>
                 {IRAQ_GOVERNORATES.map((g) => (
                   <option key={g} value={g}>{g}</option>
@@ -1359,6 +1354,7 @@ export function DocumentForm({
               </select>
               <input
                 name="area"
+                required
                 defaultValue={areaOf(values?.notes) ?? ''}
                 maxLength={200}
                 placeholder="المنطقة / العنوان — مثلاً: الكرادة، قرب ساحة الحرية"
