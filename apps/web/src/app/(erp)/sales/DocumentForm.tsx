@@ -181,6 +181,9 @@ function hydrate(line: DocLine, variants: VariantOption[]): DocLine {
  * submitted values and stores its own result, so a tampered client cannot
  * change what is recorded.
  */
+/** التطريز هو الخدمة الافتراضية (بطلب المالك)، وإلا أوّل خدمة. */
+const prefService = (list: string[]) => (list.includes('EMBROIDERY') ? 'EMBROIDERY' : list[0] ?? '');
+
 export function DocumentForm({
   action,
   customers,
@@ -245,7 +248,7 @@ export function DocumentForm({
   // الزبون (بند يرفع إجمالي الفاتورة)، أو علينا (الزبون لا يدفع شيئاً
   // — صفر — والمبلغ مصروف شحن يُخصم من ربحنا).
   const [deliveryMode, setDeliveryMode] = useState<'NONE' | 'CUSTOMER' | 'US'>(
-    (values?.deliveryFee ?? 0) > 0 ? (values?.deliveryOn ?? 'CUSTOMER') : 'NONE',
+    (values?.deliveryFee ?? 0) > 0 ? (values?.deliveryOn ?? 'CUSTOMER') : allowNewCustomer && values?.deliveryFee === undefined ? 'CUSTOMER' : 'NONE',
   );
   const [deliveryFee, setDeliveryFee] = useState(values?.deliveryFee || DELIVERY_DEFAULT_FEE);
   const deliveryOn = deliveryMode === 'US' ? 'US' : 'CUSTOMER';
@@ -261,7 +264,7 @@ export function DocumentForm({
   }
 
   // «+ عميل جديد» داخل الفورم: اسم وهاتف بدل مغادرة الفاتورة والرجوع.
-  const [newCustomer, setNewCustomer] = useState(false);
+  const [newCustomer, setNewCustomer] = useState(allowNewCustomer && !values?.customerId);
 
   // آخر سعر (عميل × متغيّر): يُجلب عند اكتمال الاختيار ويُعرض تلميحاً.
   const [customerId, setCustomerId] = useState(values?.customerId ?? '');
@@ -313,7 +316,7 @@ export function DocumentForm({
         variantId: v.value,
         // الخدمة المختارة تُطبَّق على كل المقاسات المضافة — كانت تُؤخذ أول
         // خدمةٍ في القائمة دائماً، فيُقترح سعر التطريز لطلبِ طباعة.
-        service: szService && services.includes(szService) ? szService : services[0] ?? '',
+        service: szService && services.includes(szService) ? szService : prefService(services),
         quantity: qty,
         unitPrice: 0,
         discountAmount: 0,
@@ -413,7 +416,7 @@ export function DocumentForm({
         colorId: seriesColorId,
         sizeId: bl.sizeId,
         variantId: variant.value,
-        service: services[0] ?? '',
+        service: prefService(services),
         quantity: bl.quantity * count,
         unitPrice: 0,
         discountAmount: 0,
@@ -488,7 +491,7 @@ export function DocumentForm({
         const resolved = resolveVariant(variants, next.productId, next.colorId, next.sizeId);
         next.variantId = resolved?.value ?? '';
         const services = resolved ? servicesOf(resolved) : [];
-        next.service = services.includes(next.service) ? next.service : services[0] ?? '';
+        next.service = services.includes(next.service) ? next.service : prefService(services);
         return next;
       }),
     );
@@ -703,7 +706,7 @@ export function DocumentForm({
                   <p className="mb-2 text-xs text-txt-3">الخدمة</p>
                   <div className="flex flex-wrap gap-2">
                     {szServices.map((sv) => {
-                      const on = (szService || szServices[0]) === sv;
+                      const on = (szService || prefService(szServices)) === sv;
                       return (
                         <button
                           key={sv}
