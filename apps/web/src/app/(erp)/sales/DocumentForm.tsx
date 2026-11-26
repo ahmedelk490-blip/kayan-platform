@@ -18,7 +18,7 @@ import {
 import { Field, TextArea, SubmitButton, FormError } from '@/components/crud/Form';
 import { SearchableSelect } from '@/components/crud/SearchableSelect';
 import { DELIVERY_DEFAULT_FEE } from '@/lib/delivery';
-import { giftOf, governorateOf, areaOf, plainNotes, IRAQ_GOVERNORATES } from '@/lib/gift';
+import { giftOf, governorateOf, areaOf, categoryOf, plainNotes, IRAQ_GOVERNORATES, INVOICE_CATEGORIES } from '@/lib/gift';
 import type { FormState } from './shared';
 import { PayModePills, type PayMode } from './PayMode';
 
@@ -1334,6 +1334,19 @@ export function DocumentForm({
 
           {/* الهدية — عرض «من يأخذ عدداً معيناً يحصل على هدية». ظاهرة لا مطويّة كي
               لا تُنسى، وتُحفظ أول سطر في ملاحظات الفاتورة (lib/gift). */}
+          {/* تصنيف الزبون — شركة/مشروع/مطعم/كافيه (lib/gift: سطر في الملاحظات). */}
+          {isInvoice && (
+            <label className="block rounded-xl border border-line bg-card-2 px-4 py-3">
+              <span className="mb-1.5 block text-sm font-medium text-txt-2">🏷 التصنيف</span>
+              <select name="category" defaultValue={categoryOf(values?.notes) ?? ''} className="erp-input py-2.5">
+                <option value="">— اختر التصنيف —</option>
+                {INVOICE_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
           {/* المحافظة — للتوصيل وتقارير المحافظات (lib/gift: سطر في الملاحظات). */}
           {isInvoice && (
             <label className="block rounded-xl border border-line bg-card-2 px-4 py-3">

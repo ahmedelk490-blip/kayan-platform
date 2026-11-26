@@ -83,7 +83,25 @@ export function notesWithGovernorate(
 export function plainNotes(notes: string | null | undefined): string {
   return notesWithoutGift(notes)
     .split('\n')
-    .filter((ln) => !ln.startsWith(GOV_MARK) && !ln.startsWith(AREA_MARK))
+    .filter((ln) => !ln.startsWith(GOV_MARK) && !ln.startsWith(AREA_MARK) && !ln.startsWith(CAT_MARK))
     .join('\n')
     .trim();
+}
+
+/** تصنيف الفاتورة (بطلب المالك): «🏷 التصنيف: مطعم» — سطرٌ في الملاحظات. */
+export const CAT_MARK = '🏷 التصنيف:';
+export const INVOICE_CATEGORIES = ['شركة', 'مشروع', 'مطعم', 'كافيه'] as const;
+
+export function categoryOf(notes: string | null | undefined): string | null {
+  const line = (notes ?? '').split('\n').find((ln) => ln.startsWith(CAT_MARK));
+  return line?.slice(CAT_MARK.length).trim() || null;
+}
+
+/** يضع سطر التصنيف أول الملاحظات (ويشيل القديم). قيمةٌ خارج القائمة تُهمَل. */
+export function notesWithCategory(notes: string | null | undefined, cat: FormDataEntryValue | null): string | null {
+  const kept = (notes ?? '').split('\n').filter((ln) => !ln.startsWith(CAT_MARK)).join('\n').trim();
+  const c = String(cat ?? '').trim();
+  if (!(INVOICE_CATEGORIES as readonly string[]).includes(c)) return kept || null;
+  const line = `${CAT_MARK} ${c}`;
+  return kept ? `${line}\n${kept}` : line;
 }

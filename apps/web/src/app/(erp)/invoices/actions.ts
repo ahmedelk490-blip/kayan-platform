@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { syncInvoiceCost, releaseInvoiceCost } from '@/lib/fifo';
-import { notesWithGift, notesWithGovernorate } from '@/lib/gift';
+import { notesWithGift, notesWithGovernorate, notesWithCategory } from '@/lib/gift';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import {
@@ -225,7 +225,7 @@ export async function createSalesInvoice(_prev: FormState, formData: FormData): 
     notesWithDelivery(formData.get('notes'), delivery.onUs, delivery.fee),
     formData.get('gift'),
   );
-  const notesFull = notesWithGovernorate(notes, formData.get('governorate'), formData.get('area'));
+  const notesFull = notesWithCategory(notesWithGovernorate(notes, formData.get('governorate'), formData.get('area')), formData.get('category'));
   const lineData: InvoiceLineData[] = rawLines.map((l, i) => {
     const v = byId.get(l.variantId)!;
     const t = computed[i];
@@ -633,7 +633,7 @@ export async function updateInvoiceLines(
     notesWithDelivery(formData.get('notes'), delivery.onUs, delivery.fee),
     formData.get('gift'),
   );
-  const notesFull = notesWithGovernorate(notes, formData.get('governorate'), formData.get('area'));
+  const notesFull = notesWithCategory(notesWithGovernorate(notes, formData.get('governorate'), formData.get('area')), formData.get('category'));
   const lineData: InvoiceLineData[] = rawLines.map((l, i) => {
     const v = byId.get(l.variantId)!;
     const t = computed[i];

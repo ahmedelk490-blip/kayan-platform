@@ -86,7 +86,7 @@ export function MovementForm({
   // صفٌّ لكل مقاس، أو صفٌّ واحد للّون حين يكون بلا مقاسات.
   const rows =
     productId && (colors.length === 0 || colorId)
-      ? sizes.length > 0
+      ? sizes.length > 0 && !variantFor('') // للّون صنفٌ بلا مقاس؟ عددٌ واحد بلا مقاسات
         ? sizes
             .map((z) => ({ variantId: variantFor(z.id), label: z.label }))
             .filter((r) => r.variantId)

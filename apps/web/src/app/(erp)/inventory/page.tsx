@@ -418,7 +418,8 @@ export default async function InventoryPage({
             )}
             {canWrite && (
               <MovementModal
-                variants={variants.map((v) => ({
+                // المقاسات الموقوفة (بعد «دمج المقاسات») لا تظهر في تسجيل الحركة.
+                variants={variants.filter((v) => v.isActive).map((v) => ({
                   value: v.id,
                   label: variantLabel(v),
                   perDozen: v.product.piecesPerDozen || 12,

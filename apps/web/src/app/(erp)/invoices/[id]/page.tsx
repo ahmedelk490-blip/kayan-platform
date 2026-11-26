@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { giftOf, governorateOf, areaOf } from '@/lib/gift';
+import { giftOf, governorateOf, areaOf, categoryOf } from '@/lib/gift';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
@@ -212,6 +212,11 @@ export default async function InvoicePage({
         {(governorateOf(invoice.notes) || areaOf(invoice.notes)) && (
           <span className="rounded-full border border-line-2 bg-card-2 px-3 py-1 text-xs font-medium text-txt-2">
             📍 {governorateOf(invoice.notes)}{areaOf(invoice.notes) ? ` — ${areaOf(invoice.notes)}` : ''}
+          </span>
+        )}
+        {categoryOf(invoice.notes) && (
+          <span className="rounded-full border border-line-2 bg-card-2 px-3 py-1 text-xs font-medium text-txt-2">
+            🏷 {categoryOf(invoice.notes)}
           </span>
         )}
         {giftOf(invoice.notes) && (
