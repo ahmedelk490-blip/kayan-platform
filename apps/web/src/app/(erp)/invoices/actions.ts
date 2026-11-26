@@ -1034,7 +1034,12 @@ export async function cancelInvoice(
       },
     });
     return { refunded, pieces };
+  }).catch((e: unknown) => {
+    // خطأٌ غير متوقَّع يظهر نصّه للبائع بدل زرٍّ «لا يستجيب» (بلاغ المالك: فاتورة لا تُلغى).
+    console.error('cancelInvoice', id, e);
+    return e instanceof Error ? e : new Error(String(e));
   });
+  if (result instanceof Error) return { error: `تعذّر الإلغاء: ${result.message.slice(0, 300)}` };
   if (!result) return { error: 'الفاتورة ملغاة بالفعل.' };
 
   // أجرة توصيل فاتورةٍ أُلغيت لم تُدفع: الطلب لم يُوصَّل. وكان المصروف
